@@ -328,7 +328,7 @@ export const UserManagement: React.FC = () => {
     return (
       <>
         <PageHeader title={selectedUser ? "사용자 수정" : "사용자 신규등록"} />
-        <form onSubmit={handleSave}>
+        <form onSubmit={handleSave} key={selectedUser ? selectedUser.id : 'new-entry'} autoComplete="off">
           <FormSection title="기본 정보">
             {/* 1행: 사용자 ID (아이디 만들기 모달 트리거) */}
             <FormRow label="사용자 ID" required>
@@ -343,6 +343,7 @@ export const UserManagement: React.FC = () => {
                    placeholder={selectedUser ? "아이디" : "아이디 만들기 버튼을 눌러주세요"} 
                    required 
                    inputClassName={!selectedUser ? "cursor-pointer" : ""}
+                   autoComplete="off"
                  />
                  {!selectedUser && (
                    <Button type="button" variant="secondary" onClick={handleOpenIdModal} className="whitespace-nowrap">
@@ -352,7 +353,7 @@ export const UserManagement: React.FC = () => {
               </div>
             </FormRow>
             <FormRow label="성명" required>
-              <InputGroup name="name" defaultValue={selectedUser?.name} placeholder="사용자 성명" required />
+              <InputGroup name="name" defaultValue={selectedUser?.name} placeholder="사용자 성명" required autoComplete="off" />
             </FormRow>
 
             {/* 2행: 비밀번호, 비밀번호 확인 */}
@@ -362,7 +363,8 @@ export const UserManagement: React.FC = () => {
                   type="password" 
                   value={password}
                   onChange={(e) => handlePasswordChange(e.target.value)}
-                  placeholder="********" 
+                  placeholder="" 
+                  autoComplete="new-password"
                 />
                 <p className={`text-xs ${passwordError ? 'text-red-400 font-medium' : 'text-slate-500'}`}>
                   {passwordError || '비밀번호는 영문, 숫자, 특수문자 포함 6자 ~ 12자로 생성해 주세요.'}
@@ -375,7 +377,8 @@ export const UserManagement: React.FC = () => {
                   type="password" 
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
-                  placeholder="********" 
+                  placeholder=""
+                  autoComplete="new-password" 
                 />
                 {/* 비밀번호 불일치 안내문 */}
                 {password && passwordConfirm && password !== passwordConfirm && (
