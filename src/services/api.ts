@@ -190,23 +190,19 @@ export const MarketAPI = {
   },
 
   uploadMapImage: async (file: File): Promise<string> => {
-    // 1. 파일명 생성 (충돌 방지를 위해 타임스탬프 추가)
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `maps/${fileName}`;
 
-    // 2. Supabase Storage에 업로드 (버킷명: 'market-maps')
     const { error: uploadError } = await supabase.storage
       .from('market-maps')
       .upload(filePath, file);
 
     if (uploadError) {
       console.error('Image Upload Error:', uploadError);
-      // 구체적인 에러 메시지를 포함하여 throw
       throw new Error(`이미지 업로드 실패: ${uploadError.message}`);
     }
 
-    // 3. 공개 URL 가져오기
     const { data } = supabase.storage
       .from('market-maps')
       .getPublicUrl(filePath);
@@ -215,8 +211,6 @@ export const MarketAPI = {
   },
 
   save: async (market: Market) => {
-    // 변환 로직 제거: 프론트엔드의 Market 객체 그대로 DB에 전송
-    // (distributorId 등 CamelCase 필드명이 DB 컬럼명과 일치한다고 가정)
     if (market.id === 0) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, ...newMarket } = market;
@@ -239,12 +233,13 @@ export const MarketAPI = {
 
 export const StoreAPI = {
   getList: async (params?: { address?: string, marketName?: string, storeName?: string }) => {
-    // stores 테이블과 markets 테이블을 조인하여 가져옴
+    // 1. markets 테이블과 Join (Inner Join)
+    // DB 컬럼이 "addressDetail" 같이 따옴표가 필요한 경우에도 supabase js는 자동으로 매핑해주기도 하지만,
+    // 명시적으로 선택하는 것이 안전합니다.
     let query = supabase
       .from('stores')
-      .select('*, markets!inner(name, address, address_detail)'); 
+      .select('*, markets!inner(name, address, "addressDetail")'); 
 
-    // 시장명이나 주소 검색이 필요한 경우 markets 테이블 필터링
     if (params?.marketName) {
       query = query.ilike('markets.name', `%${params.marketName}%`);
     }
@@ -260,23 +255,23 @@ export const StoreAPI = {
     const { data, error } = await query;
     if (error) handleError(error);
 
-    // Supabase Join 결과 매핑 (marketName 등)
+    // 2. 결과 매핑
+    // DB 스키마가 CamelCase("marketId", "managerName")로 되어 있으므로
+    // Supabase 결과도 CamelCase 속성으로 반환됩니다.
     const formattedData = (data || []).map((s: any) => ({
       id: s.id,
-      marketId: s.market_id,
+      marketId: s.marketId,
       marketName: s.markets?.name,
       name: s.name,
-      managerName: s.manager_name,
-      managerPhone: s.manager_phone,
+      managerName: s.managerName,
+      managerPhone: s.managerPhone,
       status: s.status,
-      storeImage: s.store_image,
+      storeImage: s.storeImage,
       memo: s.memo,
-      // DB 컬럼 -> CamelCase 매핑
-      receiverMac: s.receiver_mac,
-      repeaterId: s.repeater_id,
-      detectorId: s.detector_id,
+      receiverMac: s.receiverMac,
+      repeaterId: s.repeaterId,
+      detectorId: s.detectorId,
       mode: s.mode,
-      // 시장 주소 정보는 필요 시 사용
     }));
 
     return formattedData as Store[];
@@ -303,27 +298,16 @@ export const StoreAPI = {
   },
 
   save: async (store: Store) => {
-    // CamelCase -> SnakeCase 매핑
-    const dbData = {
-      market_id: store.marketId,
-      name: store.name,
-      manager_name: store.managerName,
-      manager_phone: store.managerPhone,
-      status: store.status,
-      store_image: store.storeImage,
-      memo: store.memo,
-      receiver_mac: store.receiverMac,
-      repeater_id: store.repeaterId,
-      detector_id: store.detectorId,
-      mode: store.mode
-    };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, marketName, ...storeData } = store;
 
     if (store.id === 0) {
-      const { data, error } = await supabase.from('stores').insert(dbData).select().single();
+      // 스네이크 표기법 변환 없이, Store 객체(CamelCase) 그대로 전송 (DB 컬럼과 일치)
+      const { data, error } = await supabase.from('stores').insert(storeData).select().single();
       if (error) handleError(error);
       return data;
     } else {
-      const { data, error } = await supabase.from('stores').update(dbData).eq('id', store.id).select().single();
+      const { data, error } = await supabase.from('stores').update(storeData).eq('id', store.id).select().single();
       if (error) handleError(error);
       return data;
     }
@@ -333,19 +317,12 @@ export const StoreAPI = {
   saveBulk: async (stores: Store[]) => {
     if (stores.length === 0) return;
 
-    const dbDataList = stores.map(store => ({
-      market_id: store.marketId,
-      name: store.name,
-      manager_name: store.managerName,
-      manager_phone: store.managerPhone,
-      status: store.status,
-      store_image: store.storeImage,
-      memo: store.memo,
-      receiver_mac: store.receiverMac,
-      repeater_id: store.repeaterId,
-      detector_id: store.detectorId,
-      mode: store.mode
-    }));
+    // marketName 등 DB에 없는 필드 제거
+    const dbDataList = stores.map(store => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, marketName, ...rest } = store;
+      return rest;
+    });
 
     const { error } = await supabase.from('stores').insert(dbDataList);
     if (error) handleError(error);
