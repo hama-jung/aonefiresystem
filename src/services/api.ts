@@ -202,7 +202,8 @@ export const MarketAPI = {
 
     if (uploadError) {
       console.error('Image Upload Error:', uploadError);
-      throw new Error('이미지 업로드에 실패했습니다.');
+      // 구체적인 에러 메시지를 포함하여 throw
+      throw new Error(`이미지 업로드 실패: ${uploadError.message}`);
     }
 
     // 3. 공개 URL 가져오기
