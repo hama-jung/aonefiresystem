@@ -169,8 +169,19 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
 
     try {
       // 3. Daum 우편번호 서비스 생성
-      // 이 방식은 window.open을 사용하지 않고, 지정된 container element 내부에 iframe을 생성합니다.
       new window.daum.Postcode({
+        // 다크 모드 테마 적용
+        theme: {
+          bgColor: "#1E293B", // 바탕 배경색 (slate-800)
+          searchBgColor: "#0F172A", // 검색창 배경색 (slate-900)
+          contentBgColor: "#1E293B", // 본문 배경색 (slate-800)
+          pageBgColor: "#1E293B", // 페이지 배경색 (slate-800)
+          textColor: "#E2E8F0", // 기본 글자색 (slate-200)
+          queryTextColor: "#FFFFFF", // 검색창 글자색 (white)
+          postcodeTextColor: "#F472B6", // 우편번호 글자색 (pink-400)
+          emphTextColor: "#60A5FA", // 강조 글자색 (blue-400)
+          outlineColor: "#334155" // 테두리 (slate-700)
+        },
         oncomplete: function(data: any) {
           // 주소 데이터 조합
           let addr = ''; 
@@ -201,7 +212,6 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
         },
         width: '100%',
         height: '100%',
-        // autoClose: false로 설정하여 라이브러리가 완료 후 스스로 postMessage를 보내 닫으려는 동작 방지
         autoClose: false,
         animation: false, // 임베드 모드에서는 애니메이션 끔
       }).embed(container);
@@ -221,10 +231,6 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   return (
     // 배경을 어둡게 처리하는 Modal 컴포넌트 재사용
     <Modal isOpen={isOpen} onClose={onClose} title="주소 검색" width="max-w-lg">
-      {/* 
-        이 div 안에 Daum 우편번호 서비스의 iframe이 삽입됩니다.
-        높이를 고정값(450px)으로 주어 내부 스크롤이 생기도록 합니다. 
-      */}
       <div 
         ref={containerRef} 
         className="w-full h-[450px] border border-slate-600 rounded bg-slate-900"
@@ -266,7 +272,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
     setIsOpen(false);
     
     // 3. 상세 주소 입력창으로 포커스 이동
-    // React 상태 업데이트 후 DOM 렌더링 시간을 고려하여 약간의 지연 시간 부여
     setTimeout(() => {
         if (detailInputRef.current) {
             detailInputRef.current.focus();

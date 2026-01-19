@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  PageHeader, SearchFilterBar, InputGroup, SelectGroup, AddressInput,
+  PageHeader, SearchFilterBar, InputGroup, AddressInput,
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES
 } from '../components/CommonUI';
 import { Distributor } from '../types';
@@ -70,7 +70,7 @@ export const DistributorManagement: React.FC = () => {
 
   const handleRegister = () => {
     setSelectedDistributor(null);
-    setFormData({ status: '사용', address: '', addressDetail: '' }); // 폼 초기화 시 주소 필드 명시
+    setFormData({ status: '사용', address: '', addressDetail: '' }); 
     setManagedMarkets([]);
     setView('form');
   };
@@ -116,10 +116,7 @@ export const DistributorManagement: React.FC = () => {
         return;
     }
     
-    if (!formData.address) {
-        alert('주소를 입력해주세요.');
-        return;
-    }
+    // 주소 필수 입력 체크 로직 제거됨 (선택 사항)
 
     const newDist: Distributor = {
       id: selectedDistributor?.id || 0,
@@ -190,19 +187,19 @@ export const DistributorManagement: React.FC = () => {
         <PageHeader title={selectedDistributor ? "총판 수정" : "총판 등록"} />
         <form onSubmit={handleSave}>
           <FormSection title={selectedDistributor ? "총판 수정" : "총판 등록"}>
-              {/* 총판명 (Full Width) */}
-              <FormRow label="총판" className="col-span-1 md:col-span-2">
+              {/* 총판명 (Full Width) - 필수 */}
+              <FormRow label="총판" required className="col-span-1 md:col-span-2">
                 <InputGroup 
                     value={formData.name || ''} 
                     onChange={e => setFormData({...formData, name: e.target.value})}
+                    placeholder="총판명을 입력하세요"
                 />
               </FormRow>
 
-              {/* AddressInput 컴포넌트 사용 (공통 UI/규칙 적용) */}
+              {/* 주소 (AddressInput) - 선택 항목 (required 속성 제거) */}
               <div className="col-span-1 md:col-span-2">
                   <AddressInput 
                      label="주소"
-                     required
                      address={formData.address || ''}
                      addressDetail={formData.addressDetail || ''}
                      onAddressChange={(val) => setFormData({...formData, address: val})}
@@ -258,8 +255,8 @@ export const DistributorManagement: React.FC = () => {
                   />
               </FormRow>
 
-              {/* 총판 사용여부 (Full Width) - UI_STYLES.input 적용 */}
-              <FormRow label="총판 사용여부" className="col-span-1 md:col-span-2">
+              {/* 총판 사용여부 (Full Width) - 필수 */}
+              <FormRow label="총판 사용여부" required className="col-span-1 md:col-span-2">
                 <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
                   <label className="flex items-center gap-2 cursor-pointer hover:text-white">
                     <input 
