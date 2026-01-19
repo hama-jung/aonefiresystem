@@ -137,12 +137,24 @@ export const MarketManagement: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // 필수값 검증 (총판, 시장명, 주소)
     if (!formData.distributorId) { alert('총판을 선택해주세요.'); return; }
     if (!formData.name) { alert('시장명을 입력해주세요.'); return; }
     if (!formData.address) { alert('주소를 입력해주세요.'); return; }
 
+    // 선택 입력 항목의 빈 문자열 처리
+    // DB의 숫자 필드나 날짜 필드 등에 빈 문자열이 들어가면 오류가 발생할 수 있으므로
+    // 값이 없는 경우(빈 문자열 등) undefined나 null로 변환하여 전송합니다.
+    const cleanFormData = { ...formData };
+    if (cleanFormData.latitude === '') cleanFormData.latitude = undefined;
+    if (cleanFormData.longitude === '') cleanFormData.longitude = undefined;
+    if (cleanFormData.managerName === '') cleanFormData.managerName = undefined;
+    if (cleanFormData.managerPhone === '') cleanFormData.managerPhone = undefined;
+    if (cleanFormData.managerEmail === '') cleanFormData.managerEmail = undefined;
+    if (cleanFormData.memo === '') cleanFormData.memo = undefined;
+
     const newMarket: Market = {
-      ...formData as Market,
+      ...cleanFormData as Market,
       id: selectedMarket?.id || 0,
       smsFire: smsFireList,
       smsFault: smsFaultList,
@@ -155,8 +167,10 @@ export const MarketManagement: React.FC = () => {
       alert('저장되었습니다.');
       setView('list');
       fetchMarkets();
-    } catch (e) {
-      alert('저장 실패');
+    } catch (e: any) {
+      console.error(e);
+      // 에러 메시지를 사용자에게 보여줌으로써 원인 파악 용이
+      alert(`저장 실패: ${e.message || '알 수 없는 오류가 발생했습니다.'}`);
     }
   };
 
@@ -204,8 +218,8 @@ export const MarketManagement: React.FC = () => {
        return dist ? dist.label : '-';
     }},
     { header: '시장명', accessor: 'name' },
-    { header: '담당자명', accessor: 'managerName' },
-    { header: '담당자전화', accessor: 'managerPhone' },
+    { header: '담당자명', accessor: (m) => m.managerName || '-' },
+    { header: '담당자전화', accessor: (m) => m.managerPhone || '-' },
     { header: '주소', accessor: (m) => `${m.address} ${m.addressDetail || ''}` },
   ];
 

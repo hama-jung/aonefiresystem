@@ -39,8 +39,8 @@ export interface Market {
   latitude?: string;       // 위도
   longitude?: string;      // 경도
   
-  managerName: string;
-  managerPhone: string;
+  managerName?: string;    // 담당자 (선택)
+  managerPhone?: string;   // 담당자 전화 (선택)
   managerEmail?: string;   // 담당자 이메일
   memo?: string;           // 비고
 
