@@ -202,8 +202,13 @@ export const MenuManagement: React.FC = () => {
     <>
       <PageHeader title="메뉴 관리" />
       <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          💡 <strong>Tip:</strong> PC/모바일 노출 여부를 변경한 후, 하단의 <strong>[적용]</strong> 버튼을 눌러야 반영됩니다.
+        <div className="flex flex-col gap-1.5">
+          <div>
+            💡 <strong>Tip:</strong> PC/모바일 노출 여부를 변경한 후, 하단의 <strong>[변경사항 적용]</strong> 버튼을 눌러야 반영됩니다.
+          </div>
+          <div className="pl-5 text-blue-400 text-xs">
+            * 하위 메뉴가 노출되려면 상위 메뉴도 노출로 바꾸어 주어야 합니다.
+          </div>
         </div>
         {/* Save All Button (Top) */}
         {/* <Button variant="primary" onClick={handleApply} icon={<CheckCircle size={16} />}>설정 일괄 적용</Button> */}
