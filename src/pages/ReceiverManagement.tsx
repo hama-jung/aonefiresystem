@@ -304,16 +304,16 @@ export const ReceiverManagement: React.FC = () => {
 
   // --- Columns ---
   const columns: Column<Receiver>[] = [
-    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-    { header: 'MAC주소', accessor: 'macAddress', width: '150px' },
-    { header: '설치시장', accessor: 'marketName' },
-    { header: 'IP주소', accessor: 'ip', width: '150px' },
-    { header: '전화번호', accessor: 'emergencyPhone', width: '150px' },
-    { header: 'DNS', accessor: 'dns', width: '150px' },
-    { header: '송신주기', accessor: 'transmissionInterval', width: '100px' },
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
+    { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
+    { header: '설치시장', accessor: 'marketName' }, // 나머지 공간 차지
+    { header: 'IP주소', accessor: 'ip', width: '200px' },
+    { header: '전화번호', accessor: 'emergencyPhone', width: '200px' },
+    { header: 'DNS', accessor: 'dns', width: '200px' },
+    { header: '송신주기', accessor: 'transmissionInterval', width: '150px' },
     { header: '사용여부', accessor: (item) => (
       <span className={item.status === '사용' ? 'text-green-400' : 'text-red-400'}>{item.status}</span>
-    ), width: '100px' },
+    ), width: '120px' },
   ];
 
   const marketColumns: Column<Market>[] = [
