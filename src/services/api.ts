@@ -398,15 +398,21 @@ export const WorkLogAPI = {
   },
 
   save: async (log: WorkLog) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id, marketName, ...logData } = log;
+    // Supabase에 저장할 때 join된 객체(markets)가 있으면 에러가 발생하므로,
+    // 저장할 필드만 명시적으로 추출하여 전송합니다.
+    const payload = {
+      marketId: log.marketId,
+      workDate: log.workDate,
+      content: log.content,
+      attachment: log.attachment
+    };
     
     if (log.id === 0) {
-      const { data, error } = await supabase.from('work_logs').insert(logData).select().single();
+      const { data, error } = await supabase.from('work_logs').insert(payload).select().single();
       if (error) handleError(error);
       return data;
     } else {
-      const { data, error } = await supabase.from('work_logs').update(logData).eq('id', log.id).select().single();
+      const { data, error } = await supabase.from('work_logs').update(payload).eq('id', log.id).select().single();
       if (error) handleError(error);
       return data;
     }

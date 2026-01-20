@@ -81,6 +81,7 @@ export const WorkLogManagement: React.FC = () => {
     setFormData({ workDate: new Date().toISOString().split('T')[0], content: '' });
     setSelectedMarketForForm(null);
     setAttachmentFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setView('form');
   };
 
@@ -89,6 +90,7 @@ export const WorkLogManagement: React.FC = () => {
     setFormData({ ...log });
     setSelectedMarketForForm({ id: log.marketId, name: log.marketName || '' } as Market);
     setAttachmentFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setView('form');
   };
 
@@ -138,6 +140,15 @@ export const WorkLogManagement: React.FC = () => {
       } else {
         alert(`저장 실패: ${e.message}`);
       }
+    }
+  };
+
+  // --- Image Logic (Same as MarketManagement) ---
+  const handleFileClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    // 이미 DB에 저장된 이미지가 있거나(formData.attachment), 현재 선택된 파일이 있으면(attachmentFile)
+    if (formData.attachment || attachmentFile) {
+      e.preventDefault(); // 파일 선택창 열림 방지
+      alert("등록된 이미지를 삭제해 주세요.");
     }
   };
 
@@ -192,6 +203,12 @@ export const WorkLogManagement: React.FC = () => {
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '작업일시', accessor: 'workDate', width: '150px' },
     { header: '시장정보', accessor: 'marketName' },
+    // 작업내용 추가 및 말줄임표 처리
+    { header: '작업내용', accessor: (item) => (
+      <div className="truncate max-w-[300px] mx-auto" title={item.content}>
+        {item.content}
+      </div>
+    ) },
     { header: '등록일', accessor: (item) => item.created_at ? new Date(item.created_at).toLocaleDateString() : '-', width: '150px' },
   ];
 
@@ -268,6 +285,7 @@ export const WorkLogManagement: React.FC = () => {
                       ref={fileInputRef}
                       type="file" 
                       onChange={handleFileChange}
+                      onClick={handleFileClick}
                       className="border-0 p-0 text-slate-300 w-full"
                     />
                     {(formData.attachment || attachmentFile) && (
