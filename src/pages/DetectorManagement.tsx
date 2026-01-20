@@ -352,7 +352,7 @@ export const DetectorManagement: React.FC = () => {
   if (view === 'form') {
     return (
       <>
-        <PageHeader title="화재감지기 관리" />
+        <PageHeader title={selectedDetector ? "화재감지기 수정" : "화재감지기 등록"} />
         <form onSubmit={handleSave}>
           <FormSection title={selectedDetector ? "화재감지기 수정" : "화재감지기 등록"}>
             {/* R형 수신기 MAC (Search) */}
@@ -510,6 +510,86 @@ export const DetectorManagement: React.FC = () => {
            />
            <Pagination totalItems={storeList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={storeModalPage} onPageChange={setStoreModalPage} />
         </Modal>
+
+        {/* Common Market Modal */}
+        <MarketSearchModal 
+          isOpen={isMarketModalOpen} 
+          onClose={() => setIsMarketModalOpen(false)} 
+          onSelect={handleMarketSelect} 
+        />
+      </>
+    );
+  }
+
+  // --- View: Excel (New) ---
+  if (view === 'excel') {
+    return (
+      <>
+        <PageHeader title="화재감지기 엑셀 신규 등록" />
+        <FormSection title="엑셀 일괄 등록">
+            {/* 1. 소속 시장 선택 */}
+            <FormRow label="소속 시장" required className="col-span-1 md:col-span-2">
+               <div className="flex gap-2 w-full max-w-md">
+                 <div onClick={openMarketModal} className="flex-1 relative cursor-pointer">
+                    <input 
+                       type="text"
+                       value={excelMarket?.name || ''} 
+                       placeholder="등록할 시장을 선택하세요" 
+                       readOnly 
+                       className={`${UI_STYLES.input} cursor-pointer hover:bg-slate-700/50 pr-8`}
+                    />
+                    <Search className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
+                 </div>
+                 <Button type="button" variant="secondary" onClick={openMarketModal}>찾기</Button>
+               </div>
+            </FormRow>
+
+            {/* 2. 파일 선택 */}
+            <FormRow label="엑셀 파일 선택" required className="col-span-1 md:col-span-2">
+                <div className="flex flex-col gap-2">
+                   <InputGroup 
+                      type="file" 
+                      accept=".xlsx, .xls"
+                      onChange={handleExcelFileChange}
+                      className="border-0 p-0 text-slate-300 w-full"
+                   />
+                   <p className="text-xs text-slate-400">
+                     * 수신기MAC, 중계기ID, 감지기ID, 모드, 사용여부, CCTV URL, 비고 컬럼을 포함해야 합니다.
+                   </p>
+                </div>
+            </FormRow>
+
+            {/* 3. 샘플 다운로드 */}
+            <FormRow label="샘플 양식" className="col-span-1 md:col-span-2">
+                <Button type="button" variant="secondary" onClick={handleSampleDownload} icon={<Upload size={14} />}>
+                   엑셀 샘플 다운로드
+                </Button>
+            </FormRow>
+        </FormSection>
+
+        {/* 미리보기 테이블 */}
+        {excelData.length > 0 && (
+          <div className="mt-8">
+             <h3 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h3>
+             <DataTable<Detector> 
+               columns={[
+                  {header:'수신기MAC', accessor:'receiverMac'},
+                  {header:'중계기ID', accessor:'repeaterId'},
+                  {header:'감지기ID', accessor:'detectorId'},
+                  {header:'상가명', accessor: (item) => item.stores?.[0]?.name || '-'},
+                  {header:'모드', accessor:'mode'},
+                  {header:'사용여부', accessor:'status'},
+               ]}
+               data={excelData.slice(0, 50)} 
+             />
+             {excelData.length > 50 && <p className="text-center text-slate-500 text-sm mt-2">...외 {excelData.length - 50}건</p>}
+          </div>
+        )}
+
+        <div className="flex justify-center gap-3 mt-8">
+            <Button type="button" variant="primary" onClick={handleExcelSave} className="w-32" disabled={excelData.length === 0}>일괄 등록</Button>
+            <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
+        </div>
 
         {/* Common Market Modal */}
         <MarketSearchModal 
