@@ -186,6 +186,27 @@ export const MenuAPI = {
     return true;
   },
 
+  // [New] 일괄 노출 설정 업데이트
+  updateVisibilities: async (updates: {id: number, isVisiblePc: boolean, isVisibleMobile: boolean}[]) => {
+    // Supabase JS에는 bulk update 기능이 제한적이므로 Promise.all로 병렬 처리
+    // 트랜잭션 처리는 아니지만, 메뉴 설정의 특성상 허용 가능한 수준
+    const promises = updates.map(u => 
+        supabase
+          .from('menus')
+          .update({ isVisiblePc: u.isVisiblePc, isVisibleMobile: u.isVisibleMobile })
+          .eq('id', u.id)
+    );
+
+    const results = await Promise.all(promises);
+    
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) {
+        console.error("Some updates failed", errors);
+        throw new Error("일부 메뉴 설정을 저장하는 중 오류가 발생했습니다.");
+    }
+    return true;
+  },
+
   save: async (menu: MenuItemDB) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, children, ...payload } = menu; 
@@ -244,6 +265,7 @@ export const MenuAPI = {
 };
 
 export const RoleAPI = {
+  // ... (이하 동일)
   getList: async (params?: { code?: string, name?: string }) => {
     let query = supabase.from('roles').select('*').order('id', { ascending: true });
 
@@ -558,6 +580,7 @@ export const StoreAPI = {
 };
 
 export const ReceiverAPI = {
+  // ... (이하 동일)
   getList: async (params?: { marketName?: string, macAddress?: string, ip?: string, emergencyPhone?: string }) => {
     let query = supabase
       .from('receivers')

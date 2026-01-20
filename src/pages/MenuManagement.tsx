@@ -3,7 +3,7 @@ import { PageHeader, DataTable, Column, Modal, FormRow, InputGroup, SelectGroup,
 import { MenuItemDB } from '../types';
 import { MenuAPI } from '../services/api';
 import { getIcon, ICON_KEYS } from '../utils/iconMapper';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, CheckCircle } from 'lucide-react';
 
 // Type for the flattened display item
 interface MenuItemDisplay extends MenuItemDB {
@@ -71,19 +71,27 @@ export const MenuManagement: React.FC = () => {
     window.dispatchEvent(new Event('menu-update'));
   };
 
-  const handleToggle = async (id: number, field: 'isVisiblePc' | 'isVisibleMobile', currentValue: boolean) => {
+  // --- Toggle Handler (Local Update Only) ---
+  const handleToggle = (id: number, field: 'isVisiblePc' | 'isVisibleMobile', currentValue: boolean) => {
+    setDisplayMenus(prev => prev.map(m => m.id === id ? { ...m, [field]: !currentValue } : m));
+  };
+
+  // --- Apply Handler (Bulk Save) ---
+  const handleApply = async () => {
+    if (!confirm('현재 설정을 메뉴에 적용하시겠습니까?')) return;
+
     try {
-      // 1. Optimistic Update
-      setDisplayMenus(prev => prev.map(m => m.id === id ? { ...m, [field]: !currentValue } : m));
-      
-      // 2. API Call
-      await MenuAPI.toggleVisibility(id, field, !currentValue);
-      
-      // 3. Trigger Global Update
-      triggerMenuUpdate();
-    } catch (e) {
-      alert('상태 변경 실패');
-      fetchMenus(); // Revert on error
+        const updates = displayMenus.map(m => ({
+            id: m.id,
+            isVisiblePc: m.isVisiblePc,
+            isVisibleMobile: m.isVisibleMobile
+        }));
+
+        await MenuAPI.updateVisibilities(updates);
+        triggerMenuUpdate(); // Notify Sidebar to refresh
+        alert('메뉴 설정이 적용되었습니다.');
+    } catch (e: any) {
+        alert(e.message || '적용 실패');
     }
   };
 
@@ -193,11 +201,12 @@ export const MenuManagement: React.FC = () => {
   return (
     <>
       <PageHeader title="메뉴 관리" />
-      <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200 flex justify-between items-center">
+      <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          💡 <strong>Tip:</strong> 메뉴의 순서는 '순서' 값을 기준으로 정렬됩니다. PC와 모바일 노출 여부를 개별적으로 설정할 수 있습니다.
+          💡 <strong>Tip:</strong> PC/모바일 노출 여부를 변경한 후, 하단의 <strong>[적용]</strong> 버튼을 눌러야 반영됩니다.
         </div>
-        {/* 신규 등록은 복잡성을 줄이기 위해 일단 제외하거나 필요시 추가 */}
+        {/* Save All Button (Top) */}
+        {/* <Button variant="primary" onClick={handleApply} icon={<CheckCircle size={16} />}>설정 일괄 적용</Button> */}
       </div>
 
       {loading ? (
@@ -206,8 +215,12 @@ export const MenuManagement: React.FC = () => {
         <DataTable columns={columns} data={displayMenus} />
       )}
       
-      {/* 하단 여백 추가 */}
-      <div className="h-20"></div>
+      {/* Bottom Action Bar */}
+      <div className="mt-6 flex justify-end pb-10">
+         <Button variant="primary" onClick={handleApply} className="px-8 py-3 text-base bg-blue-600 hover:bg-blue-500 shadow-lg" icon={<CheckCircle size={20} />}>
+            변경사항 적용
+         </Button>
+      </div>
 
       {/* Edit Modal */}
       <Modal 
