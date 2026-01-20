@@ -6,7 +6,7 @@ import {
 import { Detector, Market, Receiver, Store } from '../types';
 import { DetectorAPI, MarketAPI, ReceiverAPI, StoreAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
-import { Search, Upload } from 'lucide-react';
+import { Search, Upload, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 10;
@@ -44,11 +44,12 @@ export const DetectorManagement: React.FC = () => {
   const [receiverSearchMac, setReceiverSearchMac] = useState('');
   const [receiverModalPage, setReceiverModalPage] = useState(1);
 
-  // Store Modal
+  // Store Modal (Multiple Stores)
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [storeList, setStoreList] = useState<Store[]>([]);
   const [storeSearchName, setStoreSearchName] = useState('');
   const [storeModalPage, setStoreModalPage] = useState(1);
+  const [selectedStores, setSelectedStores] = useState<{id: number, name: string}[]>([]);
 
   // SMS Edit
   const [smsFireList, setSmsFireList] = useState<string[]>([]);
@@ -120,6 +121,7 @@ export const DetectorManagement: React.FC = () => {
       memo: ''
     });
     setSmsFireList([]);
+    setSelectedStores([]);
     setView('form');
   };
 
@@ -127,6 +129,7 @@ export const DetectorManagement: React.FC = () => {
     setSelectedDetector(detector);
     setFormData({ ...detector });
     setSmsFireList(detector.smsList || []);
+    setSelectedStores(detector.stores || []);
     setView('form');
   };
 
@@ -161,7 +164,8 @@ export const DetectorManagement: React.FC = () => {
       const newDetector: Detector = {
         ...formData as Detector,
         id: selectedDetector?.id || 0,
-        smsList: smsFireList
+        smsList: smsFireList,
+        stores: selectedStores // Attach multiple stores
       };
 
       await DetectorAPI.save(newDetector);
@@ -184,6 +188,11 @@ export const DetectorManagement: React.FC = () => {
     setSmsFireList(smsFireList.filter((_, i) => i !== index));
   };
 
+  // Store List Management (Manual Add/Remove)
+  const removeStore = (storeId: number) => {
+    setSelectedStores(selectedStores.filter(s => s.id !== storeId));
+  };
+
   // --- Receiver Search Modal ---
   const fetchReceivers = async () => {
     const data = await ReceiverAPI.getList({ macAddress: receiverSearchMac });
@@ -201,16 +210,14 @@ export const DetectorManagement: React.FC = () => {
       marketId: r.marketId, 
       marketName: r.marketName,
       receiverMac: r.macAddress,
-      // 상가가 선택되어 있었다면 시장 불일치 가능성 있으므로 초기화
-      storeId: undefined,
-      storeName: undefined
     });
+    // 시장이 바뀌면 상가 목록 초기화
+    setSelectedStores([]);
     setIsReceiverModalOpen(false);
   };
 
   // --- Store Search Modal ---
   const fetchStores = async () => {
-    // 선택된 수신기의 시장 ID에 해당하는 상가만 조회
     if (!formData.marketId) {
         setStoreList([]);
         return;
@@ -232,11 +239,12 @@ export const DetectorManagement: React.FC = () => {
     setIsStoreModalOpen(true);
   };
   const handleStoreSelect = (s: Store) => {
-    setFormData({ 
-      ...formData, 
-      storeId: s.id, 
-      storeName: s.name 
-    });
+    // 중복 체크
+    if (selectedStores.some(store => store.id === s.id)) {
+        alert('이미 추가된 상가입니다.');
+        return;
+    }
+    setSelectedStores([...selectedStores, { id: s.id, name: s.name }]);
     setIsStoreModalOpen(false);
   };
 
@@ -281,11 +289,11 @@ export const DetectorManagement: React.FC = () => {
         receiverMac: row['수신기MAC'] ? String(row['수신기MAC']) : '',
         repeaterId: row['중계기ID'] ? String(row['중계기ID']).padStart(2, '0') : '01',
         detectorId: row['감지기ID'] ? String(row['감지기ID']).padStart(2, '0') : '01',
-        storeName: row['상가명'] || '',
         mode: row['모드'] || '복합',
         usageStatus: row['사용여부'] || '사용',
         cctvUrl: row['CCTV URL'] || '',
         memo: row['비고'] || '',
+        stores: row['상가명'] ? [{ id: 0, name: row['상가명'] }] : [] // 엑셀 일괄 등록시 상가명 표시용
       }));
 
       setExcelData(parsedData);
@@ -319,7 +327,7 @@ export const DetectorManagement: React.FC = () => {
         '수신기MAC': '001A',
         '중계기ID': '01',
         '감지기ID': '01',
-        '상가명': '자유막국수',
+        '상가명': '샘플상가',
         '모드': '복합',
         '사용여부': '사용',
         'CCTV URL': 'http://...',
@@ -336,11 +344,21 @@ export const DetectorManagement: React.FC = () => {
     { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
     { header: '감지기 ID', accessor: 'detectorId', width: '100px' },
     { header: '설치시장', accessor: 'marketName' },
-    { header: '설치상가', accessor: (item) => item.storeName || '-', width: '150px' },
-    { header: 'CCTV URL', accessor: 'cctvUrl' },
+    { 
+      header: '설치상가', 
+      accessor: (item) => {
+        if (!item.stores || item.stores.length === 0) return '-';
+        if (item.stores.length === 1) return item.stores[0].name;
+        return `${item.stores[0].name} 외 ${item.stores.length - 1}건`;
+      }, 
+      width: '150px' 
+    },
+    // Fix 1: Reduce Width of CCTV URL to give space for usage status
+    { header: 'CCTV URL', accessor: 'cctvUrl', width: '150px' },
+    // Fix 1: Increase Width of Usage Status to prevent wrapping
     { header: '사용여부', accessor: (item) => (
       <span className={item.usageStatus === '사용' ? 'text-green-400' : 'text-red-400'}>{item.usageStatus}</span>
-    ), width: '80px' },
+    ), width: '100px' },
   ];
 
   // Pagination logic
@@ -408,23 +426,23 @@ export const DetectorManagement: React.FC = () => {
               />
             </FormRow>
 
-            {/* 설치 상가 (Search) */}
+            {/* 설치 상가 (Multiple Selection List) */}
             <FormRow label="설치 상가(점포 추가)" className="col-span-1 md:col-span-2">
-              <div className="flex gap-2 w-full max-w-md">
-                <div onClick={openStoreModal} className="flex-1 relative cursor-pointer">
-                  <input 
-                    type="text"
-                    value={formData.storeName || ''} 
-                    placeholder="상가를 선택하세요" 
-                    readOnly 
-                    className={`${UI_STYLES.input} cursor-pointer hover:bg-slate-700/50 pr-8`}
-                  />
-                  <Search className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
-                </div>
-                <Button type="button" variant="secondary" onClick={openStoreModal}>검색</Button>
-                {formData.storeName && (
-                    <Button type="button" variant="secondary" onClick={() => setFormData({...formData, storeId: undefined, storeName: undefined})}>삭제</Button>
-                )}
+              <div className="flex flex-col gap-2 max-w-md">
+                 <div className="flex justify-end">
+                    <Button type="button" variant="secondary" onClick={openStoreModal} icon={<Search size={14} />}>상가 검색 추가</Button>
+                 </div>
+                 <div className="bg-slate-900 border border-slate-600 rounded p-2 h-32 overflow-y-auto custom-scrollbar">
+                    {selectedStores.length === 0 && <span className="text-slate-500 text-sm p-2">등록된 상가가 없습니다.</span>}
+                    {selectedStores.map((store, idx) => (
+                      <div key={store.id} className="flex justify-between items-center py-1.5 px-2 border-b border-slate-700/50 last:border-0 hover:bg-slate-800">
+                        <span className="text-slate-200">{store.name}</span>
+                        <button type="button" onClick={() => removeStore(store.id)} className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-slate-700">
+                           <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                 </div>
               </div>
             </FormRow>
 
@@ -589,7 +607,7 @@ export const DetectorManagement: React.FC = () => {
                   {header:'수신기MAC', accessor:'receiverMac'},
                   {header:'중계기ID', accessor:'repeaterId'},
                   {header:'감지기ID', accessor:'detectorId'},
-                  {header:'상가명', accessor:'storeName'},
+                  {header:'상가명', accessor: (d) => d.stores?.[0]?.name || '-'},
                   {header:'모드', accessor:'mode'},
                ]}
                data={excelData.slice(0, 50)} 

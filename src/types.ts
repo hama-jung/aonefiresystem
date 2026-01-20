@@ -119,8 +119,10 @@ export interface Detector {
   id: number;
   marketId: number;
   marketName?: string; // Join
-  storeId?: number;
-  storeName?: string; // Join
+  
+  // Updated for multiple stores
+  stores?: { id: number; name: string }[]; 
+  
   receiverMac: string;
   repeaterId: string; // '01' ~ '20'
   detectorId: string; // '01' ~ '20'
