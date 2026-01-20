@@ -46,8 +46,14 @@ export const WorkLogManagement: React.FC = () => {
       const data = await WorkLogAPI.getList(query);
       setLogs(data);
       setCurrentPage(1);
-    } catch (e) {
-      alert('데이터 로드 실패');
+    } catch (e: any) {
+      console.error("데이터 로드 중 오류:", e);
+      // 테이블이 없는 경우(초기 설정 전)에는 사용자에게 알림창을 띄우지 않고 콘솔에만 경고
+      if (e.message && e.message.includes('Could not find the table')) {
+         console.warn('DB 테이블(work_logs)이 존재하지 않습니다. SQL 스크립트를 실행해주세요.');
+      } else {
+         alert('데이터 로드 실패: ' + e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -125,7 +131,13 @@ export const WorkLogManagement: React.FC = () => {
       setView('list');
       fetchLogs();
     } catch (e: any) {
-      alert(`저장 실패: ${e.message}`);
+      console.error(e);
+      // 테이블 미생성 에러 가이드 메시지 추가
+      if (e.message && e.message.includes('Could not find the table')) {
+        alert('저장 실패: 데이터베이스에 작업일지 테이블(work_logs)이 없습니다.\n\n[해결방법]\nSupabase SQL Editor에서 "supabase_worklogs.sql" 스크립트를 실행하여 테이블을 생성해주세요.');
+      } else {
+        alert(`저장 실패: ${e.message}`);
+      }
     }
   };
 
