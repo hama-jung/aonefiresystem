@@ -3,6 +3,9 @@ import { ChevronLeft, ChevronRight, Search, Plus, FileSpreadsheet, Trash2, Rotat
 import { Market, Receiver } from '../types';
 import { MarketAPI, ReceiverAPI } from '../services/api';
 
+// --- Global Constants ---
+export const ITEMS_PER_PAGE = 30; // 전역 페이지 목록 개수 설정
+
 // --- Helper Functions ---
 export const formatPhoneNumber = (value: string | undefined) => {
   if (!value) return '-';

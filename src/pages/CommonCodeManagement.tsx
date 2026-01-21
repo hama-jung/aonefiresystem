@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, 
-  Pagination, FormSection, FormRow, Column, UI_STYLES, StatusRadioGroup, ActionBar, StatusBadge
+  Pagination, FormSection, FormRow, Column, UI_STYLES, StatusRadioGroup, ActionBar, StatusBadge, ITEMS_PER_PAGE // Import global constant
 } from '../components/CommonUI';
 import { CommonCode } from '../types';
 import { CommonCodeAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
 import { Upload, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
-
-const ITEMS_PER_PAGE = 10;
 
 export const CommonCodeManagement: React.FC = () => {
   const [view, setView] = useState<'list' | 'excel'>('list');

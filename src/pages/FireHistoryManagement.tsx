@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
-  Pagination, Column, Modal, UI_STYLES
+  Pagination, Column, Modal, UI_STYLES, ITEMS_PER_PAGE // Import global constant
 } from '../components/CommonUI';
 import { FireHistoryItem, CommonCode } from '../types';
 import { FireHistoryAPI, CommonCodeAPI } from '../services/api';
 import { FileSpreadsheet, Trash2 } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
-
-const ITEMS_PER_PAGE = 30;
 
 export const FireHistoryManagement: React.FC = () => {
   const [historyList, setHistoryList] = useState<FireHistoryItem[]>([]);

@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, 
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, Modal, UI_STYLES,
-  formatPhoneNumber, handlePhoneKeyDown // Added import
+  formatPhoneNumber, handlePhoneKeyDown, ITEMS_PER_PAGE // Import global constant
 } from '../components/CommonUI';
 import { User, RoleItem } from '../types';
 import { UserAPI, RoleAPI, CommonAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
 
-const ITEMS_PER_PAGE = 10;
 const MODAL_ITEMS_PER_PAGE = 5;
 
 // 정규식 상수
@@ -16,6 +15,7 @@ const ID_REGEX = /^[A-Za-z0-9]{6,12}$/;
 // 영문, 숫자, 특수문자 포함 6~12자
 const PW_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{6,12}$/;
 
+// ... (rest of the file remains exactly the same, using ITEMS_PER_PAGE imported above) ...
 // 업체 목록 아이템 인터페이스
 interface CompanyItem {
   id: string;
