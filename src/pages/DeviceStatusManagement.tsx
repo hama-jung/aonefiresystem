@@ -207,10 +207,10 @@ export const DeviceStatusManagement: React.FC = () => {
     },
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '시장명', accessor: 'marketName' },
-    { header: '수신기 MAC', accessor: 'receiverMac' },
-    { header: '중계기 ID', accessor: 'repeaterId', width: '80px' },
+    { header: '수신기 MAC', accessor: 'receiverMac', width: '120px' },
+    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
     { header: '기기 구분', accessor: 'deviceType', width: '100px' },
-    { header: '기기 ID', accessor: 'deviceId', width: '80px' },
+    { header: '기기 ID', accessor: 'deviceId', width: '100px' },
     { header: '기기 상태', accessor: (item) => (
         <span className={item.deviceStatus === '에러' ? 'text-red-400 font-bold' : 'text-blue-400'}>{item.deviceStatus}</span>
     ), width: '100px' },
@@ -286,8 +286,6 @@ export const DeviceStatusManagement: React.FC = () => {
          </span>
          <div className="flex gap-2">
             <Button variant="success" onClick={handleExcel} icon={<FileSpreadsheet size={16} />}>엑셀다운로드</Button>
-            <Button variant="primary" onClick={handleSearch}>검색</Button>
-            <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
          </div>
       </div>
 
@@ -333,13 +331,21 @@ export const DeviceStatusManagement: React.FC = () => {
         </div>
       )}
 
-      <div className="flex justify-center mt-4">
-         <Pagination 
-            totalItems={statusList.length}
-            itemsPerPage={ITEMS_PER_PAGE}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
-         />
+      {/* Bottom Actions and Pagination */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
+          <div>
+             <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
+          </div>
+          <div className="flex-1 flex justify-center w-full md:w-auto">
+             <Pagination 
+                totalItems={statusList.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+             />
+          </div>
+          {/* Spacer to balance the layout if needed */}
+          <div className="w-[74px] hidden md:block"></div> 
       </div>
 
       {/* Modal */}
