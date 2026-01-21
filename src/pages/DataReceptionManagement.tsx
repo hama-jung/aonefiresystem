@@ -4,11 +4,14 @@ import {
   Pagination, Column, UI_STYLES, ITEMS_PER_PAGE,
   DateRangePicker, validateDateRange 
 } from '../components/CommonUI';
+import { usePageTitle } from '../components/Layout'; // Import Hook
 import { DataReceptionItem } from '../types';
 import { DataReceptionAPI } from '../services/api';
 import { Trash2 } from 'lucide-react';
 
 export const DataReceptionManagement: React.FC = () => {
+  const pageTitle = usePageTitle('데이터 수신 관리'); // Use Hook
+
   const [dataList, setDataList] = useState<DataReceptionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -169,7 +172,7 @@ export const DataReceptionManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="데이터수신관리 목록" />
+      <PageHeader title={pageTitle} />
       
       {/* Disclaimer */}
       <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">
@@ -193,10 +196,7 @@ export const DataReceptionManagement: React.FC = () => {
          <span className="text-sm font-bold text-slate-300">
            전체 {dataList.length} 개 (페이지 {currentPage})
          </span>
-         <div className="flex gap-2">
-            <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
-            <Button variant="primary" onClick={handleSearch}>검색</Button>
-         </div>
+         {/* 중복 검색 버튼 및 상단 삭제 버튼 제거 */}
       </div>
 
       {loading ? (
@@ -243,13 +243,21 @@ export const DataReceptionManagement: React.FC = () => {
         </div>
       )}
 
-      <div className="flex justify-center mt-4">
-         <Pagination 
-            totalItems={dataList.length}
-            itemsPerPage={ITEMS_PER_PAGE}
-            currentPage={currentPage}
-            onPageChange={setCurrentPage}
-         />
+      {/* Bottom Actions and Pagination (Layout consistent with DeviceStatusManagement) */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
+          <div>
+             <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
+          </div>
+          <div className="flex-1 flex justify-center w-full md:w-auto">
+             <Pagination 
+                totalItems={dataList.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+             />
+          </div>
+          {/* Spacer to balance the layout if needed */}
+          <div className="w-[74px] hidden md:block"></div> 
       </div>
     </>
   );

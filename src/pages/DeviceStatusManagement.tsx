@@ -4,12 +4,15 @@ import {
   Pagination, Column, Modal, UI_STYLES, ITEMS_PER_PAGE,
   DateRangePicker, validateDateRange 
 } from '../components/CommonUI';
+import { usePageTitle } from '../components/Layout'; // Import Hook
 import { DeviceStatusItem, CommonCode } from '../types';
 import { DeviceStatusAPI, CommonCodeAPI } from '../services/api';
 import { FileSpreadsheet, Trash2 } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 
 export const DeviceStatusManagement: React.FC = () => {
+  const pageTitle = usePageTitle('기기 상태 관리'); // Use Hook
+  
   const [statusList, setStatusList] = useState<DeviceStatusItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -244,7 +247,7 @@ export const DeviceStatusManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="기기상태관리 목록" />
+      <PageHeader title={pageTitle} />
       
       {/* Disclaimer */}
       <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">

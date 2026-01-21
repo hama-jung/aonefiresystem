@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
   ChevronDown, ChevronRight, LogOut, Menu, Bell, Key, HelpCircle, User
@@ -10,6 +10,20 @@ import { getIcon } from '../utils/iconMapper';
 
 // 비밀번호 정규식
 const PW_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{6,12}$/;
+
+// --- Menu Context ---
+const MenuContext = createContext<MenuItemDB[]>([]);
+
+// --- Hook for Page Title Synchronization ---
+export const usePageTitle = (defaultTitle: string) => {
+  const menus = useContext(MenuContext);
+  const location = useLocation();
+  
+  // Find menu item matching the current path
+  const currentMenu = menus.find(m => m.path === location.pathname);
+  
+  return currentMenu ? currentMenu.label : defaultTitle;
+};
 
 const SidebarItem: React.FC<{ item: MenuItemDB; level?: number }> = ({ item, level = 0 }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -65,7 +79,11 @@ const SidebarItem: React.FC<{ item: MenuItemDB; level?: number }> = ({ item, lev
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [menuItems, setMenuItems] = useState<MenuItemDB[]>([]);
+  
+  // Flattened menu list for lookup
+  const [allMenus, setAllMenus] = useState<MenuItemDB[]>([]);
+  // Tree structure for sidebar
+  const [menuTree, setMenuTree] = useState<MenuItemDB[]>([]);
   
   // 비밀번호 변경 모달 상태
   const [isPwModalOpen, setIsPwModalOpen] = useState(false);
@@ -87,8 +105,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // 메뉴 데이터 로드 함수
   const loadMenus = useCallback(async () => {
     try {
-        const tree = await MenuAPI.getTree();
-        setMenuItems(tree);
+        const list = await MenuAPI.getAll(); // Fetch flat list
+        setAllMenus(list);
+
+        // Build Tree
+        const buildTree = (items: MenuItemDB[], parentId: number | null = null): MenuItemDB[] => {
+          return items
+            .filter(item => (item.parentId || null) === parentId)
+            .map(item => ({
+              ...item,
+              children: buildTree(items, item.id)
+            }))
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+        };
+        setMenuTree(buildTree(list));
+
     } catch (e) {
         console.error("Failed to load menus");
     }
@@ -158,190 +189,186 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   // --- Menu Filtering Logic ---
-  // DB에서 가져온 트리 구조를 현재 뷰(PC/Mobile) 설정에 따라 필터링
   const getVisibleMenus = (menus: MenuItemDB[]): MenuItemDB[] => {
     return menus
       .filter(item => {
-        // 1. 현재 뷰에 따라 노출 여부 확인
         if (isMobileView) return item.isVisibleMobile;
         return item.isVisiblePc;
       })
       .map(item => ({
         ...item,
-        // 2. 자식 메뉴도 재귀적으로 필터링
         children: item.children ? getVisibleMenus(item.children) : undefined
-      }))
-      // 3. 자식이 모두 필터링되어 사라졌는데, 본인도 경로가 없는 폴더(Folder)라면 숨김 처리 (옵션)
-      //    (현재는 폴더도 명시적으로 노출 설정되어 있으면 보이도록 유지)
+      }));
   };
 
-  const visibleMenuItems = getVisibleMenus(menuItems);
+  const visibleMenuItems = getVisibleMenus(menuTree);
 
   return (
-    <div className="flex h-screen bg-[#0f172a] overflow-hidden text-slate-200">
-      {/* Sidebar */}
-      <aside 
-        className={`
-          fixed inset-y-0 left-0 z-50 w-60 bg-[#2f3b52] text-white transform transition-transform duration-300 ease-in-out shadow-xl border-r border-slate-800
-          lg:translate-x-0 lg:static lg:inset-0
-          ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
-      >
-        {/* Brand Header */}
-        <div className="h-20 flex flex-col justify-center px-5 bg-[#263245] shadow-sm border-b border-[#3e4b61]">
-          <div className="text-[20px] font-black text-white tracking-wide leading-none mb-1">
-            A-ONE 에이원
-          </div>
-          <div className="text-[12px] font-bold text-red-500 tracking-tight">
-            화재감지 모니터링
-          </div>
-        </div>
-
-        {/* Menu Area */}
-        <div className="overflow-y-auto h-[calc(100vh-5rem)] custom-scrollbar py-3">
-          <nav className="space-y-0.5">
-            {visibleMenuItems.map((item) => (
-              <SidebarItem key={item.id} item={item} />
-            ))}
-          </nav>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="h-14 bg-[#2f3b52] text-white shadow-md flex items-center justify-between px-4 lg:px-6 z-40 border-b border-[#1e293b] flex-shrink-0">
-          <div className="flex items-center gap-3">
-            {/* 1. 햄버거 메뉴 (모바일) */}
-            <button 
-              className="lg:hidden p-2 text-gray-300 hover:bg-[#3e4b61] rounded-md transition-colors"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <Menu size={22} />
-            </button>
-            
-            {/* 2. 화재 상황 알림 */}
-            <div className="flex items-center gap-2 text-red-500 font-bold px-2 py-1 rounded bg-red-500/10 border border-red-500/20">
-               <Bell size={16} className="animate-pulse" />
-               <span className="text-[13px] hidden sm:inline">현재 전국 화재 상황 (0건)</span>
-               <span className="text-[13px] sm:hidden">화재 (0)</span>
+    <MenuContext.Provider value={allMenus}>
+      <div className="flex h-screen bg-[#0f172a] overflow-hidden text-slate-200">
+        {/* Sidebar */}
+        <aside 
+          className={`
+            fixed inset-y-0 left-0 z-50 w-60 bg-[#2f3b52] text-white transform transition-transform duration-300 ease-in-out shadow-xl border-r border-slate-800
+            lg:translate-x-0 lg:static lg:inset-0
+            ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
+          `}
+        >
+          {/* Brand Header */}
+          <div className="h-20 flex flex-col justify-center px-5 bg-[#263245] shadow-sm border-b border-[#3e4b61]">
+            <div className="text-[20px] font-black text-white tracking-wide leading-none mb-1">
+              A-ONE 에이원
+            </div>
+            <div className="text-[12px] font-bold text-red-500 tracking-tight">
+              화재감지 모니터링
             </div>
           </div>
 
-          {/* Right Side Controls (PC Optimized) */}
-          <div className="flex items-center gap-2 lg:gap-4">
-             {/* 3. 사용자 정보 (이름 + 아이디) */}
-             <div className="flex items-center gap-2 px-2 py-1">
-                <div className="p-1.5 bg-gray-600 rounded-full lg:hidden">
-                  <User size={14} className="text-white" />
-                </div>
-                <div className="text-sm flex flex-col lg:flex-row lg:items-center lg:gap-1.5 text-right lg:text-left">
-                  <span className="font-bold text-white leading-tight">{currentUser?.name || 'Guest'}</span>
-                  {currentUser?.userId && (
-                    <span className="text-xs lg:text-sm text-gray-400 font-normal leading-tight">({currentUser.userId})</span>
-                  )}
-                </div>
-             </div>
-
-             {/* 구분선 (PC만) */}
-             <div className="hidden lg:block w-px h-4 bg-gray-600"></div>
-
-             {/* 4. 비밀번호 변경 (아이콘 + 텍스트) */}
-             <button 
-               onClick={handleOpenPwModal}
-               className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
-               title="비밀번호 변경"
-             >
-               <Key size={16} />
-               <span className="hidden lg:inline text-[13px] font-medium pt-0.5">비밀번호 변경</span>
-             </button>
-
-             {/* 5. 로그아웃 (아이콘 + 텍스트) */}
-             <button 
-               onClick={handleLogout}
-               className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
-               title="로그아웃"
-             >
-               <LogOut size={16} />
-               <span className="hidden lg:inline text-[13px] font-medium pt-0.5">로그아웃</span>
-             </button>
+          {/* Menu Area */}
+          <div className="overflow-y-auto h-[calc(100vh-5rem)] custom-scrollbar py-3">
+            <nav className="space-y-0.5">
+              {visibleMenuItems.map((item) => (
+                <SidebarItem key={item.id} item={item} />
+              ))}
+            </nav>
           </div>
-        </header>
+        </aside>
 
-        {/* Content Body (Dark bg) */}
-        {/* Fix: Moved padding inside and used min-h-full instead of h-full to allow content to grow */}
-        <main className="flex-1 overflow-y-auto bg-[#0f172a] custom-scrollbar relative">
-          <div className="w-full min-h-full flex flex-col max-w-[1920px] mx-auto py-6 px-4 md:px-[60px] pb-32">
-            {children}
-          </div>
-        </main>
-      </div>
-
-      {/* Overlay for mobile menu */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
-
-      {/* Password Change Modal */}
-      {isPwModalOpen && (
-        <Modal 
-          isOpen={isPwModalOpen} 
-          onClose={() => setIsPwModalOpen(false)}
-          title="비밀번호 변경"
-          icon={<Key size={20} className="text-blue-500" />}
-        >
-          <form onSubmit={handlePwChangeSubmit} className="flex flex-col gap-6">
-            <div className="space-y-5">
-              <InputGroup 
-                label="현재 비밀번호" 
-                type="password" 
-                placeholder="현재 비밀번호 입력"
-                value={pwForm.current}
-                onChange={(e) => setPwForm({...pwForm, current: e.target.value})}
-                inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
-              />
-              <InputGroup 
-                label="새 비밀번호" 
-                type="password" 
-                placeholder="새 비밀번호 입력"
-                value={pwForm.new}
-                onChange={(e) => setPwForm({...pwForm, new: e.target.value})}
-                inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
-              />
-              <div className="flex flex-col gap-1">
-                <InputGroup 
-                  label="새 비밀번호 확인" 
-                  type="password" 
-                  placeholder="새 비밀번호 다시 입력"
-                  value={pwForm.confirm}
-                  onChange={(e) => setPwForm({...pwForm, confirm: e.target.value})}
-                  inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
-                />
-                {pwForm.new && pwForm.confirm && pwForm.new !== pwForm.confirm && (
-                    <p className="text-xs text-red-400 font-medium">비밀번호가 일치하지 않습니다.</p>
-                )}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          {/* Top Header */}
+          <header className="h-14 bg-[#2f3b52] text-white shadow-md flex items-center justify-between px-4 lg:px-6 z-40 border-b border-[#1e293b] flex-shrink-0">
+            <div className="flex items-center gap-3">
+              {/* 1. 햄버거 메뉴 (모바일) */}
+              <button 
+                className="lg:hidden p-2 text-gray-300 hover:bg-[#3e4b61] rounded-md transition-colors"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              >
+                <Menu size={22} />
+              </button>
+              
+              {/* 2. 화재 상황 알림 */}
+              <div className="flex items-center gap-2 text-red-500 font-bold px-2 py-1 rounded bg-red-500/10 border border-red-500/20">
+                 <Bell size={16} className="animate-pulse" />
+                 <span className="text-[13px] hidden sm:inline">현재 전국 화재 상황 (0건)</span>
+                 <span className="text-[13px] sm:hidden">화재 (0)</span>
               </div>
             </div>
-            
-            <div className="grid grid-cols-2 gap-3 pt-2">
-               <Button type="submit" variant="primary" className="w-full py-2.5">
-                 변경하기
-               </Button>
-               <Button 
-                 type="button" 
-                 variant="secondary" 
-                 onClick={() => setIsPwModalOpen(false)} 
-                 className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-200"
+
+            {/* Right Side Controls (PC Optimized) */}
+            <div className="flex items-center gap-2 lg:gap-4">
+               {/* 3. 사용자 정보 (이름 + 아이디) */}
+               <div className="flex items-center gap-2 px-2 py-1">
+                  <div className="p-1.5 bg-gray-600 rounded-full lg:hidden">
+                    <User size={14} className="text-white" />
+                  </div>
+                  <div className="text-sm flex flex-col lg:flex-row lg:items-center lg:gap-1.5 text-right lg:text-left">
+                    <span className="font-bold text-white leading-tight">{currentUser?.name || 'Guest'}</span>
+                    {currentUser?.userId && (
+                      <span className="text-xs lg:text-sm text-gray-400 font-normal leading-tight">({currentUser.userId})</span>
+                    )}
+                  </div>
+               </div>
+
+               {/* 구분선 (PC만) */}
+               <div className="hidden lg:block w-px h-4 bg-gray-600"></div>
+
+               {/* 4. 비밀번호 변경 (아이콘 + 텍스트) */}
+               <button 
+                 onClick={handleOpenPwModal}
+                 className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
+                 title="비밀번호 변경"
                >
-                 취소
-               </Button>
+                 <Key size={16} />
+                 <span className="hidden lg:inline text-[13px] font-medium pt-0.5">비밀번호 변경</span>
+               </button>
+
+               {/* 5. 로그아웃 (아이콘 + 텍스트) */}
+               <button 
+                 onClick={handleLogout}
+                 className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
+                 title="로그아웃"
+               >
+                 <LogOut size={16} />
+                 <span className="hidden lg:inline text-[13px] font-medium pt-0.5">로그아웃</span>
+               </button>
             </div>
-          </form>
-        </Modal>
-      )}
-    </div>
+          </header>
+
+          {/* Content Body (Dark bg) */}
+          <main className="flex-1 overflow-y-auto bg-[#0f172a] custom-scrollbar relative">
+            <div className="w-full min-h-full flex flex-col max-w-[1920px] mx-auto py-6 px-4 md:px-[60px] pb-32">
+              {children}
+            </div>
+          </main>
+        </div>
+
+        {/* Overlay for mobile menu */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
+        {/* Password Change Modal */}
+        {isPwModalOpen && (
+          <Modal 
+            isOpen={isPwModalOpen} 
+            onClose={() => setIsPwModalOpen(false)}
+            title="비밀번호 변경"
+            icon={<Key size={20} className="text-blue-500" />}
+          >
+            <form onSubmit={handlePwChangeSubmit} className="flex flex-col gap-6">
+              <div className="space-y-5">
+                <InputGroup 
+                  label="현재 비밀번호" 
+                  type="password" 
+                  placeholder="현재 비밀번호 입력"
+                  value={pwForm.current}
+                  onChange={(e) => setPwForm({...pwForm, current: e.target.value})}
+                  inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
+                />
+                <InputGroup 
+                  label="새 비밀번호" 
+                  type="password" 
+                  placeholder="새 비밀번호 입력"
+                  value={pwForm.new}
+                  onChange={(e) => setPwForm({...pwForm, new: e.target.value})}
+                  inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
+                />
+                <div className="flex flex-col gap-1">
+                  <InputGroup 
+                    label="새 비밀번호 확인" 
+                    type="password" 
+                    placeholder="새 비밀번호 다시 입력"
+                    value={pwForm.confirm}
+                    onChange={(e) => setPwForm({...pwForm, confirm: e.target.value})}
+                    inputClassName="!bg-slate-900 border-slate-600 focus:border-blue-500"
+                  />
+                  {pwForm.new && pwForm.confirm && pwForm.new !== pwForm.confirm && (
+                      <p className="text-xs text-red-400 font-medium">비밀번호가 일치하지 않습니다.</p>
+                  )}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                 <Button type="submit" variant="primary" className="w-full py-2.5">
+                   변경하기
+                 </Button>
+                 <Button 
+                   type="button" 
+                   variant="secondary" 
+                   onClick={() => setIsPwModalOpen(false)} 
+                   className="w-full py-2.5 bg-slate-700 hover:bg-slate-600 border-slate-600 text-slate-200"
+                 >
+                   취소
+                 </Button>
+              </div>
+            </form>
+          </Modal>
+        )}
+      </div>
+    </MenuContext.Provider>
   );
 };

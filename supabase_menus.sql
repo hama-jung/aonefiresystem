@@ -33,7 +33,8 @@ INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "
 (2, '문자 전송', '/sms', 50, true, false),
 (2, '작업일지', '/work-logs', 60, true, true),
 (2, '롤 관리', '/roles', 70, true, false),
-(2, '메뉴 관리', '/menus', 80, true, false);
+(2, '메뉴 관리', '/menus', 80, true, false),
+(2, '공통코드 관리', '/common-codes', 75, true, false);
 
 -- Device Management Children (ParentID: 3)
 INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "isVisibleMobile") VALUES
@@ -46,7 +47,8 @@ INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "
 -- Data Management Children (ParentID: 4)
 INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "isVisibleMobile") VALUES
 (4, '화재 이력 관리', '/fire-history', 10, true, true),
-(4, '기기 상태 관리', '/device-status', 20, true, true);
+(4, '기기 상태 관리', '/device-status', 20, true, true),
+(4, '데이터 수신 관리', '/data-reception', 30, true, true);
 
 -- 5. Final Sequence Sync (Just to be safe)
 SELECT setval('menus_id_seq', (SELECT MAX(id) FROM public.menus));

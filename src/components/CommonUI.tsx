@@ -52,13 +52,13 @@ export const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => 
   }
 };
 
-// --- Date Logic Helpers (1 Month Rule) ---
+// --- Date Logic Helpers (7 Days Rule) ---
 const getDateConstraints = () => {
   const today = new Date();
   const maxDate = today.toISOString().split('T')[0]; // 오늘 (미래 선택 불가)
   
   const minDateObj = new Date(today);
-  minDateObj.setMonth(today.getMonth() - 1); // 1달 전
+  minDateObj.setDate(today.getDate() - 7); // 7일 전
   const minDate = minDateObj.toISOString().split('T')[0];
 
   return { minDate, maxDate };
@@ -90,7 +90,7 @@ export const validateDateRange = (startDate: string, endDate: string): boolean =
   }
 
   if (start < limitDate) {
-    alert(`시작일은 오늘 기준 1달 전(${minDate})까지만 선택 가능합니다.`);
+    alert(`시작일은 오늘 기준 7일 전(${minDate})까지만 선택 가능합니다.`);
     return false;
   }
 
@@ -327,8 +327,6 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
   );
 };
 
-// --- Business Modals (Market, Receiver) ---
-
 export const MarketSearchModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -442,24 +440,22 @@ export const ReceiverSearchModal: React.FC<{
   );
 };
 
-// --- Address Search Modal (Daum Postcode API - EMBED METHOD) ---
-interface AddressSearchModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onComplete: (data: { address: string; zonecode: string; buildingName: string }) => void;
-}
-
 declare global {
   interface Window {
     daum: any;
   }
 }
 
+export interface AddressSearchModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onComplete: (data: { address: string; zonecode: string; buildingName: string }) => void;
+}
+
 export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, onClose, onComplete }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 1. 모달이 열려있지 않거나 스크립트가 없으면 리턴
     if (!isOpen || !window.daum) {
       if (isOpen && !window.daum) {
         alert("주소 검색 서비스를 불러올 수 없습니다. 네트워크 연결을 확인해주세요.");
@@ -471,15 +467,11 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
     const container = containerRef.current;
     if (!container) return;
 
-    // 2. 중요: 재진입 시 기존 내용 초기화
     container.innerHTML = '';
 
     try {
-      // 3. Daum 우편번호 서비스 생성
-      // 이 방식은 window.open을 사용하지 않고, 지정된 container element 내부에 iframe을 생성합니다.
       new window.daum.Postcode({
         oncomplete: function(data: any) {
-          // 주소 데이터 조합
           let addr = ''; 
           let extraAddr = ''; 
 
@@ -496,40 +488,34 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
              addr += ' (' + extraAddr + ')';
           }
 
-          // 완료 콜백 호출
           onComplete({
             address: addr,
             zonecode: data.zonecode,
             buildingName: data.buildingName
           });
 
-          // 모달 닫기 요청 (부모 컴포넌트가 이 요청을 받아 isOpen을 false로 변경하면 언마운트됨)
           onClose();
         },
         width: '100%',
         height: '100%',
-        // autoClose: false로 설정하여 라이브러리가 완료 후 스스로 postMessage를 보내 닫으려는 동작 방지
         autoClose: false,
-        animation: false, // 임베드 모드에서는 애니메이션 끔
-        
-        // [중요] 다크 테마 적용
+        animation: false, 
         theme: {
-            bgColor: "#1E293B", // bg-slate-800
-            searchBgColor: "#0F172A", // bg-slate-900 (Input background)
-            contentBgColor: "#1E293B", // bg-slate-800 (List background)
-            pageBgColor: "#1E293B", // bg-slate-800 (Page background)
-            textColor: "#E2E8F0", // text-slate-200
-            queryTextColor: "#F1F5F9", // text-slate-100
-            postcodeTextColor: "#60A5FA", // text-blue-400
-            emphTextColor: "#60A5FA", // text-blue-400
-            outlineColor: "#334155" // border-slate-700
+            bgColor: "#1E293B", 
+            searchBgColor: "#0F172A", 
+            contentBgColor: "#1E293B", 
+            pageBgColor: "#1E293B", 
+            textColor: "#E2E8F0", 
+            queryTextColor: "#F1F5F9", 
+            postcodeTextColor: "#60A5FA", 
+            emphTextColor: "#60A5FA", 
+            outlineColor: "#334155" 
         }
       }).embed(container);
     } catch (error) {
       console.error("Daum Postcode Embed Error:", error);
     }
 
-    // Cleanup: 컴포넌트가 언마운트되거나 닫힐 때 내부 HTML 정리
     return () => {
       if (container) container.innerHTML = '';
     };
@@ -539,12 +525,7 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    // 배경을 어둡게 처리하는 Modal 컴포넌트 재사용
     <Modal isOpen={isOpen} onClose={onClose} title="주소 검색" width="max-w-lg">
-      {/* 
-        이 div 안에 Daum 우편번호 서비스의 iframe이 삽입됩니다.
-        높이를 고정값(450px)으로 주어 내부 스크롤이 생기도록 합니다. 
-      */}
       <div 
         ref={containerRef} 
         className="w-full h-[450px] border border-slate-600 rounded bg-slate-900"
@@ -554,20 +535,16 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   );
 };
 
-// --- Helper: Mock Geocoder ---
 const getMockCoordinates = (address: string) => {
   let hash = 0;
   for (let i = 0; i < address.length; i++) {
     hash = address.charCodeAt(i) + ((hash << 5) - hash);
   }
-  // Generate pseudo-random coordinates around Seoul/Korea
-  // Base: 37.xxx, 126.xxx or 127.xxx
   const lat = (36.0 + (Math.abs(hash) % 20000) / 10000).toFixed(6);
   const lng = (126.0 + (Math.abs(hash) % 30000) / 10000).toFixed(6);
   return { lat, lng };
 };
 
-// --- Address Input Component (통합 주소 입력 폼) ---
 export interface AddressInputProps {
   label?: string;
   required?: boolean;
@@ -575,7 +552,7 @@ export interface AddressInputProps {
   addressDetail: string;
   onAddressChange: (val: string) => void;
   onDetailChange: (val: string) => void;
-  onCoordinateChange?: (lat: string, lng: string) => void; // New prop for coordinates
+  onCoordinateChange?: (lat: string, lng: string) => void; 
   className?: string;
 }
 
@@ -592,24 +569,17 @@ export const AddressInput: React.FC<AddressInputProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const detailInputRef = useRef<HTMLInputElement>(null);
 
-  // 주소 선택 완료 핸들러
   const handleComplete = useCallback((data: { address: string }) => {
-    // 1. 주소 업데이트
     onAddressChange(data.address);
-    
-    // 2. 모달 닫기 (즉시 언마운트)
     setIsOpen(false);
     
-    // 3. 좌표 자동 채우기 (Mock)
     if (onCoordinateChange) {
-        // 실제 API 호출처럼 보이게 하기 위해 약간의 지연 추가 (선택사항)
         setTimeout(() => {
             const { lat, lng } = getMockCoordinates(data.address);
             onCoordinateChange(lat, lng);
         }, 100);
     }
 
-    // 4. 상세 주소 입력창으로 포커스 이동
     setTimeout(() => {
         if (detailInputRef.current) {
             detailInputRef.current.focus();
@@ -626,7 +596,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
         {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="flex flex-col gap-2">
-        {/* Row 1: Readonly Address + Search Button */}
         <div className="flex gap-2 w-full">
           <div 
             className="flex-1 relative cursor-pointer" 
@@ -653,7 +622,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
           </Button>
         </div>
 
-        {/* Row 2: Detail Input */}
         <input
            ref={detailInputRef}
            type="text"
@@ -664,7 +632,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
         />
       </div>
 
-      {/* Address Search Modal (Embed Type) */}
       <AddressSearchModal
         isOpen={isOpen}
         onClose={handleClose}
@@ -674,7 +641,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
   );
 };
 
-// --- Table Component ---
 export interface Column<T> {
   header: string;
   accessor: keyof T | ((item: T, index: number) => React.ReactNode);
@@ -732,7 +698,6 @@ export const DataTable = <T extends { id: number | string }>({ columns, data, on
   );
 };
 
-// --- Pagination ---
 interface PaginationProps {
   totalItems: number;
   itemsPerPage: number;
@@ -799,7 +764,6 @@ export const Pagination: React.FC<PaginationProps> = ({ totalItems, itemsPerPage
   );
 };
 
-// --- Action Bar (Bottom buttons) ---
 export const ActionBar: React.FC<{
   onRegister?: () => void;
   onExcel?: () => void;
@@ -824,7 +788,6 @@ export const ActionBar: React.FC<{
   </div>
 );
 
-// --- Form Section ---
 export const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-sm mb-5 w-full">
     <h3 className="text-lg font-bold text-slate-200 mb-5 border-b border-slate-700 pb-2 flex items-center gap-2">
