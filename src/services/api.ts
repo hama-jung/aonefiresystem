@@ -83,8 +83,6 @@ const simulateDelay = <T>(data: T): Promise<T> => {
   });
 };
 
-// ... (AuthAPI, RoleAPI, CommonAPI, UserAPI 등 기존 코드 유지)
-
 export const AuthAPI = {
   login: async (id: string, pw: string) => {
     return new Promise((resolve, reject) => {
@@ -246,7 +244,6 @@ export const DistributorAPI = {
   }
 };
 
-// ... (나머지 API Stub들: StoreAPI, ReceiverAPI 등은 기존 파일 내용 유지)
 export const StoreAPI = { getList: async (q:any) => simulateDelay([]), save: async (s:any) => simulateDelay(s), delete: async (id:any) => simulateDelay(true), uploadStoreImage: async (f:any) => simulateDelay("url"), saveBulk: async (d:any) => simulateDelay(true) };
 export const ReceiverAPI = { getList: async (q?:any) => simulateDelay([]), save: async (r:any) => simulateDelay(r), delete: async (id:any) => simulateDelay(true), uploadImage: async (f:any) => simulateDelay("url"), saveBulk: async (d:any) => simulateDelay(true) };
 export const RepeaterAPI = { getList: async (q?:any) => simulateDelay([]), save: async (r:any) => simulateDelay(r), delete: async (id:any) => simulateDelay(true), uploadImage: async (f:any) => simulateDelay("url"), saveBulk: async (d:any) => simulateDelay(true) };
@@ -260,6 +257,4 @@ export const DataReceptionAPI = { getList: async (q?:any) => simulateDelay([]), 
 export const CommonCodeAPI = { getList: async (q?:any) => simulateDelay([]), save: async (c:any) => simulateDelay(c), saveBulk: async (c:any) => simulateDelay(true), delete: async (id:any) => simulateDelay(true) };
 export const MenuAPI = { getAll: async () => simulateDelay([] as MenuItemDB[]), getTree: async () => simulateDelay([] as MenuItemDB[]), toggleVisibility: async () => simulateDelay(true), updateVisibilities: async (updates: any) => simulateDelay(true), save: async (m:any) => simulateDelay(m), delete: async (id:any) => simulateDelay(true) };
 
-// Dashboard API도 업데이트된 시장 데이터를 사용하도록 수정할 수 있으나, 
-// 여기서는 기본 구조를 유지하고 Dashboard 페이지에서 직접 MarketAPI를 호출하여 마커를 그릴 것입니다.
 export const DashboardAPI = { getData: async () => simulateDelay({ stats: [], fireLogs: [], faultLogs: [], mapPoints: [] }) };

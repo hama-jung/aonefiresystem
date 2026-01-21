@@ -448,7 +448,7 @@ export const Dashboard: React.FC = () => {
                          카카오 개발자 센터의 허용 도메인 설정이 누락되었습니다.
                        </p>
                        <div className="text-xs text-left bg-slate-950 p-3 rounded border border-slate-700 mb-4">
-                          <p>1. 카카오 개발자 센터 > 앱 설정 > 플랫폼 > Web</p>
+                          <p>1. 카카오 개발자 센터 &gt; 앱 설정 &gt; 플랫폼 &gt; Web</p>
                           <p>2. 사이트 도메인에 아래 주소가 있는지 확인하세요:</p>
                           <code className="text-blue-400 block mt-1">{window.location.origin}</code>
                        </div>
