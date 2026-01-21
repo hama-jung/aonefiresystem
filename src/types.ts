@@ -298,3 +298,17 @@ export interface DeviceStatusItem {
   processStatus: '처리' | '미처리';
   note?: string;
 }
+
+// [NEW] 데이터 수신 관리 아이템
+export interface DataReceptionItem {
+  id: number;
+  marketName: string;
+  logType: string; // 로그유형 (예: 62)
+  receiverId: string; // 수신기 (예: 0909)
+  repeaterId: string; // 중계기 (예: 03)
+  receivedData: string; // 수신데이터 (Long Hex String)
+  commStatus: string; // 감지기통신상태 (Long Hex String)
+  batteryStatus: string; // 감지기배터리상태 (Long Hex String)
+  chamberStatus: string; // 감지기챔버상태 (Long Hex String)
+  registeredAt: string; // 등록일
+}

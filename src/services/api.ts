@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireLog, DeviceStatusLog, DataReceptionLog, RawUartLog, FireHistoryItem, DeviceStatusItem } from '../types';
+import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireLog, DeviceStatusLog, DataReceptionLog, RawUartLog, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
 /**
  * [Supabase 연동 완료]
@@ -419,7 +419,7 @@ export const UserAPI = {
   }
 };
 
-// ... (Other APIs remain unchanged: MarketAPI, DistributorAPI, StoreAPI, ReceiverAPI, RepeaterAPI, DetectorAPI, TransmitterAPI, AlarmAPI, WorkLogAPI, DashboardAPI, FireHistoryAPI) ...
+// ... (Other APIs remain unchanged: MarketAPI, DistributorAPI, StoreAPI, ReceiverAPI, RepeaterAPI, DetectorAPI, TransmitterAPI, AlarmAPI, WorkLogAPI, DashboardAPI, FireHistoryAPI, DeviceStatusAPI) ...
 
 // ... (Export APIs)
 export const MarketAPI = {
@@ -1330,7 +1330,6 @@ export const FireHistoryAPI = {
   }
 };
 
-// [NEW] DeviceStatusAPI
 export const DeviceStatusAPI = {
   getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
     let query = supabase
@@ -1380,6 +1379,38 @@ export const DeviceStatusAPI = {
 
   delete: async (id: number) => {
     const { error } = await supabase.from('device_status').delete().eq('id', id);
+    if (error) handleError(error);
+    return true;
+  }
+};
+
+// [NEW] DataReceptionAPI
+export const DataReceptionAPI = {
+  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string }) => {
+    let query = supabase
+      .from('data_reception')
+      .select('*')
+      .order('registeredAt', { ascending: false }); // Sort by latest
+
+    if (params) {
+        if (params.startDate) {
+            query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
+        }
+        if (params.endDate) {
+            query = query.lte('registeredAt', `${params.endDate}T23:59:59.999`);
+        }
+        if (params.marketName) {
+            query = query.ilike('marketName', `%${params.marketName}%`);
+        }
+    }
+
+    const { data, error } = await query;
+    if (error) handleError(error);
+    return data as DataReceptionItem[];
+  },
+
+  delete: async (id: number) => {
+    const { error } = await supabase.from('data_reception').delete().eq('id', id);
     if (error) handleError(error);
     return true;
   }
