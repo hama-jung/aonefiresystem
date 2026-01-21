@@ -228,29 +228,42 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
           </div>
 
-          {/* Right Side Controls */}
-          <div className="flex items-center gap-2">
-             {/* 3. 사용자 이름 (아이콘 제거) */}
-             <span className="text-sm font-bold text-white mr-2">
-               {currentUser?.name || 'Guest'}
-             </span>
+          {/* Right Side Controls (PC Optimized) */}
+          <div className="flex items-center gap-2 lg:gap-4">
+             {/* 3. 사용자 정보 (이름 + 아이디) */}
+             <div className="flex items-center gap-2 px-2 py-1">
+                <div className="p-1.5 bg-gray-600 rounded-full lg:hidden">
+                  <User size={14} className="text-white" />
+                </div>
+                <div className="text-sm flex flex-col lg:flex-row lg:items-center lg:gap-1.5 text-right lg:text-left">
+                  <span className="font-bold text-white leading-tight">{currentUser?.name || 'Guest'}</span>
+                  {currentUser?.userId && (
+                    <span className="text-xs lg:text-sm text-gray-400 font-normal leading-tight">({currentUser.userId})</span>
+                  )}
+                </div>
+             </div>
 
-             {/* 4. 비밀번호 변경 (열쇠 아이콘) */}
+             {/* 구분선 (PC만) */}
+             <div className="hidden lg:block w-px h-4 bg-gray-600"></div>
+
+             {/* 4. 비밀번호 변경 (아이콘 + 텍스트) */}
              <button 
                onClick={handleOpenPwModal}
-               className="p-2 rounded-full hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors"
+               className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
                title="비밀번호 변경"
              >
-               <Key size={20} />
+               <Key size={16} />
+               <span className="hidden lg:inline text-[13px] font-medium pt-0.5">비밀번호 변경</span>
              </button>
 
-             {/* 5. 로그아웃 */}
+             {/* 5. 로그아웃 (아이콘 + 텍스트) */}
              <button 
                onClick={handleLogout}
-               className="p-2 rounded-full hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors"
+               className="flex items-center gap-2 p-2 lg:px-3 lg:py-1.5 rounded-full lg:rounded hover:bg-[#3e4b61] text-gray-300 hover:text-white transition-colors lg:border lg:border-gray-600/50 lg:bg-[#3e4b61]/30"
                title="로그아웃"
              >
-               <LogOut size={20} />
+               <LogOut size={16} />
+               <span className="hidden lg:inline text-[13px] font-medium pt-0.5">로그아웃</span>
              </button>
           </div>
         </header>

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
-  Pagination, ActionBar, Column, Modal, UI_STYLES
+  Pagination, Column, Modal, UI_STYLES
 } from '../components/CommonUI';
 import { FireHistoryItem, CommonCode } from '../types';
 import { FireHistoryAPI, CommonCodeAPI } from '../services/api';
-import { Search, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { FileSpreadsheet, Trash2 } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 30;
 
 export const FireHistoryManagement: React.FC = () => {
   const [historyList, setHistoryList] = useState<FireHistoryItem[]>([]);
@@ -258,56 +258,57 @@ export const FireHistoryManagement: React.FC = () => {
         ⚠️ 공통코드 관리 메뉴에 등록된 코드명(예: 화재알람, 화재해소)과 연동되어 표시됩니다.
       </div>
 
-      {/* Search Filter */}
-      <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm mb-5">
-        <div className="flex flex-col md:flex-row gap-6 items-end">
-            <div className="flex-1">
-                <label className={UI_STYLES.label}>기간</label>
-                <div className="flex items-center gap-2">
-                    <input 
-                        type="date" 
-                        value={startDate} 
-                        onChange={(e) => setStartDate(e.target.value)} 
-                        className={UI_STYLES.input} 
-                    />
-                    <span className="text-slate-400">~</span>
-                    <input 
-                        type="date" 
-                        value={endDate} 
-                        onChange={(e) => setEndDate(e.target.value)} 
-                        className={UI_STYLES.input} 
-                    />
-                </div>
-            </div>
-            <div className="flex-1">
-                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-            </div>
-            <div className="flex-1">
-                <label className={UI_STYLES.label}>화재여부</label>
-                <div className="flex gap-4 items-center h-[42px]">
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                        <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/> 전체
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                        <input type="radio" checked={searchStatus === 'fire'} onChange={() => setSearchStatus('fire')} className="accent-blue-500 w-4 h-4"/> 화재
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-                        <input type="radio" checked={searchStatus === 'false'} onChange={() => setSearchStatus('false')} className="accent-blue-500 w-4 h-4"/> 오탐
-                    </label>
-                </div>
+      {/* Search Filter Bar */}
+      <SearchFilterBar onSearch={handleSearch}>
+        {/* 기간 검색 */}
+        <div className="min-w-[300px]">
+            <label className={UI_STYLES.label}>기간</label>
+            <div className="flex items-center gap-2">
+                <input 
+                    type="date" 
+                    value={startDate} 
+                    onChange={(e) => setStartDate(e.target.value)} 
+                    className={UI_STYLES.input} 
+                />
+                <span className="text-slate-400">~</span>
+                <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={(e) => setEndDate(e.target.value)} 
+                    className={UI_STYLES.input} 
+                />
             </div>
         </div>
-      </div>
+        
+        {/* 설치시장 검색 */}
+        <div className="min-w-[200px]">
+            <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+        </div>
 
-      {/* List Actions */}
+        {/* 화재여부 라디오 버튼 */}
+        <div className="min-w-[300px]">
+            <label className={UI_STYLES.label}>화재여부</label>
+            <div className="flex gap-4 items-center h-[42px] px-2">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                    <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/> 전체
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                    <input type="radio" checked={searchStatus === 'fire'} onChange={() => setSearchStatus('fire')} className="accent-blue-500 w-4 h-4"/> 화재
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
+                    <input type="radio" checked={searchStatus === 'false'} onChange={() => setSearchStatus('false')} className="accent-blue-500 w-4 h-4"/> 오탐
+                </label>
+            </div>
+        </div>
+      </SearchFilterBar>
+
+      {/* List Header Actions */}
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm font-bold text-slate-300">
            전체 {historyList.length} 개 (페이지 {currentPage})
          </span>
          <div className="flex gap-2">
             <Button variant="success" onClick={handleExcel} icon={<FileSpreadsheet size={16} />}>엑셀다운로드</Button>
-            <Button variant="primary" onClick={handleSearch} icon={<Search size={16} />}>검색</Button>
-            <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
          </div>
       </div>
 
@@ -353,12 +354,22 @@ export const FireHistoryManagement: React.FC = () => {
         </div>
       )}
 
-      <Pagination 
-        totalItems={historyList.length}
-        itemsPerPage={ITEMS_PER_PAGE}
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-      />
+      {/* Bottom Actions and Pagination */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
+          <div>
+             <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
+          </div>
+          <div className="flex-1 flex justify-center w-full md:w-auto">
+             <Pagination 
+                totalItems={historyList.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+             />
+          </div>
+          {/* Spacer to balance the layout if needed, or keeping it empty for now */}
+          <div className="w-[74px] hidden md:block"></div> 
+      </div>
 
       {/* Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="등록 팝업" width="max-w-md">
