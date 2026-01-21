@@ -214,8 +214,6 @@ export const DeviceStatusManagement: React.FC = () => {
     { header: '기기 상태', accessor: (item) => (
         <span className={item.deviceStatus === '에러' ? 'text-red-400 font-bold' : 'text-blue-400'}>{item.deviceStatus}</span>
     ), width: '100px' },
-    // 기기 에러 코드 (Hidden visually but data exists)
-    // { header: '기기 에러 코드', accessor: 'errorCode' }, 
     { header: '기기 에러 내용', accessor: (item) => getErrorName(item.errorCode) },
     { 
         header: '등록일', 
@@ -227,12 +225,13 @@ export const DeviceStatusManagement: React.FC = () => {
         accessor: (item) => (
             <button 
                 onClick={(e) => { 
-                    if (item.processStatus === '미처리') {
-                        e.stopPropagation(); 
-                        openModal(item); 
-                    }
+                    // 상태와 관계없이 항상 모달 오픈 가능
+                    e.stopPropagation(); 
+                    openModal(item); 
                 }}
-                className={`text-sm ${item.processStatus === '미처리' ? 'text-blue-400 hover:underline cursor-pointer' : 'text-slate-400 cursor-default'}`}
+                className={`text-sm font-bold hover:underline cursor-pointer ${
+                    item.processStatus === '미처리' ? 'text-blue-400' : 'text-green-400'
+                }`}
             >
                 [{item.processStatus}]
             </button>
