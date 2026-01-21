@@ -3,6 +3,8 @@ import { PageHeader, Pagination } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SIDO_LIST, getSigungu } from '../utils/addressData';
+import { MarketAPI } from '../services/api'; // MarketAPI 추가
+import { Market } from '../types';
 
 declare global {
   interface Window {
@@ -10,38 +12,37 @@ declare global {
   }
 }
 
-// --- Mock Data Generators ---
+// --- Mock Data Generators (Event Logs) ---
 const generateMockData = (count: number, type: 'fire' | 'fault' | 'comm') => {
   return Array.from({ length: count }, (_, i) => {
     const id = i + 1;
-    // 시간 생성 (최근 시간부터 역순)
     const date = new Date();
     date.setMinutes(date.getMinutes() - i * 45); 
     const timeStr = date.toISOString().replace('T', ' ').substring(0, 19);
 
     if (type === 'fire') {
-      const locations = ['대전광역시 서구 흥부과일', '전라남도 강진군 신세계건강원', '경상북도 상주시 B-8자매수선', '서울 성북구 길음시장', '부산 사상구 덕포시장'];
+      // 시장 목록에 있는 시장을 우선적으로 매칭
+      const markets = ['대전중앙시장', '부평자유시장', '서울광장시장', '부산자갈치시장'];
       return {
         id,
-        msg: `${locations[i % locations.length]} 화재 감지`,
+        msg: `${markets[i % markets.length]} A동 10${i}호 화재 감지`,
         time: timeStr,
-        location: ['대전', '전남', '경북', '서울', '부산'][i % 5]
+        marketName: markets[i % markets.length], // 매핑용 이름
       };
     } else if (type === 'fault') {
-      const markets = ['부평 문화의 거리', '대구능금시장', '안양 중앙시장', '모래내시장', '석바위시장'];
+      const markets = ['부평자유시장', '대구서문시장', '서울광장시장'];
       return {
         id,
-        msg: `중계기 ${(i % 10) + 1} 감지기 ${(i % 20) + 1} 배터리 이상 [${markets[i % markets.length]}]`,
+        msg: `중계기 ${(i % 10) + 1} 감지기 배터리 이상 [${markets[i % markets.length]}]`,
         time: timeStr,
       };
     } else {
-      const markets = ['길음시장', '남부전통시장', '덕포시장', '산격종합시장', '솔매로50길 상가번영회', '오정시장', '조암시장'];
-      const addrs = ['서울특별시 성북구 동소문로 227', '경상북도 포항시 남구 상공로 43', '부산광역시 사상구 사상로', '대구광역시 북구 동북로', '서울특별시 강북구 도봉로', '경기도 부천시 부천로', '경기도 화성시 우정읍'];
+      const markets = ['대전중앙시장', '부산자갈치시장'];
       return {
         id,
         market: markets[i % markets.length],
         receiver: `01${(i + 10).toString(16).toUpperCase()}`,
-        address: addrs[i % addrs.length],
+        address: '통신 상태 점검 필요',
         time: timeStr
       };
     }
@@ -58,11 +59,11 @@ const DashboardListSection: React.FC<{
   data: any[];
   renderItem: (item: any) => React.ReactNode;
   linkTo: string;
-}> = ({ title, icon, headerColorClass, data, renderItem, linkTo }) => {
+  onItemClick?: (item: any) => void; // 클릭 이벤트 추가
+}> = ({ title, icon, headerColorClass, data, renderItem, linkTo, onItemClick }) => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   
-  // 데이터 슬라이싱
   const currentItems = data.slice((page - 1) * ITEMS_PER_LIST_PAGE, page * ITEMS_PER_LIST_PAGE);
 
   return (
@@ -83,7 +84,11 @@ const DashboardListSection: React.FC<{
       
       <div className="flex-1 overflow-hidden p-2 space-y-1">
         {currentItems.map((item) => (
-           <div key={item.id} className="border-b border-slate-700/50 last:border-0 pb-1 mb-1 last:mb-0 last:pb-0">
+           <div 
+             key={item.id} 
+             onClick={() => onItemClick && onItemClick(item)} // Row Click
+             className={`border-b border-slate-700/50 last:border-0 pb-1 mb-1 last:mb-0 last:pb-0 ${onItemClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
+           >
              {renderItem(item)}
            </div>
         ))}
@@ -117,10 +122,14 @@ export const Dashboard: React.FC = () => {
   const [fireData, setFireData] = useState<any[]>([]);
   const [faultData, setFaultData] = useState<any[]>([]);
   const [commErrorData, setCommErrorData] = useState<any[]>([]);
+  const [markets, setMarkets] = useState<Market[]>([]); // 시장 데이터 상태
 
   // --- Map State ---
   const mapContainer = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const [markers, setMarkers] = useState<any[]>([]); // 마커 관리
+  const [infowindows, setInfowindows] = useState<any[]>([]); // 인포윈도우 관리
+
   const [selectedSido, setSelectedSido] = useState('');
   const [selectedSigungu, setSelectedSigungu] = useState('');
   const [searchMarketMap, setSearchMarketMap] = useState('');
@@ -140,12 +149,24 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Data Load (Mock)
+  // 2. Data Load (Mock + API)
   useEffect(() => {
-    setFireData(generateMockData(12, 'fire'));
-    setFaultData(generateMockData(25, 'fault'));
-    setCommErrorData(generateMockData(8, 'comm'));
-  }, [now]); // now가 바뀔 때마다 데이터 갱신
+    // 이벤트 로그 데이터 생성
+    setFireData(generateMockData(2, 'fire')); // 화재 데이터 적게 설정하여 집중
+    setFaultData(generateMockData(15, 'fault'));
+    setCommErrorData(generateMockData(5, 'comm'));
+
+    // 시장 데이터 로드 (API)
+    const loadMarkets = async () => {
+        try {
+            const data = await MarketAPI.getList();
+            setMarkets(data);
+        } catch (e) {
+            console.error("Failed to load markets for map");
+        }
+    };
+    loadMarkets();
+  }, [now]);
 
   // 3. Map Initialization
   useEffect(() => {
@@ -156,11 +177,10 @@ export const Dashboard: React.FC = () => {
     if (mapContainer.current && !mapInstance) {
       const options = {
         center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근 (대한민국 중심)
-        level: 13 // 전국이 보이는 레벨
+        level: 13 
       };
       const map = new window.kakao.maps.Map(mapContainer.current, options);
       
-      // 줌 컨트롤 추가
       const zoomControl = new window.kakao.maps.ZoomControl();
       map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
       
@@ -168,32 +188,90 @@ export const Dashboard: React.FC = () => {
     }
   }, []);
 
-  // 4. Map Markers Update
+  // 4. Map Markers Update (Based on Markets)
   useEffect(() => {
-    if (mapInstance && fireData.length > 0) {
-        // 기존 마커 제거 로직은 생략 (간소화)
-        fireData.slice(0, 5).forEach((fire: any) => {
-            const lat = 36.35 + (Math.random() - 0.5) * 2;
-            const lng = 127.38 + (Math.random() - 0.5) * 2;
-            const markerPosition  = new window.kakao.maps.LatLng(lat, lng); 
-            
-            const marker = new window.kakao.maps.Marker({ position: markerPosition });
-            marker.setMap(mapInstance);
+    if (mapInstance && markets.length > 0) {
+        // 기존 마커/인포윈도우 제거
+        markers.forEach(m => m.setMap(null));
+        infowindows.forEach(iw => iw.close());
+        setMarkers([]);
+        setInfowindows([]);
 
-            const iwContent = `<div style="padding:5px;color:black;font-size:12px;">${fire.location} 화재감지</div>`;
-            const infowindow = new window.kakao.maps.InfoWindow({
-                content : iwContent
-            });
-            
-            window.kakao.maps.event.addListener(marker, 'mouseover', function() {
-                infowindow.open(mapInstance, marker);
-            });
-            window.kakao.maps.event.addListener(marker, 'mouseout', function() {
-                infowindow.close();
-            });
+        const newMarkers: any[] = [];
+        const newInfowindows: any[] = [];
+
+        markets.forEach((market) => {
+            // 좌표가 있는 경우만 표시
+            if (market.latitude && market.longitude) {
+                const lat = parseFloat(market.latitude);
+                const lng = parseFloat(market.longitude);
+                const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+
+                // 상태에 따른 마커 이미지 (여기서는 기본 마커 사용하되 인포윈도우로 구분)
+                const marker = new window.kakao.maps.Marker({
+                    position: markerPosition,
+                    map: mapInstance,
+                    title: market.name
+                });
+
+                // 인포윈도우 컨텐츠 구성
+                const isFire = market.status === 'Fire';
+                const statusColor = isFire ? 'text-red-600' : (market.status === 'Error' ? 'text-orange-500' : 'text-green-600');
+                const statusText = isFire ? '화재발생' : (market.status === 'Error' ? '장애발생' : '정상운영');
+                
+                const iwContent = `
+                    <div style="padding:10px; min-width:200px; color:black; font-size:12px; border-radius:4px;">
+                        <strong style="font-size:14px;">${market.name}</strong>
+                        <div style="margin-top:4px; color:#666;">${market.address}</div>
+                        <div style="margin-top:4px;">담당자: ${market.managerName || '-'}</div>
+                        <div style="margin-top:6px; font-weight:bold;" class="${statusColor}">
+                            상태: ${statusText}
+                        </div>
+                    </div>
+                `;
+
+                const infowindow = new window.kakao.maps.InfoWindow({
+                    content: iwContent,
+                    removable: true
+                });
+
+                // 이벤트 등록
+                window.kakao.maps.event.addListener(marker, 'click', function() {
+                    // 다른 인포윈도우 닫기
+                    newInfowindows.forEach(iw => iw.close());
+                    infowindow.open(mapInstance, marker);
+                });
+
+                // 화재 발생 시 인포윈도우 자동 오픈
+                if (isFire) {
+                    infowindow.open(mapInstance, marker);
+                }
+
+                newMarkers.push(marker);
+                newInfowindows.push(infowindow);
+            }
         });
+
+        setMarkers(newMarkers);
+        setInfowindows(newInfowindows);
     }
-  }, [mapInstance, fireData]);
+  }, [mapInstance, markets]); // markets 변경 시 실행
+
+  // --- Map Pan Handler ---
+  const handlePanToMarket = (marketName: string) => {
+      if (!mapInstance || !markets.length) return;
+
+      const target = markets.find(m => m.name.includes(marketName) || marketName.includes(m.name));
+      if (target && target.latitude && target.longitude) {
+          const moveLatLon = new window.kakao.maps.LatLng(parseFloat(target.latitude), parseFloat(target.longitude));
+          mapInstance.setLevel(3); // 줌인
+          mapInstance.panTo(moveLatLon);
+      } else {
+          // 이름 매칭 안될 경우 (데모용: 랜덤 마커 중 하나로 이동하거나 경고)
+          // 여기서는 첫번째 마커로 이동 예시
+          // alert("해당 시장의 위치 정보를 찾을 수 없습니다.");
+      }
+  };
 
   // 상단 타이머 JSX
   const timerContent = (
@@ -244,13 +322,14 @@ export const Dashboard: React.FC = () => {
             headerColorClass="bg-gradient-to-r from-red-900 to-slate-800"
             data={fireData}
             linkTo="/fire-history"
+            onItemClick={(item) => handlePanToMarket(item.marketName || '')}
             renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 hover:bg-slate-700/30 rounded transition-colors cursor-pointer group text-sm">
+              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">소방</span>
-                    <span className="font-medium text-slate-200 truncate group-hover:text-white transition-colors" title={item.msg}>{item.msg}</span>
+                    <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">화재</span>
+                    <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
                  </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono group-hover:text-slate-400">{item.time}</div>
+                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">{item.time}</div>
               </div>
             )}
           />
@@ -263,12 +342,12 @@ export const Dashboard: React.FC = () => {
             data={faultData}
             linkTo="/device-status"
             renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 hover:bg-slate-700/30 rounded transition-colors cursor-pointer group text-sm">
+              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
                  <div className="flex items-center gap-2 min-w-0">
                     <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">고장</span>
-                    <span className="font-medium text-slate-200 truncate group-hover:text-white transition-colors" title={item.msg}>{item.msg}</span>
+                    <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
                  </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono group-hover:text-slate-400">{item.time}</div>
+                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">{item.time}</div>
               </div>
             )}
           />
@@ -281,7 +360,7 @@ export const Dashboard: React.FC = () => {
             data={commErrorData}
             linkTo="/device-status"
             renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 hover:bg-slate-700/30 rounded transition-colors text-sm group cursor-pointer">
+              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
                  <div className="flex items-center gap-2 min-w-0">
                     <span className="font-bold text-slate-200 truncate group-hover:text-white">{item.market}</span>
                     <span className="text-xs text-slate-400 truncate hidden sm:inline">({item.address})</span>
@@ -329,8 +408,11 @@ export const Dashboard: React.FC = () => {
                         className="w-full bg-slate-800 text-white text-xs border border-slate-600 rounded pl-2 pr-8 py-1.5 focus:outline-none focus:border-blue-500 shadow-lg placeholder-slate-500"
                         value={searchMarketMap}
                         onChange={(e) => setSearchMarketMap(e.target.value)}
+                        onKeyDown={(e) => {
+                            if(e.key === 'Enter') handlePanToMarket(searchMarketMap);
+                        }}
                     />
-                    <Search size={14} className="absolute right-2 top-2 text-slate-400" />
+                    <Search size={14} className="absolute right-2 top-2 text-slate-400 cursor-pointer" onClick={() => handlePanToMarket(searchMarketMap)} />
                 </div>
              </div>
           </div>
@@ -353,7 +435,7 @@ export const Dashboard: React.FC = () => {
                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
              </span>
-             실시간 관제 중
+             실시간 관제 중 ({markets.length}개 시장 연동)
           </div>
         </div>
 
