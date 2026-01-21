@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Dashboard2 } from './pages/Dashboard2';
 import { UserManagement } from './pages/UserManagement';
 import { MarketManagement } from './pages/MarketManagement';
 import { StoreManagement } from './pages/StoreManagement';
@@ -41,6 +42,7 @@ const App: React.FC = () => {
           <Layout>
             <Routes>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard2" element={<Dashboard2 />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="/markets" element={<MarketManagement />} />
               
