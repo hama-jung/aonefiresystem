@@ -16,26 +16,28 @@ create table if not exists public.data_reception (
 -- 2. RLS Policies
 alter table public.data_reception enable row level security;
 
+-- Drop existing policies to prevent errors on re-run
+DROP POLICY IF EXISTS "Public Select data_reception" ON public.data_reception;
+DROP POLICY IF EXISTS "Public Insert data_reception" ON public.data_reception;
+DROP POLICY IF EXISTS "Public Update data_reception" ON public.data_reception;
+DROP POLICY IF EXISTS "Public Delete data_reception" ON public.data_reception;
+
+-- Create policies
 create policy "Public Select data_reception" on public.data_reception for select using ( true );
 create policy "Public Insert data_reception" on public.data_reception for insert with check ( true );
 create policy "Public Update data_reception" on public.data_reception for update using ( true );
 create policy "Public Delete data_reception" on public.data_reception for delete using ( true );
 
--- 3. Insert Menu Item (Data Management > Data Reception Management)
--- ParentID 4 is Data Management
-INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "isVisibleMobile")
-VALUES (4, '데이터 수신 관리', '/data-reception', 30, true, true)
-ON CONFLICT DO NOTHING;
+-- 3. Menu Item (Data Management > Data Reception Management)
+-- Update existing menu label if it exists (to fix spacing)
+UPDATE public.menus SET label = '데이터 수신 관리' WHERE path = '/data-reception';
 
--- 4. Initial Mock Data (Based on screenshot)
-INSERT INTO public.data_reception ("marketName", "logType", "receiverId", "repeaterId", "receivedData", "commStatus", "batteryStatus", "chamberStatus", "registeredAt") VALUES
-('안양 남부시장', '62', '0909', '03', 'AA4D4300156233340909300309090301190000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('안양 남부시장', '62', '0909', '07', 'AA4D4300156233340909300709090701060000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('조암시장', '62', '0154', '09', 'AA4D43001562333401543009540109010A0000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('왕십리도선동상', '62', '0178', '18', 'AA4D4300156233340178301201781201020000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('조암시장', '62', '0154', '07', 'AA4D4300156233340154300754010701050000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('조암시장', '62', '0154', '05', 'AA4D4300156233340154300554010501030000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('면곡시장', '62', '0161', '03', 'AA4D4300156233340161300301610301020080000000', '00000001000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('대구 전기재료', '62', '0155', '12', 'AA4D4300156233340155300C55010C01120080038000', '00000011100000000000', '00000000000000000010', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('대구 전기재료', '62', '0155', '16', 'AA4D4300156233340155301055011001008004000000', '00000000000000001001', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'),
-('면곡시장', '62', '0161', '01', 'AA4D4300156233340161300101610101000000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0');
+-- Insert if not exists
+INSERT INTO public.menus ("parentId", label, path, "sortOrder", "isVisiblePc", "isVisibleMobile")
+SELECT 4, '데이터 수신 관리', '/data-reception', 30, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.menus WHERE path = '/data-reception');
+
+-- 4. Initial Mock Data (If empty)
+INSERT INTO public.data_reception ("marketName", "logType", "receiverId", "repeaterId", "receivedData", "commStatus", "batteryStatus", "chamberStatus", "registeredAt") 
+SELECT '안양 남부시장', '62', '0909', '03', 'AA4D4300156233340909300309090301190000000000', '00000000000000000000', '00000000000000000000', '00000000000000000000', '2026-01-21 10:10:03.0'
+WHERE NOT EXISTS (SELECT 1 FROM public.data_reception LIMIT 1);

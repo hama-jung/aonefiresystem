@@ -154,21 +154,27 @@ export const DataReceptionManagement: React.FC = () => {
     },
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '설치시장', accessor: 'marketName', width: '120px' },
-    { header: '로그유형', accessor: 'logType', width: '100px' }, // Widened
+    { header: '로그유형', accessor: 'logType', width: '100px' }, // Increased width to prevent wrapping
     { header: '수신기', accessor: 'receiverId', width: '80px' },
     { header: '중계기', accessor: 'repeaterId', width: '80px' },
-    { header: '수신데이터', accessor: 'receivedData', width: '300px' }, // Long string
+    { header: '수신데이터', accessor: 'receivedData', width: '300px' },
     { header: '감지기통신상태', accessor: 'commStatus', width: '180px' },
     { header: '감지기배터리상태', accessor: 'batteryStatus', width: '180px' },
     { header: '감지기챔버상태', accessor: 'chamberStatus', width: '180px' },
     { 
         header: '등록일', 
-        accessor: (item) => item.registeredAt ? (
-            <div className="whitespace-pre-wrap leading-tight text-xs">
-                {item.registeredAt.replace('T', ' ').substring(0, 19).replace(' ', '\n')}
-            </div>
-        ) : '-', 
-        width: '100px' // Reduced width for 2-line display
+        accessor: (item) => {
+            if (!item.registeredAt) return '-';
+            const dateStr = item.registeredAt.replace('T', ' ').substring(0, 19);
+            const [date, time] = dateStr.split(' ');
+            return (
+                <div className="flex flex-col items-center justify-center leading-tight">
+                    <span className="text-xs text-slate-200">{date}</span>
+                    <span className="text-[11px] text-slate-400">{time}</span>
+                </div>
+            );
+        },
+        width: '110px' // Reduced width for compact view
     },
   ];
 
@@ -200,7 +206,7 @@ export const DataReceptionManagement: React.FC = () => {
          <span className="text-sm font-bold text-slate-300">
            전체 {dataList.length} 개 (페이지 {currentPage})
          </span>
-         {/* 중복 검색 버튼 및 상단 삭제 버튼 제거 */}
+         {/* 중복 검색 버튼 및 상단 삭제 버튼 제거됨 */}
       </div>
 
       {loading ? (

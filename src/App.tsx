@@ -20,6 +20,7 @@ import { CommonCodeManagement } from './pages/CommonCodeManagement';
 import { FireHistoryManagement } from './pages/FireHistoryManagement';
 import { DeviceStatusManagement } from './pages/DeviceStatusManagement';
 import { DataReceptionManagement } from './pages/DataReceptionManagement';
+import { UartCommunication } from './pages/UartCommunication';
 
 // Placeholder components for routes not fully implemented
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
@@ -61,6 +62,7 @@ const App: React.FC = () => {
               <Route path="/fire-history" element={<FireHistoryManagement />} />
               <Route path="/device-status" element={<DeviceStatusManagement />} />
               <Route path="/data-reception" element={<DataReceptionManagement />} />
+              <Route path="/uart-communication" element={<UartCommunication />} />
               
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
