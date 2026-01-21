@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PageHeader, Pagination } from '../components/CommonUI';
-import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Activity, Search } from 'lucide-react';
+import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SIDO_LIST, getSigungu } from '../utils/addressData';
 
@@ -354,12 +354,6 @@ export const Dashboard: React.FC = () => {
                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
              </span>
              실시간 관제 중
-          </div>
-
-          <div className="absolute top-16 right-4 z-10 flex flex-col gap-2 pointer-events-auto">
-             <button className="bg-slate-800/90 text-white px-3 py-2 rounded shadow-lg border border-slate-600 hover:bg-slate-700 text-xs flex items-center gap-2 backdrop-blur-sm">
-                <Activity size={14} className="text-red-500" /> 화재감지기 보기
-             </button>
           </div>
         </div>
 
