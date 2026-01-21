@@ -266,10 +266,6 @@ export const Dashboard: React.FC = () => {
           const moveLatLon = new window.kakao.maps.LatLng(parseFloat(target.latitude), parseFloat(target.longitude));
           mapInstance.setLevel(3); // 줌인
           mapInstance.panTo(moveLatLon);
-      } else {
-          // 이름 매칭 안될 경우 (데모용: 랜덤 마커 중 하나로 이동하거나 경고)
-          // 여기서는 첫번째 마커로 이동 예시
-          // alert("해당 시장의 위치 정보를 찾을 수 없습니다.");
       }
   };
 
