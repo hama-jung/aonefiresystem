@@ -16,6 +16,7 @@ import { MenuManagement } from './pages/MenuManagement';
 import { DetectorManagement } from './pages/DetectorManagement';
 import { TransmitterManagement } from './pages/TransmitterManagement';
 import { AlarmManagement } from './pages/AlarmManagement';
+import { CommonCodeManagement } from './pages/CommonCodeManagement';
 
 // Placeholder components for routes not fully implemented
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
@@ -51,6 +52,9 @@ const App: React.FC = () => {
               <Route path="/detectors" element={<DetectorManagement />} />
               <Route path="/transmitters" element={<TransmitterManagement />} />
               <Route path="/alarms" element={<AlarmManagement />} />
+              
+              {/* New Route */}
+              <Route path="/common-codes" element={<CommonCodeManagement />} />
               
               {/* Placeholders for other menu items */}
               <Route path="/fire-history" element={<PlaceholderPage title="화재 이력 관리" />} />

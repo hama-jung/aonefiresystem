@@ -211,3 +211,59 @@ export interface MenuItemDB {
   isVisibleMobile: boolean;
   children?: MenuItemDB[]; // For tree structure
 }
+
+// 공통코드
+export interface CommonCode {
+  id: number;
+  code: string;       // 공통코드
+  name: string;       // 공통코드명
+  description: string; // 공통코드 상세
+  groupCode: string;  // 공통그룹코드
+  groupName: string;  // 공통그룹코드명
+  status: '사용' | '미사용';
+}
+
+// --- Data Management Logs ---
+
+export interface FireLog {
+  id: number;
+  marketName: string;
+  storeName: string;
+  receiverMac: string;
+  repeaterId: string;
+  detectorId: string;
+  eventType: string; // '화재', '고장'
+  eventDetail: string;
+  occurrenceTime: string;
+}
+
+export interface DeviceStatusLog {
+  id: number;
+  receiverMac: string;
+  repeaterId: string;
+  detectorId: string;
+  battery: string;
+  signal: string;
+  temperature: string;
+  smoke_value: string;
+  status: string;
+  loggedAt: string;
+}
+
+export interface DataReceptionLog {
+  id: number;
+  marketName: string;
+  receiverMac: string;
+  packetType: string;
+  dataSize: number;
+  result: string;
+  receivedAt: string;
+}
+
+export interface RawUartLog {
+  id: number;
+  direction: 'RX' | 'TX';
+  receiverMac: string;
+  rawData: string;
+  created_at: string;
+}
