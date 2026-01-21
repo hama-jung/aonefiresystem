@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Lock, User } from 'lucide-react';
 import { AuthAPI } from '../services/api';
@@ -9,6 +9,15 @@ export const Login: React.FC = () => {
   const [pw, setPw] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // [Fix 1] 이미 로그인된 사용자가 로그인 페이지에 접근하면 대시보드로 리다이렉트
+  useEffect(() => {
+    const userStr = localStorage.getItem('currentUser');
+    if (userStr) {
+      // replace: true를 사용하여 뒤로가기 시 다시 로그인 페이지로 오는 것 방지
+      navigate('/dashboard', { replace: true });
+    }
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +34,8 @@ export const Login: React.FC = () => {
       if (response.success) {
         // 로그인 성공 시 사용자 정보 저장
         localStorage.setItem('currentUser', JSON.stringify(response.user));
-        navigate('/dashboard');
+        // [Fix 2] 로그인 후 히스토리 스택을 교체(replace)하여 뒤로가기 방지
+        navigate('/dashboard', { replace: true });
       }
     } catch (error) {
       // 로그인 실패 시 에러 메시지 설정

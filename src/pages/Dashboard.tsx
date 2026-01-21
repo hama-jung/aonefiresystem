@@ -2,11 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, Video } from 'lucide-react';
 import { DashboardAPI } from '../services/api';
+import { useNavigate } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [level, setLevel] = useState<1 | 2 | 3>(1); // 1: National, 2: City, 3: Market
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // [Fix] 뒤로가기 버튼 감지 및 로그아웃 경고 처리
+  useEffect(() => {
+    // 1. 현재 히스토리 상태를 강제로 push하여 '뒤로가기' 할 공간을 만듦
+    // 이렇게 하면 뒤로가기를 눌렀을 때 페이지가 바뀌는 대신 popstate 이벤트만 발생함
+    window.history.pushState(null, '', window.location.href);
+
+    const handlePopState = (event: PopStateEvent) => {
+      // 2. 뒤로가기 감지 시 경고창 표시
+      // 브라우저 기본 동작은 popstate 이벤트 발생 시 이미 URL이 변경된 상태임
+      if (confirm('로그아웃 하시겠습니까?')) {
+        // 확인 시: 로그아웃 처리 및 로그인 페이지로 이동
+        localStorage.removeItem('currentUser');
+        navigate('/', { replace: true });
+      } else {
+        // 취소 시: 다시 히스토리를 push하여 대시보드 유지 (뒤로가기 무효화 효과)
+        window.history.pushState(null, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
 
   useEffect(() => {
     // 컴포넌트 마운트 시 데이터 로드
