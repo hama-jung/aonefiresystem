@@ -192,7 +192,7 @@ export const Dashboard: React.FC = () => {
         window.kakao.maps.load(() => {
             const options = {
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
-                level: 13 
+                level: 12 // [수정] 지도 확대 레벨 13 -> 12 (숫자가 작을수록 확대)
             };
             const map = new window.kakao.maps.Map(mapContainer.current, options);
             
@@ -399,7 +399,8 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Right Column: Map */}
-        <div className="bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-700 flex flex-col min-h-[600px] lg:h-auto">
+        {/* [수정] lg:h-auto, min-h-[600px] 제거 후 h-full 적용 */}
+        <div className="bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-700 flex flex-col h-full">
           {/* Map Controls */}
           <div className="absolute top-0 left-0 right-0 z-20 p-3 flex gap-2 bg-gradient-to-b from-slate-900/90 to-transparent pointer-events-none">
              <div className="flex gap-2 w-full max-w-2xl pointer-events-auto">
