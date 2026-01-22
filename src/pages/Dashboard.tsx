@@ -48,7 +48,8 @@ const generateMockData = (count: number, type: 'fire' | 'fault' | 'comm') => {
   });
 };
 
-const ITEMS_PER_LIST_PAGE = 5;
+// [수정] 목록 기준을 5개 -> 4개로 변경
+const ITEMS_PER_LIST_PAGE = 4;
 
 // --- Sub Component: Dashboard List Section ---
 const DashboardListSection: React.FC<{
@@ -65,8 +66,9 @@ const DashboardListSection: React.FC<{
   
   const currentItems = data.slice((page - 1) * ITEMS_PER_LIST_PAGE, page * ITEMS_PER_LIST_PAGE);
 
+  // [수정] h-[320px] 고정 높이 제거, flex-1 제거하여 내용물 크기에 맞게 조절
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm overflow-hidden flex flex-col h-[320px]">
+    <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm overflow-hidden flex flex-col transition-all duration-300">
       <div className={`px-4 py-3 border-b border-slate-700/50 flex items-center justify-between ${headerColorClass}`}>
         <div className="flex items-center gap-2">
           {icon}
@@ -81,7 +83,8 @@ const DashboardListSection: React.FC<{
         </button>
       </div>
       
-      <div className="flex-1 overflow-hidden p-2 space-y-1">
+      {/* 고정 높이 대신 내용에 따라 늘어나도록 설정 */}
+      <div className="p-2 space-y-1">
         {currentItems.map((item) => (
            <div 
              key={item.id} 
@@ -92,22 +95,23 @@ const DashboardListSection: React.FC<{
            </div>
         ))}
         {currentItems.length === 0 && (
-            <div className="h-full flex items-center justify-center text-slate-500 text-xs">
+            <div className="py-8 flex items-center justify-center text-slate-500 text-xs">
                 데이터가 없습니다.
             </div>
         )}
       </div>
 
-      <div className="py-2 border-t border-slate-700 bg-slate-800/50 min-h-[40px] flex items-center justify-center">
-         {data.length > ITEMS_PER_LIST_PAGE && (
+      {/* 데이터가 4개(ITEMS_PER_LIST_PAGE) 초과일 때만 페이지네이션 표시 */}
+      {data.length > ITEMS_PER_LIST_PAGE && (
+        <div className="py-2 border-t border-slate-700 bg-slate-800/50 min-h-[40px] flex items-center justify-center">
              <Pagination 
                 totalItems={data.length} 
                 itemsPerPage={ITEMS_PER_LIST_PAGE} 
                 currentPage={page} 
                 onPageChange={setPage} 
              />
-         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
