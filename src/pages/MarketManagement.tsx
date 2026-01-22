@@ -34,7 +34,6 @@ export const MarketManagement: React.FC = () => {
   
   // 이미지 파일 상태
   const [mapImageFile, setMapImageFile] = useState<File | null>(null);
-  // 파일 입력 요소 참조 (초기화용)
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // SMS 목록 관리 (Edit Mode 전용)
@@ -411,9 +410,9 @@ export const MarketManagement: React.FC = () => {
                 />
               </FormRow>
 
-              {/* SMS 관리 섹션 (화재/고장) */}
-              <FormRow label="화재발생시 SMS" className="col-span-1 md:col-span-2">
-                 <div className="flex flex-col gap-2 max-w-md">
+              {/* SMS 관리 섹션 (화재/고장) - [수정] col-span 제거하여 나란히 배치 */}
+              <FormRow label="화재발생시 SMS">
+                 <div className="flex flex-col gap-2 w-full">
                     <div className="bg-slate-900 border border-slate-600 rounded p-2 h-24 overflow-y-auto custom-scrollbar">
                         {smsFireList.length === 0 && <span className="text-slate-500 text-sm">등록된 번호가 없습니다.</span>}
                         {smsFireList.map((num, idx) => (
@@ -430,13 +429,14 @@ export const MarketManagement: React.FC = () => {
                             onChange={(e) => setTempSmsFire(e.target.value.replace(/[^0-9]/g, ''))}
                             maxLength={11}
                         />
-                        <Button type="button" variant="secondary" onClick={() => addSms('fire')} icon={<Plus size={16}/>}>추가</Button>
+                        {/* [수정] whitespace-nowrap 추가 */}
+                        <Button type="button" variant="secondary" onClick={() => addSms('fire')} icon={<Plus size={16}/>} className="whitespace-nowrap">추가</Button>
                     </div>
                  </div>
               </FormRow>
 
-              <FormRow label="고장발생시 SMS" className="col-span-1 md:col-span-2">
-                 <div className="flex flex-col gap-2 max-w-md">
+              <FormRow label="고장발생시 SMS">
+                 <div className="flex flex-col gap-2 w-full">
                     <div className="bg-slate-900 border border-slate-600 rounded p-2 h-24 overflow-y-auto custom-scrollbar">
                         {smsFaultList.length === 0 && <span className="text-slate-500 text-sm">등록된 번호가 없습니다.</span>}
                         {smsFaultList.map((num, idx) => (
@@ -453,7 +453,8 @@ export const MarketManagement: React.FC = () => {
                             onChange={(e) => setTempSmsFault(e.target.value.replace(/[^0-9]/g, ''))}
                             maxLength={11}
                         />
-                        <Button type="button" variant="secondary" onClick={() => addSms('fault')} icon={<Plus size={16}/>}>추가</Button>
+                        {/* [수정] whitespace-nowrap 추가 */}
+                        <Button type="button" variant="secondary" onClick={() => addSms('fault')} icon={<Plus size={16}/>} className="whitespace-nowrap">추가</Button>
                     </div>
                  </div>
               </FormRow>
