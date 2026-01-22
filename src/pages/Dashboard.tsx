@@ -3,7 +3,7 @@ import { PageHeader, Pagination } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SIDO_LIST, getSigungu } from '../utils/addressData';
-import { MarketAPI } from '../services/api'; 
+import { MarketAPI, DashboardAPI } from '../services/api'; 
 import { Market } from '../types';
 
 declare global {
@@ -12,43 +12,6 @@ declare global {
   }
 }
 
-// --- Mock Data Generators (Event Logs) ---
-const generateMockData = (count: number, type: 'fire' | 'fault' | 'comm') => {
-  return Array.from({ length: count }, (_, i) => {
-    const id = i + 1;
-    const date = new Date();
-    date.setMinutes(date.getMinutes() - i * 45); 
-    const timeStr = date.toISOString().replace('T', ' ').substring(0, 19);
-
-    if (type === 'fire') {
-      const markets = ['대전중앙시장', '부평자유시장', '서울광장시장', '부산자갈치시장'];
-      return {
-        id,
-        msg: `${markets[i % markets.length]} A동 10${i}호 화재 감지`,
-        time: timeStr,
-        marketName: markets[i % markets.length],
-      };
-    } else if (type === 'fault') {
-      const markets = ['부평자유시장', '대구서문시장', '서울광장시장'];
-      return {
-        id,
-        msg: `중계기 ${(i % 10) + 1} 감지기 배터리 이상 [${markets[i % markets.length]}]`,
-        time: timeStr,
-      };
-    } else {
-      const markets = ['대전중앙시장', '부산자갈치시장'];
-      return {
-        id,
-        market: markets[i % markets.length],
-        receiver: `01${(i + 10).toString(16).toUpperCase()}`,
-        address: '통신 상태 점검 필요',
-        time: timeStr
-      };
-    }
-  });
-};
-
-// [수정] 목록 기준을 5개 -> 4개로 변경
 const ITEMS_PER_LIST_PAGE = 4;
 
 // --- Sub Component: Dashboard List Section ---
@@ -66,7 +29,6 @@ const DashboardListSection: React.FC<{
   
   const currentItems = data.slice((page - 1) * ITEMS_PER_LIST_PAGE, page * ITEMS_PER_LIST_PAGE);
 
-  // [수정] h-[320px] 고정 높이 제거, flex-1 제거하여 내용물 크기에 맞게 조절
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm overflow-hidden flex flex-col transition-all duration-300">
       <div className={`px-4 py-3 border-b border-slate-700/50 flex items-center justify-between ${headerColorClass}`}>
@@ -83,7 +45,6 @@ const DashboardListSection: React.FC<{
         </button>
       </div>
       
-      {/* 고정 높이 대신 내용에 따라 늘어나도록 설정 */}
       <div className="p-2 space-y-1">
         {currentItems.map((item) => (
            <div 
@@ -101,7 +62,6 @@ const DashboardListSection: React.FC<{
         )}
       </div>
 
-      {/* 데이터가 4개(ITEMS_PER_LIST_PAGE) 초과일 때만 페이지네이션 표시 */}
       {data.length > ITEMS_PER_LIST_PAGE && (
         <div className="py-2 border-t border-slate-700 bg-slate-800/50 min-h-[40px] flex items-center justify-center">
              <Pagination 
@@ -125,6 +85,11 @@ export const Dashboard: React.FC = () => {
   const [fireData, setFireData] = useState<any[]>([]);
   const [faultData, setFaultData] = useState<any[]>([]);
   const [commErrorData, setCommErrorData] = useState<any[]>([]);
+  const [stats, setStats] = useState<any[]>([
+    { label: '최근 화재 발생', value: 0, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
+    { label: '최근 고장 발생', value: 0, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
+    { label: '통신 이상', value: 0, color: 'bg-slate-600', icon: <WifiOff size={20} /> },
+  ]);
   const [markets, setMarkets] = useState<Market[]>([]);
 
   // --- Map State ---
@@ -132,7 +97,7 @@ export const Dashboard: React.FC = () => {
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [markers, setMarkers] = useState<any[]>([]);
   const [infowindows, setInfowindows] = useState<any[]>([]);
-  const [mapError, setMapError] = useState(false); // 지도 로딩 에러 상태
+  const [mapError, setMapError] = useState(false);
 
   const [selectedSido, setSelectedSido] = useState('');
   const [selectedSigungu, setSelectedSigungu] = useState('');
@@ -153,22 +118,54 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Data Load
+  // 2. Data Load (Real Data from DB)
   useEffect(() => {
-    setFireData(generateMockData(2, 'fire'));
-    setFaultData(generateMockData(15, 'fault'));
-    setCommErrorData(generateMockData(5, 'comm'));
-
-    const loadMarkets = async () => {
+    const loadData = async () => {
         try {
-            const data = await MarketAPI.getList();
-            setMarkets(data);
+            // 1. 시장 목록 로드
+            const allMarkets = await MarketAPI.getList();
+            
+            // 2. 대시보드 이벤트 데이터 로드 (화재, 고장, 통신)
+            const dashboardData = await DashboardAPI.getData();
+            
+            setFireData(dashboardData.fireEvents || []);
+            setFaultData(dashboardData.faultEvents || []);
+            setCommErrorData(dashboardData.commEvents || []);
+            
+            if (dashboardData.stats && dashboardData.stats.length === 3) {
+                setStats([
+                    { label: '최근 화재 발생', value: dashboardData.stats[0].value, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
+                    { label: '최근 고장 발생', value: dashboardData.stats[1].value, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
+                    { label: '통신 이상', value: dashboardData.stats[2].value, color: 'bg-slate-600', icon: <WifiOff size={20} /> },
+                ]);
+            }
+
+            // 3. 시장 상태 업데이트 (이벤트 데이터 기반으로 시장 상태 결정)
+            // - 화재 목록에 있는 시장 -> Status: Fire
+            // - 고장/통신 목록에 있는 시장 -> Status: Error
+            // - 그 외 -> Normal
+            const fireMarkets = new Set(dashboardData.fireEvents?.map((e: any) => e.marketName));
+            const errorMarkets = new Set([
+                ...(dashboardData.faultEvents?.map((e: any) => e.marketName) || []),
+                ...(dashboardData.commEvents?.map((e: any) => e.market) || [])
+            ]);
+
+            const updatedMarkets = allMarkets.map(m => {
+                let dynamicStatus: 'Normal' | 'Fire' | 'Error' = 'Normal';
+                if (fireMarkets.has(m.name)) dynamicStatus = 'Fire';
+                else if (errorMarkets.has(m.name)) dynamicStatus = 'Error';
+                
+                return { ...m, status: dynamicStatus };
+            });
+
+            setMarkets(updatedMarkets);
+
         } catch (e) {
-            console.error("Failed to load markets for map");
+            console.error("Dashboard data load failed", e);
         }
     };
-    loadMarkets();
-  }, [now]);
+    loadData();
+  }, [now]); // Timer reset triggers reload
 
   // 3. Map Initialization (With Retry Logic)
   useEffect(() => {
@@ -176,42 +173,29 @@ export const Dashboard: React.FC = () => {
     let timeoutId: any;
 
     const initMap = () => {
-      // 카카오 맵 스크립트가 로드되었는지 확인
-      if (!window.kakao || !window.kakao.maps) {
-        return false;
-      }
-
-      // 이미 맵이 로드되었으면 중단
+      if (!window.kakao || !window.kakao.maps) return false;
       if (mapInstance) return true;
-
-      // 컨테이너가 없으면 중단
       if (!mapContainer.current) return false;
 
-      // 지도 생성 시도
       try {
         window.kakao.maps.load(() => {
             const options = {
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
-                level: 12 // [수정] 지도 확대 레벨 12 (축소)
+                level: 12
             };
             const map = new window.kakao.maps.Map(mapContainer.current, options);
-            
             const zoomControl = new window.kakao.maps.ZoomControl();
             map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
-            
             setMapInstance(map);
             setMapError(false);
         });
         return true;
       } catch (e) {
-        console.error("Map init error:", e);
         return false;
       }
     };
 
-    // 즉시 시도
     if (!initMap()) {
-      // 실패 시 500ms 간격으로 10번(5초간) 재시도
       intervalId = setInterval(() => {
         if (initMap()) {
           clearInterval(intervalId);
@@ -219,7 +203,6 @@ export const Dashboard: React.FC = () => {
         }
       }, 500);
 
-      // 5초 후에도 실패하면 에러 표시
       timeoutId = setTimeout(() => {
         clearInterval(intervalId);
         if (!mapInstance && !window.kakao?.maps) {
@@ -234,22 +217,17 @@ export const Dashboard: React.FC = () => {
     };
   }, []);
 
-  // [NEW] Resize Observer to handle container resizing and relayout map
+  // Map Resize Observer
   useEffect(() => {
     if (!mapInstance || !mapContainer.current) return;
-
     const resizeObserver = new ResizeObserver(() => {
       mapInstance.relayout();
     });
-    
     resizeObserver.observe(mapContainer.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
+    return () => resizeObserver.disconnect();
   }, [mapInstance]);
 
-  // 4. Map Markers Update
+  // 4. Map Markers Update (Status Linked)
   useEffect(() => {
     if (mapInstance && markets.length > 0) {
         markers.forEach(m => m.setMap(null));
@@ -266,6 +244,8 @@ export const Dashboard: React.FC = () => {
                 const lng = parseFloat(market.longitude);
                 const markerPosition = new window.kakao.maps.LatLng(lat, lng);
 
+                // 마커 이미지 (상태별 색상 구분은 카카오맵 기본 마커로는 제한적이므로, 필요시 커스텀 이미지 사용)
+                // 여기서는 기본 마커를 쓰고 인포윈도우로 상태 강조
                 const marker = new window.kakao.maps.Marker({
                     position: markerPosition,
                     map: mapInstance,
@@ -297,6 +277,7 @@ export const Dashboard: React.FC = () => {
                     infowindow.open(mapInstance, marker);
                 });
 
+                // 화재 발생 시 인포윈도우 자동 오픈
                 if (isFire) {
                     infowindow.open(mapInstance, marker);
                 }
@@ -333,17 +314,10 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 
-  const stats = [
-    { label: '최근 화재 발생', value: fireData.length, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
-    { label: '최근 고장 발생', value: faultData.length, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
-    { label: '통신 이상', value: commErrorData.length, color: 'bg-slate-600', icon: <WifiOff size={20} /> },
-  ];
-
   return (
     <div className="flex flex-col h-full text-slate-200">
       <PageHeader title="대시보드" rightContent={timerContent} />
 
-      {/* Grid: Removed pb-10 and changed h-full to flex-1 to utilize remaining space correctly */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
         {/* Left Column: Lists */}
         <div className="flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar">
@@ -372,7 +346,9 @@ export const Dashboard: React.FC = () => {
                     <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">화재</span>
                     <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
                  </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">{item.time}</div>
+                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">
+                    {item.time ? new Date(item.time).toLocaleTimeString() : '-'}
+                 </div>
               </div>
             )}
           />
@@ -389,7 +365,9 @@ export const Dashboard: React.FC = () => {
                     <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">고장</span>
                     <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
                  </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">{item.time}</div>
+                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">
+                    {item.time ? new Date(item.time).toLocaleTimeString() : '-'}
+                 </div>
               </div>
             )}
           />
@@ -467,11 +445,6 @@ export const Dashboard: React.FC = () => {
                          설정된 도메인과 API 키가 일치하지 않거나,<br/>
                          카카오 개발자 센터의 허용 도메인 설정이 누락되었습니다.
                        </p>
-                       <div className="text-xs text-left bg-slate-950 p-3 rounded border border-slate-700 mb-4">
-                          <p>1. 카카오 개발자 센터 &gt; 앱 설정 &gt; 플랫폼 &gt; Web</p>
-                          <p>2. 사이트 도메인에 아래 주소가 있는지 확인하세요:</p>
-                          <code className="text-blue-400 block mt-1">{window.location.origin}</code>
-                       </div>
                        <button 
                          onClick={() => window.location.reload()}
                          className="flex items-center gap-2 mx-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm transition-colors"
@@ -481,7 +454,6 @@ export const Dashboard: React.FC = () => {
                    </div>
                 </div>
              ) : (
-                /* Loading State or Map Canvas */
                 <div className="absolute inset-0 flex items-center justify-center text-slate-500 bg-slate-900 -z-10">
                    <div className="text-center p-4">
                       <MapPin size={48} className="mx-auto mb-4 opacity-50 animate-bounce" />
@@ -493,8 +465,8 @@ export const Dashboard: React.FC = () => {
           
           <div className="absolute bottom-4 left-4 z-10 bg-slate-900/80 backdrop-blur border border-slate-600 px-3 py-1.5 rounded-full text-xs text-slate-300 shadow-lg flex items-center gap-2">
              <span className="relative flex h-3 w-3">
-               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-               <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${fireData.length > 0 ? 'bg-red-400' : 'bg-green-400'}`}></span>
+               <span className={`relative inline-flex rounded-full h-3 w-3 ${fireData.length > 0 ? 'bg-red-500' : 'bg-green-500'}`}></span>
              </span>
              실시간 관제 중 ({markets.length}개 시장 연동)
           </div>

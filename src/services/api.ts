@@ -700,64 +700,68 @@ export const MenuAPI = {
 export const DashboardAPI = { 
     getData: async () => {
         try {
-            // 1. 화재 건수
-            const { count: fireCount } = await supabase
+            // [수정됨] 실제 DB 데이터 조회 (최근 20건 제한)
+            
+            // 1. 화재 건수 (등록 상태) & 리스트
+            const { data: fireLogs, count: fireCount } = await supabase
                 .from('fire_history')
-                .select('*', { count: 'exact', head: true })
-                .eq('falseAlarmStatus', '화재');
-
-            // 2. 고장 건수
-            const { count: faultCount } = await supabase
-                .from('device_status')
-                .select('*', { count: 'exact', head: true })
-                .eq('deviceStatus', '에러');
-
-            // 3. 최근 화재 로그
-            const { data: fireLogs } = await supabase
-                .from('fire_history')
-                .select('*')
-                .eq('falseAlarmStatus', '화재')
+                .select('*', { count: 'exact' })
+                .eq('falseAlarmStatus', '등록') // '등록' 상태인 것만 대시보드에 화재 알림으로 표시 (필요시 '화재'로 변경)
                 .order('registeredAt', { ascending: false })
-                .limit(5);
+                .limit(20);
 
-            // 4. 최근 고장 로그
-            const { data: faultLogs } = await supabase
+            // 2. 고장 건수 & 리스트 (장치 상태 '에러')
+            // - 통신이상(04)은 별도 분리, 그 외 에러만 조회
+            const { data: faultLogs, count: faultCount } = await supabase
                 .from('device_status')
-                .select('*')
+                .select('*', { count: 'exact' })
                 .eq('deviceStatus', '에러')
+                .neq('errorCode', '04') // 통신이상 제외
                 .order('registeredAt', { ascending: false })
-                .limit(5);
+                .limit(20);
+
+            // 3. 통신 이상 건수 & 리스트 (에러코드 04)
+            const { data: commLogs, count: commCount } = await supabase
+                .from('device_status')
+                .select('*', { count: 'exact' })
+                .eq('errorCode', '04')
+                .order('registeredAt', { ascending: false })
+                .limit(20);
 
             return {
                 stats: [
                     { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-600' },
                     { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
-                    { label: '통신 이상', value: 0, type: 'error', color: 'bg-slate-600' },
+                    { label: '통신 이상', value: commCount || 0, type: 'error', color: 'bg-slate-600' },
                 ],
-                fireLogs: (fireLogs || []).map((l: any) => ({
+                // UI 형식으로 매핑
+                fireEvents: (fireLogs || []).map((l: any) => ({
                     id: l.id,
-                    msg: `${l.marketName} - ${l.receiverStatus || '화재감지'}`,
+                    msg: `${l.marketName} - ${l.detectorInfoChamber || '화재감지'}`,
                     time: l.registeredAt,
-                    type: 'fire',
-                    marketName: l.marketName
+                    marketName: l.marketName,
+                    type: 'fire'
                 })),
-                faultLogs: (faultLogs || []).map((l: any) => ({
+                faultEvents: (faultLogs || []).map((l: any) => ({
                     id: l.id,
                     msg: `${l.marketName} ${l.deviceType} ${l.deviceId} 에러`,
                     time: l.registeredAt,
+                    marketName: l.marketName,
                     type: 'fault'
                 })),
-                mapPoints: [
-                    // 지도 좌표는 실제 데이터가 없으므로 고정값 유지 (추후 시장 좌표 연동 가능)
-                    { id: 1, x: 30, y: 40, name: '서울/경기', status: 'normal' },
-                    { id: 2, x: 60, y: 50, name: '경상북도', status: fireCount ? 'fire' : 'normal' },
-                    { id: 3, x: 40, y: 70, name: '전라북도', status: 'normal' },
-                ]
+                commEvents: (commLogs || []).map((l: any) => ({
+                    id: l.id,
+                    market: l.marketName,
+                    address: `${l.deviceType} ${l.deviceId}`,
+                    receiver: l.receiverMac,
+                    time: l.registeredAt
+                })),
             };
         } catch (e) {
-            // DB 에러 시 빈 껍데기 반환
+            console.error("Dashboard Load Error:", e);
+            // 에러 시 빈 객체 반환
             return {
-                stats: [], fireLogs: [], faultLogs: [], mapPoints: []
+                stats: [], fireEvents: [], faultEvents: [], commEvents: []
             };
         }
     } 
