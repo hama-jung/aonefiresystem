@@ -166,7 +166,7 @@ export const MarketManagement: React.FC = () => {
     }
   };
 
-  // 이미지 파일 다운로드 (파일명 클릭)
+  // 이미지 파일명 추출
   const getFileName = () => {
      if (mapImageFile) return mapImageFile.name;
      if (formData.mapImage) {
@@ -181,9 +181,40 @@ export const MarketManagement: React.FC = () => {
      return '';
   };
 
-  const handleDownload = () => {
+  // 이미지 다운로드 핸들러
+  const handleDownload = async () => {
+    // 1. 방금 선택한 로컬 파일이 있는 경우
+    if (mapImageFile) {
+        const url = URL.createObjectURL(mapImageFile);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = mapImageFile.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+    }
+
+    // 2. 서버에 저장된 이미지가 있는 경우
     if (formData.mapImage) {
-      window.open(formData.mapImage, '_blank');
+        try {
+            const response = await fetch(formData.mapImage);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = getFileName(); // URL에서 추출한 파일명 사용
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error("Download failed", e);
+            // CORS 등으로 실패 시 새 탭으로 열기 (기존 동작)
+            window.open(formData.mapImage, '_blank');
+        }
     }
   };
 
@@ -232,24 +263,44 @@ export const MarketManagement: React.FC = () => {
   const handleExcel = () => {
     const excelData = markets.map((m, index) => ({
       'No': index + 1,
+      '총판': m.distributorName || '-',
       '시장명': m.name,
       '주소': `${m.address} ${m.addressDetail || ''}`.trim(),
       '담당자명': m.managerName,
       '담당자연락처': m.managerPhone,
-      '상태': m.status
+      '상태': m.status === 'Normal' ? '정상' : (m.status === 'Fire' ? '화재' : '장애')
     }));
     exportToExcel(excelData, '시장관리_목록');
   };
 
   const columns: Column<Market>[] = [
     { header: 'No', accessor: 'id', width: '60px' },
+    { header: '총판', accessor: (m) => m.distributorName || '-', width: '120px' }, // 총판 컬럼 추가
     { header: '시장명', accessor: 'name' },
     { header: '주소', accessor: (m) => `${m.address} ${m.addressDetail || ''}` },
     { header: '담당자명', accessor: 'managerName' },
     { header: '담당자연락처', accessor: (m) => formatPhoneNumber(m.managerPhone) || '-' },
-    { header: '상태', accessor: (m: Market) => (
-      <span className={m.status === 'Fire' ? 'text-red-400 font-bold' : 'text-slate-400'}>{m.status}</span>
-    )},
+    { header: '상태', accessor: (m: Market) => {
+        let statusText: string = m.status;
+        let badgeClass = 'bg-slate-700 text-slate-400 border-slate-600';
+        
+        if (m.status === 'Normal') {
+            statusText = '정상';
+            badgeClass = 'bg-green-900/30 text-green-400 border-green-800';
+        } else if (m.status === 'Fire') {
+            statusText = '화재';
+            badgeClass = 'bg-red-900/30 text-red-400 border-red-800 animate-pulse';
+        } else if (m.status === 'Error') {
+            statusText = '장애';
+            badgeClass = 'bg-orange-900/30 text-orange-400 border-orange-800';
+        }
+
+        return (
+            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${badgeClass}`}>
+                {statusText}
+            </span>
+        );
+    }, width: '80px' },
   ];
 
   // -- Pagination Logic --
@@ -362,8 +413,8 @@ export const MarketManagement: React.FC = () => {
                                 <Paperclip size={14} className="text-slate-400" />
                                 <span 
                                     onClick={handleDownload}
-                                    className={`text-sm ${formData.mapImage ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                                    title={formData.mapImage ? "클릭하여 다운로드" : "저장 전 파일입니다"}
+                                    className={`text-sm ${formData.mapImage || mapImageFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                                    title="클릭하여 다운로드"
                                 >
                                     {getFileName()}
                                 </span>

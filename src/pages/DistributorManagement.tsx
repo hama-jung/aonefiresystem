@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, AddressInput,
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES,
-  formatPhoneNumber, handlePhoneKeyDown // Added import
+  formatPhoneNumber, handlePhoneKeyDown, MarketSearchModal, StatusBadge // Import StatusBadge
 } from '../components/CommonUI';
-import { Distributor } from '../types';
+import { Distributor, Market } from '../types';
 import { DistributorAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
+import { Search, X } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -28,9 +29,9 @@ export const DistributorManagement: React.FC = () => {
   // 폼 상태 (전체 객체로 관리)
   const [formData, setFormData] = useState<Partial<Distributor>>({});
   
-  // 관리 시장 추가 관련 상태 (수정 모드 전용)
+  // 관리 시장 추가 관련 상태
   const [managedMarkets, setManagedMarkets] = useState<string[]>([]);
-  const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null);
+  const [isMarketModalOpen, setIsMarketModalOpen] = useState(false); // Modal state
 
   // -- Data Fetching --
   const fetchData = async (overrides?: { address?: string, name?: string, managerName?: string }) => {
@@ -144,23 +145,26 @@ export const DistributorManagement: React.FC = () => {
     }
   };
 
-  // 관리 시장 목록 핸들러
-  const handleRemoveMarket = () => {
-      if (selectedMarketIndex !== null) {
-          const newMarkets = [...managedMarkets];
-          newMarkets.splice(selectedMarketIndex, 1);
-          setManagedMarkets(newMarkets);
-          setSelectedMarketIndex(null);
-      } else {
-          alert('삭제할 시장을 선택해주세요.');
-      }
+  // --- Market Modal Handlers ---
+  const handleOpenMarketModal = () => {
+    setIsMarketModalOpen(true);
   };
 
-  const handleAddMarketMock = () => {
-      const mockName = prompt("추가할 시장 이름을 입력하세요 (Mock):", "신규시장");
-      if (mockName) {
-          setManagedMarkets([...managedMarkets, mockName]);
-      }
+  const handleMarketSelect = (market: Market) => {
+    // 중복 체크
+    if (managedMarkets.includes(market.name)) {
+        alert('이미 추가된 시장입니다.');
+        return;
+    }
+    // 시장 추가
+    setManagedMarkets([...managedMarkets, market.name]);
+    setIsMarketModalOpen(false);
+  };
+
+  const handleRemoveMarket = (index: number) => {
+      const newMarkets = [...managedMarkets];
+      newMarkets.splice(index, 1);
+      setManagedMarkets(newMarkets);
   };
 
   const handleCancel = () => { setView('list'); };
@@ -179,6 +183,7 @@ export const DistributorManagement: React.FC = () => {
     { header: '담당자전화', accessor: (d) => formatPhoneNumber(d.managerPhone) || '-' }, // Formatted
     { header: 'E-mail', accessor: 'managerEmail' },
     { header: '주소', accessor: (d) => `${d.address} ${d.addressDetail}` },
+    { header: '상태', accessor: (d) => <StatusBadge status={d.status} />, width: '80px' }
   ];
 
   // -- Views --
@@ -289,23 +294,29 @@ export const DistributorManagement: React.FC = () => {
               {/* 관리 시장 추가 (Full Width, 수정 모드일 때만 표시) */}
               {selectedDistributor && (
                   <FormRow label="관리 시장 추가" className="col-span-1 md:col-span-2">
-                      <div className="flex gap-2 w-full">
-                          <div className="flex-1 border border-slate-600 bg-slate-800 rounded h-32 overflow-y-auto custom-scrollbar">
-                              <ul className="p-0 m-0 list-none">
-                                  {managedMarkets.map((market, idx) => (
+                      <div className="flex flex-col gap-2 max-w-md">
+                          <div className="flex justify-end">
+                              <Button type="button" variant="secondary" className="h-8" onClick={handleOpenMarketModal} icon={<Search size={14}/>}>시장 검색 추가</Button>
+                          </div>
+                          <div className="border border-slate-600 bg-slate-800 rounded h-32 overflow-y-auto custom-scrollbar p-2">
+                              {managedMarkets.length === 0 && <span className="text-slate-500 text-sm">등록된 시장이 없습니다.</span>}
+                              <ul className="p-0 m-0 list-none space-y-1">
+                                  {managedMarkets.map((marketName, idx) => (
                                       <li 
                                         key={idx}
-                                        onClick={() => setSelectedMarketIndex(idx)}
-                                        className={`px-3 py-1.5 cursor-pointer text-sm ${selectedMarketIndex === idx ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}
+                                        className="flex justify-between items-center px-2 py-1 bg-slate-700/30 rounded border border-slate-700/50"
                                       >
-                                          {market}
+                                          <span className="text-slate-200 text-sm">{marketName}</span>
+                                          <button 
+                                            type="button" 
+                                            onClick={() => handleRemoveMarket(idx)}
+                                            className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-slate-700 transition-colors"
+                                          >
+                                            <X size={14} />
+                                          </button>
                                       </li>
                                   ))}
                               </ul>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                              <Button type="button" variant="secondary" className="h-8" onClick={handleAddMarketMock}>검색</Button>
-                              <Button type="button" variant="secondary" className="h-8" onClick={handleRemoveMarket}>삭제</Button>
                           </div>
                       </div>
                   </FormRow>
@@ -325,6 +336,13 @@ export const DistributorManagement: React.FC = () => {
              <Button type="button" variant="secondary" onClick={handleCancel} className="w-32">취소</Button>
           </div>
         </form>
+
+        {/* Common Market Search Modal */}
+        <MarketSearchModal 
+          isOpen={isMarketModalOpen} 
+          onClose={() => setIsMarketModalOpen(false)} 
+          onSelect={handleMarketSelect} 
+        />
       </>
     );
   }

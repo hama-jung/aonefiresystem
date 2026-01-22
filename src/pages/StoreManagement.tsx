@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup,
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, Modal, UI_STYLES, AddressInput,
-  formatPhoneNumber, handlePhoneKeyDown 
+  formatPhoneNumber, handlePhoneKeyDown, StatusBadge, StatusRadioGroup // Import common components
 } from '../components/CommonUI';
 import { Store, Market } from '../types';
 import { StoreAPI, MarketAPI } from '../services/api';
@@ -158,9 +158,38 @@ export const StoreManagement: React.FC = () => {
      return '';
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    // 1. 방금 선택한 파일
+    if (storeImageFile) {
+        const url = URL.createObjectURL(storeImageFile);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = storeImageFile.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+    }
+
+    // 2. 서버 파일
     if (formData.storeImage) {
-      window.open(formData.storeImage, '_blank');
+        try {
+            const response = await fetch(formData.storeImage);
+            if (!response.ok) throw new Error('Network error');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = getFileName();
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Download failed', e);
+            window.open(formData.storeImage, '_blank');
+        }
     }
   };
 
@@ -325,9 +354,7 @@ export const StoreManagement: React.FC = () => {
     { header: '상가명', accessor: 'name' },
     { header: '대표자', accessor: 'managerName' },
     { header: '대표자연락처', accessor: (s) => formatPhoneNumber(s.managerPhone) || '-' }, // Formatted
-    { header: '상태', accessor: (s) => (
-       <span className={s.status === '사용' ? 'text-green-400' : 'text-red-400'}>{s.status}</span>
-    )},
+    { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' }, // Use StatusBadge component
   ];
 
   // --- Market Modal Columns ---
@@ -472,26 +499,11 @@ export const StoreManagement: React.FC = () => {
 
             {/* 8. 사용여부 */}
             <FormRow label="사용여부">
-               <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                        type="radio" name="status" value="사용" 
-                        checked={formData.status === '사용'} 
-                        onChange={() => setFormData({...formData, status: '사용'})}
-                        className="accent-blue-500" 
-                    />
-                    <span>사용</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                        type="radio" name="status" value="미사용" 
-                        checked={formData.status === '미사용'} 
-                        onChange={() => setFormData({...formData, status: '미사용'})}
-                        className="accent-blue-500" 
-                    />
-                    <span>미사용</span>
-                  </label>
-               </div>
+               <StatusRadioGroup 
+                  label="" 
+                  value={formData.status} 
+                  onChange={(val) => setFormData({...formData, status: val as any})} 
+               />
             </FormRow>
 
             {/* 9. 비고 */}
@@ -523,8 +535,8 @@ export const StoreManagement: React.FC = () => {
                                 <Paperclip size={14} className="text-slate-400" />
                                 <span 
                                     onClick={handleDownload}
-                                    className={`text-sm ${formData.storeImage ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                                    title={formData.storeImage ? "클릭하여 다운로드" : "저장 전 파일입니다"}
+                                    className={`text-sm ${formData.storeImage || storeImageFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                                    title="클릭하여 다운로드"
                                 >
                                     {getFileName()}
                                 </span>

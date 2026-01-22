@@ -179,9 +179,38 @@ export const WorkLogManagement: React.FC = () => {
     return '';
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    // 1. 방금 선택한 파일
+    if (attachmentFile) {
+        const url = URL.createObjectURL(attachmentFile);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = attachmentFile.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+    }
+
+    // 2. 서버 파일
     if (formData.attachment) {
-      window.open(formData.attachment, '_blank');
+        try {
+            const response = await fetch(formData.attachment);
+            if (!response.ok) throw new Error('Network error');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = getFileName();
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Download failed', e);
+            window.open(formData.attachment, '_blank');
+        }
     }
   };
 
@@ -304,7 +333,8 @@ export const WorkLogManagement: React.FC = () => {
                             <Paperclip size={14} className="text-slate-400" />
                             <span 
                               onClick={handleDownload}
-                              className={`text-sm ${formData.attachment ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                              className={`text-sm ${formData.attachment || attachmentFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                              title="클릭하여 다운로드"
                             >
                               {getFileName()}
                             </span>

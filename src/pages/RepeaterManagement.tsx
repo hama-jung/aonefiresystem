@@ -200,9 +200,38 @@ export const RepeaterManagement: React.FC = () => {
     return '';
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
+    // 1. 방금 선택한 파일
+    if (imageFile) {
+        const url = URL.createObjectURL(imageFile);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = imageFile.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        return;
+    }
+
+    // 2. 서버 파일
     if (formData.image) {
-      window.open(formData.image, '_blank');
+        try {
+            const response = await fetch(formData.image);
+            if (!response.ok) throw new Error('Network error');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = getFileName();
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (e) {
+            console.error('Download failed', e);
+            window.open(formData.image, '_blank');
+        }
     }
   };
 
@@ -393,7 +422,8 @@ export const RepeaterManagement: React.FC = () => {
                           <Paperclip size={14} className="text-slate-400" />
                           <span 
                             onClick={handleDownload}
-                            className={`text-sm ${formData.image ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                            className={`text-sm ${formData.image || imageFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                            title="클릭하여 다운로드"
                           >
                             {getFileName()}
                           </span>

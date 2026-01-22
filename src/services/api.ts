@@ -26,7 +26,7 @@ const MOCK_MARKETS: Market[] = [
     id: 1, name: '부평자유시장', address: '인천광역시 부평구 시장로 11', addressDetail: '', 
     latitude: '37.4924', longitude: '126.7234', 
     managerName: '홍길동', managerPhone: '010-1234-1234', status: 'Normal',
-    distributorId: 1
+    distributorId: 1, distributorName: '미창'
   }
 ];
 
@@ -41,24 +41,34 @@ const MOCK_DISTRIBUTORS: Distributor[] = [
 
 // --- 2. Helper Utilities ---
 
-// 파일명 안전 변환 함수 (한글/특수문자/공백 오류 방지)
+// 파일명 안전 변환 함수
 const generateSafeFileName = (prefix: string, originalName: string) => {
-  // 1. 확장자 추출
   const parts = originalName.split('.');
   let ext = parts.length > 1 ? parts.pop() : 'png';
-  
-  // 2. 확장자 안전성 검사 (영문 숫자만 허용, 아니면 png로 대체)
-  if (!ext || !/^[a-zA-Z0-9]+$/.test(ext)) {
-      ext = 'png'; 
-  }
-  
-  // 3. 랜덤 문자열 생성
+  if (!ext || !/^[a-zA-Z0-9]+$/.test(ext)) { ext = 'png'; }
   const randomStr = Math.random().toString(36).substring(2, 10);
   const timestamp = Date.now();
-  
-  // 4. 최종 파일명 반환 (예: market_1700000000_abc123.jpg)
   return `${prefix}_${timestamp}_${randomStr}.${ext}`;
 };
+
+// 특정 총판의 managedMarkets 배열을 실제 markets 테이블과 동기화하는 함수
+async function syncDistributorManagedMarkets(distributorId: number) {
+  if (!distributorId) return;
+
+  // 1. 해당 총판 ID를 가진 시장들의 이름을 조회
+  const { data: markets } = await supabase
+    .from('markets')
+    .select('name')
+    .eq('distributorId', distributorId);
+  
+  const marketNames = markets ? markets.map(m => m.name) : [];
+
+  // 2. 총판 테이블의 managedMarkets 컬럼 업데이트
+  await supabase
+    .from('distributors')
+    .update({ managedMarkets: marketNames })
+    .eq('id', distributorId);
+}
 
 // Generic Supabase Reader
 async function supabaseReader<T>(
@@ -216,13 +226,68 @@ export const CommonAPI = {
 
 export const MarketAPI = {
   getList: async (params?: { name?: string, address?: string, managerName?: string }) => {
-    return supabaseReader<Market>('markets', params as any, ['name', 'address', 'managerName'], MOCK_MARKETS);
+    try {
+      let query = supabase.from('markets').select('*, distributors(name)').order('id', { ascending: false });
+      
+      if (params?.name) query = query.ilike('name', `%${params.name}%`);
+      if (params?.address) query = query.ilike('address', `%${params.address}%`);
+      if (params?.managerName) query = query.ilike('managerName', `%${params.managerName}%`);
+
+      const { data, error } = await query;
+      
+      if (error) {
+         console.warn(`Supabase read error on markets:`, error.message);
+         // Fallback to MOCK_MARKETS on error
+         return MOCK_MARKETS.map(m => ({...m, distributorName: '미창'}));
+      }
+      
+      if (data) {
+        return data.map((m: any) => ({
+          ...m,
+          distributorName: m.distributors?.name || '-'
+        })) as Market[];
+      }
+      return [];
+    } catch (e) {
+      return MOCK_MARKETS.map(m => ({...m, distributorName: '미창'}));
+    }
   },
   save: async (market: Market) => {
-    return supabaseSaver('markets', market);
+    // 1. 기존 데이터 조회 (변경 전 distributorId 확인용)
+    let oldDistributorId = null;
+    if (market.id) {
+        const { data } = await supabase.from('markets').select('distributorId').eq('id', market.id).single();
+        oldDistributorId = data?.distributorId;
+    }
+
+    // 2. 시장 데이터 저장 (distributorName은 DB컬럼이 아니므로 제외 처리 필요하지만, supabaseSaver에서 id제외 나머지를 보내므로 주의)
+    // types.ts의 Market에는 distributorName이 있지만, supabaseSaver는 id만 떼고 나머지 다 보내려고 함.
+    // 따라서 여기서 DB에 없는 필드는 제거해줘야 함.
+    const { distributorName, ...dbData } = market;
+    const savedMarket = await supabaseSaver('markets', dbData as Market); // Casting back to Market for return type match
+
+    // 3. 총판-시장 동기화 (distributorId가 변경되었을 수 있으므로)
+    if (savedMarket.distributorId) {
+        await syncDistributorManagedMarkets(savedMarket.distributorId);
+    }
+    if (oldDistributorId && oldDistributorId !== savedMarket.distributorId) {
+        await syncDistributorManagedMarkets(oldDistributorId);
+    }
+
+    return { ...savedMarket, distributorName }; // Return with distributorName for UI consistency if needed
   },
   delete: async (id: number) => {
-    return supabaseDeleter('markets', id);
+    // 삭제 전 해당 시장의 총판 ID 확인
+    const { data: market } = await supabase.from('markets').select('distributorId').eq('id', id).single();
+    
+    // 삭제 수행
+    const result = await supabaseDeleter('markets', id);
+
+    // 해당 총판의 관리 시장 목록 동기화
+    if (market?.distributorId) {
+        await syncDistributorManagedMarkets(market.distributorId);
+    }
+    return result;
   },
   uploadMapImage: async (file: File) => {
     const fileName = generateSafeFileName('market', file.name);
@@ -244,9 +309,48 @@ export const DistributorAPI = {
     return supabaseReader<Distributor>('distributors', params as any, ['address', 'name', 'managerName'], MOCK_DISTRIBUTORS);
   },
   save: async (dist: Distributor) => {
-    return supabaseSaver('distributors', dist);
+    // 1. 총판 데이터 저장
+    const savedDist = await supabaseSaver('distributors', dist);
+    const distId = savedDist.id;
+
+    // 2. 관리 시장 목록(managedMarkets) 동기화 (Foreign Key 업데이트)
+    // 리스트에 있는 시장 이름들은 이 총판 ID로 업데이트
+    if (dist.managedMarkets && dist.managedMarkets.length > 0) {
+        await supabase
+            .from('markets')
+            .update({ distributorId: distId })
+            .in('name', dist.managedMarkets); // 이름 기준 매칭 (주의: 이름 중복 시 다수 업데이트될 수 있음)
+    }
+
+    // 이 총판에 속해있었으나 리스트에서 제외된 시장들은 NULL 처리
+    // (현재 DB상 이 총판 ID를 가지고 있으나, 새 리스트에는 없는 시장들)
+    if (dist.managedMarkets) {
+        // A. 현재 이 총판의 ID를 가진 모든 시장 조회
+        const { data: currentLinked } = await supabase.from('markets').select('id, name').eq('distributorId', distId);
+        
+        if (currentLinked) {
+            const marketsToUnlink = currentLinked
+                .filter(m => !dist.managedMarkets.includes(m.name))
+                .map(m => m.id);
+            
+            if (marketsToUnlink.length > 0) {
+                await supabase
+                    .from('markets')
+                    .update({ distributorId: null })
+                    .in('id', marketsToUnlink);
+            }
+        }
+    }
+
+    // 3. 최종적으로 DB 상태 기준으로 managedMarkets 배열 재정렬 (Source of Truth 보장)
+    await syncDistributorManagedMarkets(distId);
+
+    return savedDist;
   },
   delete: async (id: number) => {
+    // 총판 삭제 시 연결된 시장들의 distributorId를 NULL로 변경
+    await supabase.from('markets').update({ distributorId: null }).eq('distributorId', id);
+    
     return supabaseDeleter('distributors', id);
   }
 };
@@ -254,21 +358,37 @@ export const DistributorAPI = {
 export const StoreAPI = { 
   getList: async (params?: { address?: string, marketName?: string, storeName?: string, marketId?: number }) => {
     try {
-      let query = supabase.from('stores').select('*').order('id', { ascending: false });
+      // marketId와 marketName을 조인하여 가져옴
+      let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
+      
       if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
       if (params?.address) query = query.ilike('address', `%${params.address}%`);
       if (params?.marketId) query = query.eq('marketId', params.marketId);
-      if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
-
+      
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as Store[];
+
+      if (data) {
+        let result = data.map((s: any) => ({
+            ...s,
+            marketName: s.markets?.name || '-' // 조인된 시장 이름 매핑
+        }));
+
+        // marketName으로 필터링 (In-memory filtering because joining ilike is complex in basic query)
+        if (params?.marketName) {
+            result = result.filter((s: any) => s.marketName.includes(params.marketName));
+        }
+        return result as Store[];
+      }
+      return [];
     } catch (e) {
       return [];
     }
   }, 
   save: async (store: Store) => {
-    return supabaseSaver('stores', store);
+    // DB에 없는 필드 제거 (marketName)
+    const { marketName, ...dbData } = store;
+    return supabaseSaver('stores', dbData as Store);
   }, 
   delete: async (id: number) => {
     return supabaseDeleter('stores', id);
@@ -284,13 +404,14 @@ export const StoreAPI = {
     return '';
   }, 
   saveBulk: async (stores: Store[]) => {
-    const storesToInsert = stores.map(({ id, ...rest }) => rest);
+    const storesToInsert = stores.map(({ id, marketName, ...rest }) => rest);
     const { error } = await supabase.from('stores').insert(storesToInsert);
     if (error) throw error;
     return true;
   } 
 };
 
+// ... (Rest of existing code remains the same)
 export const CommonCodeAPI = { 
   getList: async (params?: { groupName?: string, name?: string }) => {
     return supabaseReader<CommonCode>('common_codes', params as any, ['groupName', 'name', 'code']);

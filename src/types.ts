@@ -32,6 +32,7 @@ export interface User {
 export interface Market {
   id: number;
   distributorId?: number; // 연결된 총판 ID
+  distributorName?: string; // [NEW] 총판명 (Join용)
   name: string;
   address: string;
   addressDetail?: string; // 상세주소
