@@ -74,7 +74,40 @@ let MOCK_DISTRIBUTORS: Distributor[] = [
   },
 ];
 
-// ... (이하 기존 API 코드 유지)
+// --- 기본 메뉴 데이터 (DB가 비어있을 때 사용) ---
+const DEFAULT_MENUS: MenuItemDB[] = [
+  // 1. 대시보드 (루트)
+  { id: 1, label: '대시보드', path: null, icon: 'Home', sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
+  { id: 11, parentId: 1, label: '대시보드1', path: '/dashboard', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
+  { id: 12, parentId: 1, label: '대시보드2', path: '/dashboard2', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: true },
+
+  // 2. 시스템 관리 (루트)
+  { id: 2, label: '시스템 관리', path: null, icon: 'Settings', sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
+  { id: 21, parentId: 2, label: '사용자 관리', path: '/users', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: false },
+  { id: 22, parentId: 2, label: '총판 관리', path: '/distributors', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
+  { id: 23, parentId: 2, label: '시장 관리', path: '/markets', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
+  { id: 24, parentId: 2, label: '상가 관리', path: '/stores', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: false },
+  { id: 25, parentId: 2, label: '문자 전송', path: '/sms', icon: undefined, sortOrder: 50, isVisiblePc: true, isVisibleMobile: false },
+  { id: 26, parentId: 2, label: '작업일지', path: '/work-logs', icon: undefined, sortOrder: 60, isVisiblePc: true, isVisibleMobile: true },
+  { id: 27, parentId: 2, label: '롤 관리', path: '/roles', icon: undefined, sortOrder: 70, isVisiblePc: true, isVisibleMobile: false },
+  { id: 28, parentId: 2, label: '공통코드 관리', path: '/common-codes', icon: undefined, sortOrder: 75, isVisiblePc: true, isVisibleMobile: false },
+  { id: 29, parentId: 2, label: '메뉴 관리', path: '/menus', icon: undefined, sortOrder: 80, isVisiblePc: true, isVisibleMobile: false },
+
+  // 3. 기기 관리 (루트)
+  { id: 3, label: '기기 관리', path: null, icon: 'Cpu', sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
+  { id: 31, parentId: 3, label: 'R형 수신기 관리', path: '/receivers', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: false },
+  { id: 32, parentId: 3, label: '중계기 관리', path: '/repeaters', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
+  { id: 33, parentId: 3, label: '화재감지기 관리', path: '/detectors', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
+  { id: 34, parentId: 3, label: '발신기 관리', path: '/transmitters', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: false },
+  { id: 35, parentId: 3, label: '경종 관리', path: '/alarms', icon: undefined, sortOrder: 50, isVisiblePc: true, isVisibleMobile: false },
+
+  // 4. 데이터 관리 (루트)
+  { id: 4, label: '데이터 관리', path: null, icon: 'Activity', sortOrder: 40, isVisiblePc: true, isVisibleMobile: true },
+  { id: 41, parentId: 4, label: '화재 이력 관리', path: '/fire-history', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
+  { id: 42, parentId: 4, label: '기기 상태 관리', path: '/device-status', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: true },
+  { id: 43, parentId: 4, label: '데이터 수신 관리', path: '/data-reception', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: true },
+  { id: 44, parentId: 4, label: 'UART 통신', path: '/uart-communication', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: true },
+];
 
 // --- 2. Helper Utilities ---
 const simulateDelay = <T>(data: T): Promise<T> => {
@@ -255,6 +288,54 @@ export const FireHistoryAPI = { getList: async (q?:any) => simulateDelay([]), sa
 export const DeviceStatusAPI = { getList: async (q?:any) => simulateDelay([]), save: async (id:any, s:any, n:any) => simulateDelay(true), delete: async (id:any) => simulateDelay(true) };
 export const DataReceptionAPI = { getList: async (q?:any) => simulateDelay([]), delete: async (id:any) => simulateDelay(true) };
 export const CommonCodeAPI = { getList: async (q?:any) => simulateDelay([]), save: async (c:any) => simulateDelay(c), saveBulk: async (c:any) => simulateDelay(true), delete: async (id:any) => simulateDelay(true) };
-export const MenuAPI = { getAll: async () => simulateDelay([] as MenuItemDB[]), getTree: async () => simulateDelay([] as MenuItemDB[]), toggleVisibility: async () => simulateDelay(true), updateVisibilities: async (updates: any) => simulateDelay(true), save: async (m:any) => simulateDelay(m), delete: async (id:any) => simulateDelay(true) };
+
+// --- Menu API 수정: Supabase 연동 및 기본값 제공 ---
+export const MenuAPI = { 
+  getAll: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('menus')
+        .select('*')
+        .order('sortOrder', { ascending: true });
+      
+      if (error) {
+        console.warn("Menu fetch error, using default:", error);
+        return DEFAULT_MENUS;
+      }
+      
+      // DB가 비어있으면 기본값 반환
+      if (!data || data.length === 0) {
+        return DEFAULT_MENUS;
+      }
+      
+      return data as MenuItemDB[];
+    } catch (e) {
+      console.error("Supabase connection error, using default menus", e);
+      return DEFAULT_MENUS;
+    }
+  },
+  
+  getTree: async () => {
+    // getAll을 재사용하여 트리 구조 생성
+    const list = await MenuAPI.getAll();
+    
+    const buildTree = (items: MenuItemDB[], parentId: number | null = null): MenuItemDB[] => {
+      return items
+        .filter(item => (item.parentId || null) === parentId)
+        .map(item => ({
+          ...item,
+          children: buildTree(items, item.id)
+        }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    };
+    
+    return buildTree(list);
+  },
+
+  toggleVisibility: async () => simulateDelay(true), 
+  updateVisibilities: async (updates: any) => simulateDelay(true), 
+  save: async (m:any) => simulateDelay(m), 
+  delete: async (id:any) => simulateDelay(true) 
+};
 
 export const DashboardAPI = { getData: async () => simulateDelay({ stats: [], fireLogs: [], faultLogs: [], mapPoints: [] }) };
