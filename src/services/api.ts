@@ -2,13 +2,15 @@ import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
 /**
- * [API 서비스 정책]
- * 1. 우선적으로 Supabase DB에서 데이터를 조회합니다.
- * 2. DB 연결 실패, 에러 발생, 또는 데이터가 0건일 경우(초기 상태) -> 자동으로 MOCK(임시) 데이터를 반환합니다.
- *    이를 통해 DB가 준비되지 않아도 프론트엔드 화면이 비어 보이지 않게 합니다.
+ * [API 서비스 정책 - 수정됨]
+ * 1. 읽기(Read): Supabase 조회 실패 시에만 Mock 데이터 반환 (화면 꺼짐 방지)
+ * 2. 쓰기(Write - Save/Update/Delete): 
+ *    - 반드시 실제 DB 결과를 반환해야 함. 
+ *    - Mock 데이터를 반환하면 ID가 0이 되거나 수정 사항이 반영되지 않는 치명적 오류 발생.
+ *    - 따라서 쓰기 작업은 실패 시 에러를 throw하여 사용자가 인지하게 함.
  */
 
-// --- 1. MOCK DATA (Fallback용 임시 데이터) ---
+// --- 1. MOCK DATA (Fallback용 임시 데이터 - 읽기 실패 시에만 사용) ---
 
 const MOCK_ROLES: RoleItem[] = [
   { id: 1, code: '7777', name: '지자체', description: '구단위', status: '사용' },
@@ -20,8 +22,6 @@ const MOCK_ROLES: RoleItem[] = [
 const MOCK_USERS: User[] = [
   { id: 1, userId: 'admin', password: '12341234!', name: '관리자', role: '시스템관리자', phone: '010-1234-5678', department: '본사', status: '사용', smsReceive: '수신' },
   { id: 2, userId: 'dist01', password: '12341234!', name: '김총판', role: '총판관리자', phone: '010-9876-5432', department: '경기남부', status: '사용', smsReceive: '미수신' },
-  { id: 3, userId: 'market01', password: '12341234!', name: '박시장', role: '시장관리자', phone: '010-5555-4444', department: '부평시장', status: '사용', smsReceive: '수신' },
-  { id: 4, userId: 'store01', password: '12341234!', name: '이상인', role: '시장관리자', phone: '010-1111-2222', department: '진라도김치', status: '미사용', smsReceive: '수신' },
 ];
 
 const MOCK_MARKETS: Market[] = [
@@ -29,12 +29,6 @@ const MOCK_MARKETS: Market[] = [
     id: 1, name: '부평자유시장', address: '인천광역시 부평구 시장로 11', addressDetail: '', 
     latitude: '37.4924', longitude: '126.7234', 
     managerName: '홍길동', managerPhone: '010-1234-1234', status: 'Normal',
-    distributorId: 1
-  },
-  { 
-    id: 2, name: '대전중앙시장', address: '대전광역시 동구 중교로 12', addressDetail: '', 
-    latitude: '36.3288', longitude: '127.4268',
-    managerName: '김철수', managerPhone: '010-9876-5432', status: 'Fire',
     distributorId: 1
   }
 ];
@@ -44,73 +38,50 @@ const MOCK_DISTRIBUTORS: Distributor[] = [
     id: 1, name: '미창', address: '경기도 부천시 원미구 도약로 294', addressDetail: '5,7F', 
     latitude: '37.5102443', longitude: '126.7822721', 
     managerName: '미창AS', managerPhone: '01074158119', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: ['원주자유시장', '원주시민시장', '원주남부시장', '사직시장', '상동시장']
-  },
-  { 
-    id: 2, name: '디지털허브', address: '서울특별시 성동구 아차산로 17', addressDetail: '101호', 
-    latitude: '37.541', longitude: '127.056', 
-    managerName: '정진욱팀장', managerPhone: '01071512644', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
+    managedMarkets: ['원주자유시장']
+  }
 ];
 
 const MOCK_MENUS: MenuItemDB[] = [
-  { id: 1, label: '대시보드', path: null, icon: 'Home', sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
-  { id: 11, parentId: 1, label: '대시보드1', path: '/dashboard', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
-  { id: 12, parentId: 1, label: '대시보드2', path: '/dashboard2', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: true },
-  { id: 2, label: '시스템 관리', path: null, icon: 'Settings', sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
-  { id: 21, parentId: 2, label: '사용자 관리', path: '/users', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: false },
-  { id: 22, parentId: 2, label: '총판 관리', path: '/distributors', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
-  { id: 23, parentId: 2, label: '시장 관리', path: '/markets', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
-  { id: 24, parentId: 2, label: '상가 관리', path: '/stores', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: false },
-  { id: 25, parentId: 2, label: '문자 전송', path: '/sms', icon: undefined, sortOrder: 50, isVisiblePc: true, isVisibleMobile: false },
-  { id: 26, parentId: 2, label: '작업일지', path: '/work-logs', icon: undefined, sortOrder: 60, isVisiblePc: true, isVisibleMobile: true },
-  { id: 27, parentId: 2, label: '롤 관리', path: '/roles', icon: undefined, sortOrder: 70, isVisiblePc: true, isVisibleMobile: false },
-  { id: 28, parentId: 2, label: '공통코드 관리', path: '/common-codes', icon: undefined, sortOrder: 75, isVisiblePc: true, isVisibleMobile: false },
-  { id: 29, parentId: 2, label: '메뉴 관리', path: '/menus', icon: undefined, sortOrder: 80, isVisiblePc: true, isVisibleMobile: false },
-  { id: 3, label: '기기 관리', path: null, icon: 'Cpu', sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
-  { id: 31, parentId: 3, label: 'R형 수신기 관리', path: '/receivers', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: false },
-  { id: 32, parentId: 3, label: '중계기 관리', path: '/repeaters', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: false },
-  { id: 33, parentId: 3, label: '화재감지기 관리', path: '/detectors', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: false },
-  { id: 34, parentId: 3, label: '발신기 관리', path: '/transmitters', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: false },
-  { id: 35, parentId: 3, label: '경종 관리', path: '/alarms', icon: undefined, sortOrder: 50, isVisiblePc: true, isVisibleMobile: false },
-  { id: 4, label: '데이터 관리', path: null, icon: 'Activity', sortOrder: 40, isVisiblePc: true, isVisibleMobile: true },
-  { id: 41, parentId: 4, label: '화재 이력 관리', path: '/fire-history', icon: undefined, sortOrder: 10, isVisiblePc: true, isVisibleMobile: true },
-  { id: 42, parentId: 4, label: '기기 상태 관리', path: '/device-status', icon: undefined, sortOrder: 20, isVisiblePc: true, isVisibleMobile: true },
-  { id: 43, parentId: 4, label: '데이터 수신 관리', path: '/data-reception', icon: undefined, sortOrder: 30, isVisiblePc: true, isVisibleMobile: true },
-  { id: 44, parentId: 4, label: 'UART 통신', path: '/uart-communication', icon: undefined, sortOrder: 40, isVisiblePc: true, isVisibleMobile: true },
-];
-
-const MOCK_FIRE_HISTORY: FireHistoryItem[] = [
-  { id: 1, marketName: '대전중앙시장', receiverMac: '01A4', receiverStatus: '10', repeaterId: '06', repeaterStatus: '35', detectorInfoChamber: '07(ITR2)', registeredAt: '2026-01-22 14:15:53', falseAlarmStatus: '화재', registrar: 'system' },
-  { id: 2, marketName: '부평자유시장', receiverMac: '0193', receiverStatus: '10', repeaterId: '01', repeaterStatus: '35', detectorInfoChamber: '10(그린야채)', registeredAt: '2026-01-22 12:29:45', falseAlarmStatus: '등록', registrar: 'system' },
-];
-
-const MOCK_DEVICE_STATUS: DeviceStatusItem[] = [
-  { id: 1, marketName: '대전중앙시장', receiverMac: '0136', repeaterId: '03', deviceType: '수신기', deviceId: '01', deviceStatus: '에러', errorCode: '04', registeredAt: '2026-01-22 11:40:03', processStatus: '미처리' },
-  { id: 2, marketName: '부평자유시장', receiverMac: '0156', repeaterId: '04', deviceType: '중계기', deviceId: '01', deviceStatus: '에러', errorCode: '04', registeredAt: '2026-01-22 10:40:03', processStatus: '미처리' },
+  { id: 1, label: '대시보드', path: '/dashboard', icon: 'Home', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
+  { id: 2, label: '시스템 관리', icon: 'Settings', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
+  { id: 3, parentId: 2, label: '사용자 관리', path: '/users', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
+  { id: 4, parentId: 2, label: '총판 관리', path: '/distributors', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
+  { id: 5, parentId: 2, label: '시장 관리', path: '/markets', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
+  { id: 6, parentId: 2, label: '상가 관리', path: '/stores', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
+  { id: 7, parentId: 2, label: '문자 전송', path: '/sms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true },
+  { id: 8, parentId: 2, label: '롤 관리', path: '/roles', sortOrder: 6, isVisiblePc: true, isVisibleMobile: true },
+  { id: 9, parentId: 2, label: '작업 일지', path: '/work-logs', sortOrder: 7, isVisiblePc: true, isVisibleMobile: true },
+  { id: 10, parentId: 2, label: '메뉴 관리', path: '/menus', sortOrder: 8, isVisiblePc: true, isVisibleMobile: true },
+  { id: 11, parentId: 2, label: '공통코드 관리', path: '/common-codes', sortOrder: 9, isVisiblePc: true, isVisibleMobile: true },
+  { id: 12, label: '기기 관리', icon: 'Cpu', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
+  { id: 13, parentId: 12, label: 'R형 수신기', path: '/receivers', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
+  { id: 14, parentId: 12, label: '중계기 관리', path: '/repeaters', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
+  { id: 15, parentId: 12, label: '화재감지기', path: '/detectors', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
+  { id: 16, parentId: 12, label: '발신기 관리', path: '/transmitters', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
+  { id: 17, parentId: 12, label: '경종 관리', path: '/alarms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true },
+  { id: 18, label: '데이터 관리', icon: 'Activity', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
+  { id: 19, parentId: 18, label: '화재 이력 관리', path: '/fire-history', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
+  { id: 20, parentId: 18, label: '기기 상태 관리', path: '/device-status', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
+  { id: 21, parentId: 18, label: '데이터 수신 관리', path: '/data-reception', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
+  { id: 22, parentId: 18, label: 'UART 통신', path: '/uart-communication', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
 ];
 
 // --- 2. Helper Utilities ---
-const simulateDelay = <T>(data: T): Promise<T> => {
-  return new Promise(resolve => {
-    setTimeout(() => resolve(data), 200); // 0.2초 딜레이
-  });
-};
 
-// Generic Supabase CRUD helper with Fallback
-async function supabaseCrud<T>(
+// Generic Supabase Reader (읽기 전용)
+async function supabaseReader<T>(
   table: string, 
   params?: Record<string, string>, 
   searchFields?: string[],
   fallbackData: T[] = []
 ) {
   try {
-    let query = supabase.from(table).select('*').order('id', { ascending: false }); // 기본 내림차순 정렬
+    let query = supabase.from(table).select('*').order('id', { ascending: false });
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value) {
+        if (value && value !== 'all') { // 'all'은 전체 조회로 간주
           if (searchFields?.includes(key)) {
             query = query.ilike(key, `%${value}%`);
           } else {
@@ -122,25 +93,60 @@ async function supabaseCrud<T>(
     
     const { data, error } = await query;
     if (error) {
-        console.warn(`Supabase ${table} fetch error (Using Mock):`, error.message);
-        return fallbackData; // 에러 시 Mock 데이터 반환
-    }
-    // 데이터가 없으면 초기 상태일 수 있으므로 Mock 데이터를 보여줄 수도 있지만, 
-    // 실제 운영 환경에서는 []가 맞음. 그러나 데모를 위해 비어있으면 Mock을 반환하게 설정.
-    if (!data || data.length === 0) {
+        console.warn(`Supabase read error on ${table} (Using Mock):`, error.message);
         return fallbackData;
     }
+    // 데이터가 [] (빈배열)인 경우는 실제 데이터가 없는 것이므로 빈배열 반환이 맞음.
+    // 단, 테이블 자체가 없거나 연결 오류 시 undefined가 올 수 있음.
+    if (data === null) return fallbackData;
+    
     return data as T[];
   } catch (e) {
-    console.error(`Error fetching ${table}:`, e);
+    console.error(`Unexpected error reading ${table}:`, e);
     return fallbackData;
   }
+}
+
+// Generic Supabase Saver (저장/수정 전용 - 중요!)
+// 입력받은 ID가 0이면 Insert, 아니면 Update 수행 후 *실제 DB 데이터*를 반환
+async function supabaseSaver<T extends { id: number }>(table: string, item: T): Promise<T> {
+  // 1. ID 분리 (Insert 시 ID가 0이면 DB가 자동생성하도록 제외해야 함)
+  const { id, ...rest } = item;
+  
+  let query;
+  if (id && id > 0) {
+    // Update: ID로 찾아서 업데이트하고, 업데이트된 행을 반환(.select())
+    query = supabase.from(table).update(rest).eq('id', id).select();
+  } else {
+    // Insert: ID 제외하고 삽입, 삽입된 행을 반환(.select())
+    query = supabase.from(table).insert(rest).select();
+  }
+
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error(`Save failed for ${table}:`, error);
+    throw new Error(error.message); // 에러를 던져서 UI가 알게 함
+  }
+  
+  if (!data || data.length === 0) {
+    throw new Error('데이터 저장 후 반환된 결과가 없습니다.');
+  }
+
+  return data[0] as T; // 실제 저장된 데이터(ID 포함) 반환
+}
+
+async function supabaseDeleter(table: string, id: number) {
+  const { error } = await supabase.from(table).delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return true;
 }
 
 // --- API IMPLEMENTATIONS ---
 
 export const AuthAPI = {
   login: async (id: string, pw: string) => {
+    // 1. 실제 DB 로그인 시도
     try {
       const { data, error } = await supabase.from('users').select('*').eq('userId', id).single();
       if (!error && data) {
@@ -151,81 +157,80 @@ export const AuthAPI = {
         }
       }
     } catch (e) {}
-    // Fallback
+    
+    // 2. 실패 시 Mock 로그인 시도 (데모용)
     const user = MOCK_USERS.find(u => u.userId === id);
     if (user && user.password === pw && user.status === '사용') {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...userInfo } = user;
         return { success: true, token: 'mock-token', user: userInfo };
     }
-    throw new Error('Invalid credentials');
+    throw new Error('아이디 또는 비밀번호가 잘못되었습니다.');
   },
   changePassword: async (userId: string, currentPw: string, newPw: string) => {
-    try {
-        const { data } = await supabase.from('users').select('*').eq('userId', userId).single();
-        if (data) {
-            if (data.password !== currentPw) throw new Error('현재 비밀번호 불일치');
-            await supabase.from('users').update({ password: newPw }).eq('userId', userId);
-            return { success: true };
-        }
-    } catch (e) {}
-    // Fallback
-    return simulateDelay({ success: true });
+    // 비밀번호 변경은 실제 DB에만 적용
+    const { data } = await supabase.from('users').select('*').eq('userId', userId).single();
+    if (!data) throw new Error('사용자를 찾을 수 없습니다.');
+    if (data.password !== currentPw) throw new Error('현재 비밀번호 불일치');
+    
+    const { error } = await supabase.from('users').update({ password: newPw }).eq('userId', userId);
+    if (error) throw error;
+    return { success: true };
   }
 };
 
 export const UserAPI = {
   getList: async (params?: { userId?: string, name?: string, role?: string, department?: string }) => {
-    return supabaseCrud<User>('users', params as any, ['userId', 'name', 'department'], MOCK_USERS);
+    return supabaseReader<User>('users', params as any, ['userId', 'name', 'department'], MOCK_USERS);
   },
   checkDuplicate: async (userId: string) => {
     const { data } = await supabase.from('users').select('id').eq('userId', userId);
     return data && data.length > 0;
   },
   save: async (user: User) => {
-    if (user.id) await supabase.from('users').update(user).eq('id', user.id);
-    else await supabase.from('users').insert(user);
-    return user;
+    return supabaseSaver('users', user);
   },
   delete: async (id: number) => {
-    await supabase.from('users').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('users', id);
   }
 };
 
 export const RoleAPI = {
   getList: async (params?: { code?: string, name?: string }) => {
-    return supabaseCrud<RoleItem>('roles', params as any, ['code', 'name'], MOCK_ROLES);
+    return supabaseReader<RoleItem>('roles', params as any, ['code', 'name'], MOCK_ROLES);
   },
   save: async (role: RoleItem) => {
-    if (role.id) await supabase.from('roles').update(role).eq('id', role.id);
-    else await supabase.from('roles').insert(role);
-    return role;
+    return supabaseSaver('roles', role);
   },
   delete: async (id: number) => {
-    await supabase.from('roles').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('roles', id);
   }
 };
 
 export const CommonAPI = {
   getCompanyList: async (searchName?: string) => {
     try {
-      const { data: dists } = await supabase.from('distributors').select('id, name, managerName, managerPhone');
-      const { data: mkts } = await supabase.from('markets').select('id, name, managerName, managerPhone');
+      // 1. 총판 목록 조회
+      let dQuery = supabase.from('distributors').select('id, name, managerName, managerPhone');
+      if(searchName) dQuery = dQuery.ilike('name', `%${searchName}%`);
+      const { data: dists } = await dQuery;
+
+      // 2. 시장 목록 조회
+      let mQuery = supabase.from('markets').select('id, name, managerName, managerPhone');
+      if(searchName) mQuery = mQuery.ilike('name', `%${searchName}%`);
+      const { data: mkts } = await mQuery;
       
       const dList = (dists || []).map((d: any) => ({ id: `D_${d.id}`, name: d.name, type: '총판', manager: d.managerName, phone: d.managerPhone }));
       const mList = (mkts || []).map((m: any) => ({ id: `M_${m.id}`, name: m.name, type: '시장', manager: m.managerName, phone: m.managerPhone }));
       
       let all = [...dList, ...mList];
-      if (all.length === 0) {
-          // Fallback if empty
+      
+      // 데이터 없으면 Mock 반환 (검색어가 없을때만)
+      if (all.length === 0 && !searchName) {
           const dMock = MOCK_DISTRIBUTORS.map(d => ({ id: `D_${d.id}`, name: d.name, type: '총판', manager: d.managerName, phone: d.managerPhone }));
           const mMock = MOCK_MARKETS.map(m => ({ id: `M_${m.id}`, name: m.name, type: '시장', manager: m.managerName, phone: m.managerPhone }));
           all = [...dMock, ...mMock];
       }
-
-      if (searchName) all = all.filter(c => c.name.includes(searchName));
       return all;
     } catch (e) {
       return [];
@@ -235,42 +240,38 @@ export const CommonAPI = {
 
 export const MarketAPI = {
   getList: async (params?: { name?: string, address?: string, managerName?: string }) => {
-    return supabaseCrud<Market>('markets', params as any, ['name', 'address', 'managerName'], MOCK_MARKETS);
+    return supabaseReader<Market>('markets', params as any, ['name', 'address', 'managerName'], MOCK_MARKETS);
   },
   save: async (market: Market) => {
-    if (market.id) await supabase.from('markets').update(market).eq('id', market.id);
-    else await supabase.from('markets').insert(market);
-    return market;
+    return supabaseSaver('markets', market);
   },
   delete: async (id: number) => {
-    await supabase.from('markets').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('markets', id);
   },
   uploadMapImage: async (file: File) => {
-    const fileName = `${Date.now()}_${file.name}`;
-    const { data } = await supabase.storage.from('market-maps').upload(fileName, file);
+    const fileName = `market_${Date.now()}_${file.name}`;
+    const { data, error } = await supabase.storage.from('market-maps').upload(fileName, file);
+    if (error) {
+        console.error("Image Upload Error:", error);
+        throw new Error('이미지 업로드 실패: ' + error.message);
+    }
     if (data) {
       const { data: urlData } = supabase.storage.from('market-maps').getPublicUrl(fileName);
       return urlData.publicUrl;
     }
-    // Fallback: don't error, just return null string to proceed
-    console.warn('Image upload failed, skipping image.');
     return '';
   }
 };
 
 export const DistributorAPI = {
   getList: async (params?: { address?: string, name?: string, managerName?: string }) => {
-    return supabaseCrud<Distributor>('distributors', params as any, ['address', 'name', 'managerName'], MOCK_DISTRIBUTORS);
+    return supabaseReader<Distributor>('distributors', params as any, ['address', 'name', 'managerName'], MOCK_DISTRIBUTORS);
   },
   save: async (dist: Distributor) => {
-    if (dist.id) await supabase.from('distributors').update(dist).eq('id', dist.id);
-    else await supabase.from('distributors').insert(dist);
-    return dist;
+    return supabaseSaver('distributors', dist);
   },
   delete: async (id: number) => {
-    await supabase.from('distributors').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('distributors', id);
   }
 };
 
@@ -287,22 +288,20 @@ export const StoreAPI = {
       if (error) throw error;
       return (data || []) as Store[];
     } catch (e) {
-      // Return empty array for stores if failed, as we don't have good mock data for stores in this file yet
+      // Stores는 Mock 데이터가 없으므로 빈 배열 반환
       return [];
     }
   }, 
   save: async (store: Store) => {
-    if (store.id) await supabase.from('stores').update(store).eq('id', store.id);
-    else await supabase.from('stores').insert(store);
-    return store;
+    return supabaseSaver('stores', store);
   }, 
   delete: async (id: number) => {
-    await supabase.from('stores').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('stores', id);
   }, 
   uploadStoreImage: async (file: File) => {
     const fileName = `store_${Date.now()}_${file.name}`;
-    const { data } = await supabase.storage.from('store-images').upload(fileName, file);
+    const { data, error } = await supabase.storage.from('store-images').upload(fileName, file);
+    if (error) throw error;
     if (data) {
       const { data: urlData } = supabase.storage.from('store-images').getPublicUrl(fileName);
       return urlData.publicUrl;
@@ -310,7 +309,9 @@ export const StoreAPI = {
     return '';
   }, 
   saveBulk: async (stores: Store[]) => {
-    const { error } = await supabase.from('stores').insert(stores);
+    // Bulk Insert (ID 제외)
+    const storesToInsert = stores.map(({ id, ...rest }) => rest);
+    const { error } = await supabase.from('stores').insert(storesToInsert);
     if (error) throw error;
     return true;
   } 
@@ -318,52 +319,60 @@ export const StoreAPI = {
 
 export const CommonCodeAPI = { 
   getList: async (params?: { groupName?: string, name?: string }) => {
-    return supabaseCrud<CommonCode>('common_codes', params as any, ['groupName', 'name', 'code']);
+    return supabaseReader<CommonCode>('common_codes', params as any, ['groupName', 'name', 'code']);
   }, 
   save: async (code: CommonCode) => {
-    if (code.id) await supabase.from('common_codes').update(code).eq('id', code.id);
-    else await supabase.from('common_codes').insert(code);
-    return code;
+    return supabaseSaver('common_codes', code);
   }, 
   saveBulk: async (codes: CommonCode[]) => {
-    const { error } = await supabase.from('common_codes').insert(codes);
+    const dataToInsert = codes.map(({ id, ...rest }) => rest);
+    const { error } = await supabase.from('common_codes').insert(dataToInsert);
     if (error) throw error;
     return true;
   }, 
   delete: async (id: number) => {
-    await supabase.from('common_codes').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('common_codes', id);
   } 
 };
 
 export const WorkLogAPI = { 
   getList: async (params?: { marketName?: string }) => {
     try {
+      // Join Query: work_logs + markets(name)
       let query = supabase.from('work_logs').select('*, markets(name)').order('workDate', { ascending: false });
+      // Note: Supabase complex filtering on joined table needs explicit handling or stored procedures.
+      // Here we filter locally for simplicity if needed, or rely on client filtering.
+      
       const { data, error } = await query;
       
       if (!error && data) {
-        return data.map((log: any) => ({
+        let result = data.map((log: any) => ({
           ...log,
           marketName: log.markets?.name || 'Unknown'
-        })) as WorkLog[];
+        }));
+        if (params?.marketName) {
+            result = result.filter((l: any) => l.marketName.includes(params.marketName));
+        }
+        return result as WorkLog[];
       }
-    } catch(e) {}
-    return [];
+      return [];
+    } catch(e) {
+      return [];
+    }
   }, 
   save: async (log: WorkLog) => {
+    // marketName은 Join된 필드이므로 저장 시 제외해야 함
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, ...saveData } = log;
-    if (saveData.id) await supabase.from('work_logs').update(saveData).eq('id', saveData.id);
-    else await supabase.from('work_logs').insert(saveData);
-    return log;
+    return supabaseSaver('work_logs', saveData as WorkLog);
   }, 
   delete: async (id: number) => {
-    await supabase.from('work_logs').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('work_logs', id);
   }, 
   uploadAttachment: async (file: File) => {
     const fileName = `log_${Date.now()}_${file.name}`;
-    const { data } = await supabase.storage.from('work-log-images').upload(fileName, file);
+    const { data, error } = await supabase.storage.from('work-log-images').upload(fileName, file);
+    if (error) throw error;
     if (data) {
       const { data: urlData } = supabase.storage.from('work-log-images').getPublicUrl(fileName);
       return urlData.publicUrl;
@@ -378,6 +387,7 @@ export const ReceiverAPI = {
       let query = supabase.from('receivers').select('*, markets(name)').order('id', { ascending: false });
       if (params?.macAddress) query = query.ilike('macAddress', `%${params.macAddress}%`);
       if (params?.ip) query = query.ilike('ip', `%${params.ip}%`);
+      if (params?.emergencyPhone) query = query.ilike('emergencyPhone', `%${params.emergencyPhone}%`);
       
       const { data, error } = await query;
       if (!error && data) {
@@ -387,22 +397,21 @@ export const ReceiverAPI = {
         }
         return result as Receiver[];
       }
-    } catch(e) {}
-    return [];
+      return [];
+    } catch(e) { return []; }
   }, 
   save: async (receiver: Receiver) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, ...saveData } = receiver;
-    if (saveData.id) await supabase.from('receivers').update(saveData).eq('id', saveData.id);
-    else await supabase.from('receivers').insert(saveData);
-    return receiver;
+    return supabaseSaver('receivers', saveData as Receiver);
   }, 
   delete: async (id: number) => {
-    await supabase.from('receivers').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('receivers', id);
   }, 
   uploadImage: async (file: File) => {
     const fileName = `rcv_${Date.now()}_${file.name}`;
-    const { data } = await supabase.storage.from('receiver-images').upload(fileName, file);
+    const { data, error } = await supabase.storage.from('receiver-images').upload(fileName, file);
+    if (error) throw error;
     if (data) {
       const { data: urlData } = supabase.storage.from('receiver-images').getPublicUrl(fileName);
       return urlData.publicUrl;
@@ -410,7 +419,9 @@ export const ReceiverAPI = {
     return '';
   }, 
   saveBulk: async (data: Receiver[]) => {
-    const { error } = await supabase.from('receivers').insert(data);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const insertData = data.map(({ id, marketName, ...rest }) => rest);
+    const { error } = await supabase.from('receivers').insert(insertData);
     if (error) throw error;
     return true;
   } 
@@ -429,22 +440,21 @@ export const RepeaterAPI = {
         if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
         return result as Repeater[];
       }
-    } catch(e) {}
-    return [];
+      return [];
+    } catch(e) { return []; }
   }, 
   save: async (repeater: Repeater) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, ...saveData } = repeater;
-    if (saveData.id) await supabase.from('repeaters').update(saveData).eq('id', saveData.id);
-    else await supabase.from('repeaters').insert(saveData);
-    return repeater;
+    return supabaseSaver('repeaters', saveData as Repeater);
   }, 
   delete: async (id: number) => {
-    await supabase.from('repeaters').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('repeaters', id);
   }, 
   uploadImage: async (file: File) => {
     const fileName = `rpt_${Date.now()}_${file.name}`;
-    const { data } = await supabase.storage.from('repeater-images').upload(fileName, file);
+    const { data, error } = await supabase.storage.from('repeater-images').upload(fileName, file);
+    if (error) throw error;
     if (data) {
       const { data: urlData } = supabase.storage.from('repeater-images').getPublicUrl(fileName);
       return urlData.publicUrl;
@@ -452,7 +462,9 @@ export const RepeaterAPI = {
     return '';
   }, 
   saveBulk: async (data: Repeater[]) => {
-    const { error } = await supabase.from('repeaters').insert(data);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const insertData = data.map(({ id, marketName, ...rest }) => rest);
+    const { error } = await supabase.from('repeaters').insert(insertData);
     if (error) throw error;
     return true;
   } 
@@ -461,45 +473,65 @@ export const RepeaterAPI = {
 export const DetectorAPI = { 
   getList: async (params?: any) => {
     try {
+      // 1. 감지기 정보 조회
       let query = supabase.from('detectors').select('*, markets(name)').order('id', { ascending: false });
       if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
       
-      const { data, error } = await query;
-      if (!error && data) {
-        let result = data.map((d: any) => ({ ...d, marketName: d.markets?.name }));
-        if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
-        return result as Detector[];
-      }
-    } catch(e) {}
-    return [];
+      const { data: detectors, error } = await query;
+      if (error || !detectors) return [];
+
+      // 2. 각 감지기의 상가 매핑 정보 조회 (junction table)
+      const detectorIds = detectors.map(d => d.id);
+      const { data: junctions } = await supabase
+        .from('detector_stores')
+        .select('detectorId, storeId, stores(name)')
+        .in('detectorId', detectorIds);
+
+      // 3. 데이터 병합
+      let result = detectors.map((d: any) => {
+        const myJunctions = junctions?.filter((j: any) => j.detectorId === d.id) || [];
+        const stores = myJunctions.map((j: any) => ({ id: j.storeId, name: j.stores?.name }));
+        
+        return {
+            ...d,
+            marketName: d.markets?.name,
+            stores: stores
+        };
+      });
+
+      if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
+      return result as Detector[];
+    } catch(e) { return []; }
   }, 
   save: async (detector: Detector) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, stores, ...saveData } = detector;
-    let savedId = saveData.id;
     
-    if (savedId) {
-        await supabase.from('detectors').update(saveData).eq('id', savedId);
-    } else {
-        const { data } = await supabase.from('detectors').insert(saveData).select();
-        if (data) savedId = data[0].id;
+    // 1. 감지기 기본 정보 저장 (ID 반환 중요)
+    const savedDetector = await supabaseSaver('detectors', saveData as Detector);
+    const savedId = savedDetector.id;
+
+    // 2. 상가 연결 정보 저장 (다대다)
+    // 기존 연결 모두 삭제 후 재생성 (간단한 처리)
+    await supabase.from('detector_stores').delete().eq('detectorId', savedId);
+    
+    if (stores && stores.length > 0) {
+        const junctions = stores.map(s => ({ detectorId: savedId, storeId: s.id }));
+        const { error } = await supabase.from('detector_stores').insert(junctions);
+        if (error) throw new Error('상가 연결 저장 실패: ' + error.message);
     }
     
-    // Save Junction Stores (Simplify: Delete all and re-insert)
-    if (savedId && stores) {
-        await supabase.from('detector_stores').delete().eq('detectorId', savedId);
-        if (stores.length > 0) {
-            const junctions = stores.map(s => ({ detectorId: savedId, storeId: s.id }));
-            await supabase.from('detector_stores').insert(junctions);
-        }
-    }
-    return detector;
+    return savedDetector;
   }, 
   delete: async (id: number) => {
-    await supabase.from('detectors').delete().eq('id', id);
-    return true;
+    // Junction 테이블은 Cascade Delete 설정되어 있으므로 부모만 지우면 됨
+    return supabaseDeleter('detectors', id);
   }, 
   saveBulk: async (data: Detector[]) => {
-    const { error } = await supabase.from('detectors').insert(data);
+    // Bulk Insert (Stores 연결은 제외하고 기본 정보만)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const insertData = data.map(({ id, marketName, stores, ...rest }) => rest);
+    const { error } = await supabase.from('detectors').insert(insertData);
     if (error) throw error;
     return true;
   } 
@@ -519,14 +551,12 @@ export const TransmitterAPI = {
     return [];
   }, 
   save: async (t: Transmitter) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, ...saveData } = t;
-    if (saveData.id) await supabase.from('transmitters').update(saveData).eq('id', saveData.id);
-    else await supabase.from('transmitters').insert(saveData);
-    return t;
+    return supabaseSaver('transmitters', saveData as Transmitter);
   }, 
   delete: async (id: number) => {
-    await supabase.from('transmitters').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('transmitters', id);
   } 
 };
 
@@ -544,72 +574,100 @@ export const AlarmAPI = {
     return [];
   }, 
   save: async (a: Alarm) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { marketName, ...saveData } = a;
-    if (saveData.id) await supabase.from('alarms').update(saveData).eq('id', saveData.id);
-    else await supabase.from('alarms').insert(saveData);
-    return a;
+    return supabaseSaver('alarms', saveData as Alarm);
   }, 
   delete: async (id: number) => {
-    await supabase.from('alarms').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('alarms', id);
   } 
 };
 
-// --- Log & Data APIs with Mock Fallback ---
+// --- Log & Data APIs ---
 
 export const FireHistoryAPI = { 
   getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
-    return supabaseCrud<FireHistoryItem>('fire_history', params as any, ['marketName'], MOCK_FIRE_HISTORY);
+    // Mock 데이터 대신 실제 DB만 조회
+    let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
+    
+    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
+    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
+    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+    if (params?.status && params.status !== 'all') {
+        if (params.status === 'fire') query = query.eq('falseAlarmStatus', '화재');
+        else if (params.status === 'false') query = query.eq('falseAlarmStatus', '오탐');
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.warn(error);
+        return [];
+    }
+    return data as FireHistoryItem[];
   }, 
   save: async (id: number, type: string, note: string) => {
-    await supabase.from('fire_history').update({ falseAlarmStatus: type, note }).eq('id', id);
+    const { error } = await supabase.from('fire_history').update({ falseAlarmStatus: type, note }).eq('id', id);
+    if (error) throw new Error(error.message);
     return true;
   }, 
   delete: async (id: number) => {
-    await supabase.from('fire_history').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('fire_history', id);
   } 
 };
 
 export const DeviceStatusAPI = { 
   getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
-    return supabaseCrud<DeviceStatusItem>('device_status', params as any, ['marketName'], MOCK_DEVICE_STATUS);
+    let query = supabase.from('device_status').select('*').order('registeredAt', { ascending: false });
+    
+    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
+    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
+    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+    if (params?.status && params.status !== 'all') {
+        if (params.status === 'processed') query = query.eq('processStatus', '처리');
+        else if (params.status === 'unprocessed') query = query.eq('processStatus', '미처리');
+    }
+
+    const { data } = await query;
+    return (data || []) as DeviceStatusItem[];
   }, 
   save: async (id: number, status: string, note: string) => {
-    await supabase.from('device_status').update({ processStatus: status, note }).eq('id', id);
+    const { error } = await supabase.from('device_status').update({ processStatus: status, note }).eq('id', id);
+    if (error) throw new Error(error.message);
     return true;
   }, 
   delete: async (id: number) => {
-    await supabase.from('device_status').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('device_status', id);
   } 
 };
 
 export const DataReceptionAPI = { 
   getList: async (params?: { startDate?: string, endDate?: string, marketName?: string }) => {
-    return supabaseCrud<DataReceptionItem>('data_reception', params as any, ['marketName'], []);
+    let query = supabase.from('data_reception').select('*').order('registeredAt', { ascending: false });
+    
+    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
+    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
+    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+
+    const { data } = await query;
+    return (data || []) as DataReceptionItem[];
   }, 
   delete: async (id: number) => {
-    await supabase.from('data_reception').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('data_reception', id);
   } 
 };
 
 export const MenuAPI = { 
   getAll: async () => {
-    try {
-      const { data, error } = await supabase
-        .from('menus')
-        .select('*')
-        .order('sortOrder', { ascending: true });
-      
-      if (error || !data || data.length === 0) {
-        return MOCK_MENUS;
-      }
-      return data as MenuItemDB[];
-    } catch (e) {
+    const { data, error } = await supabase
+      .from('menus')
+      .select('*')
+      .order('sortOrder', { ascending: true });
+    
+    if (error || !data || data.length === 0) {
+      // 메뉴 테이블이 없을 때만 Mock 반환 (사이드바 깨짐 방지)
       return MOCK_MENUS;
     }
+    return data as MenuItemDB[];
   },
   
   getTree: async () => {
@@ -626,43 +684,35 @@ export const MenuAPI = {
     return buildTree(list);
   },
 
-  toggleVisibility: async () => simulateDelay(true), 
   updateVisibilities: async (updates: any) => {
-    try {
-        await Promise.all(updates.map((u: any) => 
-            supabase.from('menus').update({ isVisiblePc: u.isVisiblePc, isVisibleMobile: u.isVisibleMobile }).eq('id', u.id)
-        ));
-        return true;
-    } catch (e) { return false; }
+    const { error } = await supabase.from('menus').upsert(updates);
+    if (error) throw new Error(error.message);
+    return true;
   }, 
   save: async (m: MenuItemDB) => {
-    if (m.id) await supabase.from('menus').update(m).eq('id', m.id);
-    else await supabase.from('menus').insert(m);
-    return m;
+    return supabaseSaver('menus', m);
   }, 
   delete: async (id: number) => {
-    await supabase.from('menus').delete().eq('id', id);
-    return true;
+    return supabaseDeleter('menus', id);
   } 
 };
 
 export const DashboardAPI = { 
     getData: async () => {
-        // [수정] 실제 DB 조회 시도 후, 실패 시 Mock 데이터 반환
         try {
-            // 1. 화재 발생 건수 (최근 24시간 or 전체) - 여기서는 전체 '화재' 상태 카운트
-            const { count: fireCount, error: fireError } = await supabase
+            // 1. 화재 건수
+            const { count: fireCount } = await supabase
                 .from('fire_history')
                 .select('*', { count: 'exact', head: true })
                 .eq('falseAlarmStatus', '화재');
 
-            // 2. 고장 발생 건수
-            const { count: faultCount, error: faultError } = await supabase
+            // 2. 고장 건수
+            const { count: faultCount } = await supabase
                 .from('device_status')
                 .select('*', { count: 'exact', head: true })
                 .eq('deviceStatus', '에러');
 
-            // 3. 최근 화재 로그 (Top 5)
+            // 3. 최근 화재 로그
             const { data: fireLogs } = await supabase
                 .from('fire_history')
                 .select('*')
@@ -670,7 +720,7 @@ export const DashboardAPI = {
                 .order('registeredAt', { ascending: false })
                 .limit(5);
 
-            // 4. 최근 고장 로그 (Top 5)
+            // 4. 최근 고장 로그
             const { data: faultLogs } = await supabase
                 .from('device_status')
                 .select('*')
@@ -678,57 +728,37 @@ export const DashboardAPI = {
                 .order('registeredAt', { ascending: false })
                 .limit(5);
 
-            // 에러가 없고 데이터가 있으면 리얼 데이터 반환
-            if (!fireError && !faultError) {
-                return {
-                    stats: [
-                        { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-600' },
-                        { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
-                        { label: '통신 이상', value: 0, type: 'error', color: 'bg-slate-600' }, // 통신 이상은 별도 집계 필요 (여기선 0)
-                    ],
-                    fireLogs: (fireLogs || []).map((l: any) => ({
-                        id: l.id,
-                        msg: `${l.marketName} - ${l.receiverStatus || '화재감지'}`,
-                        time: l.registeredAt,
-                        type: 'fire'
-                    })),
-                    faultLogs: (faultLogs || []).map((l: any) => ({
-                        id: l.id,
-                        msg: `${l.marketName} ${l.deviceType} ${l.deviceId} 에러`,
-                        time: l.registeredAt,
-                        type: 'fault'
-                    })),
-                    mapPoints: [
-                        { id: 1, x: 30, y: 40, name: '서울/경기', status: 'normal' },
-                        { id: 2, x: 60, y: 50, name: '경상북도', status: fireCount ? 'fire' : 'normal' },
-                        { id: 3, x: 40, y: 70, name: '전라북도', status: 'normal' },
-                    ]
-                };
-            }
+            return {
+                stats: [
+                    { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-600' },
+                    { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
+                    { label: '통신 이상', value: 0, type: 'error', color: 'bg-slate-600' },
+                ],
+                fireLogs: (fireLogs || []).map((l: any) => ({
+                    id: l.id,
+                    msg: `${l.marketName} - ${l.receiverStatus || '화재감지'}`,
+                    time: l.registeredAt,
+                    type: 'fire',
+                    marketName: l.marketName
+                })),
+                faultLogs: (faultLogs || []).map((l: any) => ({
+                    id: l.id,
+                    msg: `${l.marketName} ${l.deviceType} ${l.deviceId} 에러`,
+                    time: l.registeredAt,
+                    type: 'fault'
+                })),
+                mapPoints: [
+                    // 지도 좌표는 실제 데이터가 없으므로 고정값 유지 (추후 시장 좌표 연동 가능)
+                    { id: 1, x: 30, y: 40, name: '서울/경기', status: 'normal' },
+                    { id: 2, x: 60, y: 50, name: '경상북도', status: fireCount ? 'fire' : 'normal' },
+                    { id: 3, x: 40, y: 70, name: '전라북도', status: 'normal' },
+                ]
+            };
         } catch (e) {
-            console.warn("Dashboard DB fetch failed, using mock.", e);
+            // DB 에러 시 빈 껍데기 반환
+            return {
+                stats: [], fireLogs: [], faultLogs: [], mapPoints: []
+            };
         }
-
-        // Fallback Mock Data
-        return {
-            stats: [
-                { label: '최근 화재 발생', value: 2, type: 'fire', color: 'bg-red-600' },
-                { label: '최근 고장 발생', value: 5, type: 'fault', color: 'bg-orange-500' },
-                { label: '통신 이상', value: 1, type: 'error', color: 'bg-slate-600' },
-            ],
-            fireLogs: [
-                { id: 1, msg: '인천광역시 부평구 진라도김치 화재 감지', time: '2024-05-25 12:39:15', type: 'fire' },
-                { id: 2, msg: '대전광역시 서구 약초마을 화재 감지 알림', time: '2024-06-25 08:59:15', type: 'fire' },
-            ],
-            faultLogs: [
-                { id: 1, msg: '중계기 02 감지기 01 감지기 통신이상', time: '2024-06-25 10:06:53', type: 'fault' },
-                { id: 2, msg: '중계기 15 감지기 11 감지기 통신이상', time: '2024-06-25 08:01:51', type: 'fault' },
-            ],
-            mapPoints: [
-                { id: 1, x: 30, y: 40, name: '서울/경기', status: 'normal' },
-                { id: 2, x: 60, y: 50, name: '경상북도', status: 'fire' },
-                { id: 3, x: 40, y: 70, name: '전라북도', status: 'normal' },
-            ]
-        };
     } 
 };

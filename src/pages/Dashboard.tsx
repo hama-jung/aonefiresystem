@@ -192,7 +192,7 @@ export const Dashboard: React.FC = () => {
         window.kakao.maps.load(() => {
             const options = {
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
-                level: 11 // 지도 확대 레벨
+                level: 12 // [수정] 지도 확대 레벨 12 (축소)
             };
             const map = new window.kakao.maps.Map(mapContainer.current, options);
             

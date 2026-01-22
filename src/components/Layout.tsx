@@ -295,10 +295,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </div>
           </header>
 
-          {/* Content Body (Dark bg) */}
-          <main className="flex-1 overflow-y-auto bg-[#0f172a] custom-scrollbar relative">
-            {/* Removed pb-32 to fix excessive bottom padding */}
-            <div className="w-full min-h-full flex flex-col max-w-[1920px] mx-auto py-6 px-4 md:px-[60px]">
+          {/* Content Body (Dark bg) - Padding adjustment: pb-0 to allow full height map */}
+          <main className="flex-1 overflow-auto pt-5 px-[60px] pb-0 bg-[#0f172a] custom-scrollbar relative">
+            <div className="w-full min-h-full flex flex-col max-w-[1920px] mx-auto">
               {children}
             </div>
           </main>
