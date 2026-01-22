@@ -1,101 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Search, Plus, FileSpreadsheet, Trash2, RotateCcw, X, Calendar } from 'lucide-react';
-import { Market, Receiver } from '../types';
+import { ChevronLeft, ChevronRight, Search, Plus, FileSpreadsheet, Trash2, Edit, Save, X, Home, RotateCcw } from 'lucide-react';
 import { MarketAPI, ReceiverAPI } from '../services/api';
+import { Market, Receiver } from '../types';
 
-// --- Global Constants ---
-export const ITEMS_PER_PAGE = 30; // 전역 페이지 목록 개수 설정
-
-// --- Helper Functions ---
-export const formatPhoneNumber = (value: string | undefined) => {
-  if (!value) return '-';
-  const cleaned = value.replace(/[^0-9]/g, '');
-  
-  if (cleaned.length === 11) {
-    // 010-1234-5678
-    return cleaned.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
-  }
-  if (cleaned.length === 10) {
-    // 02-1234-5678 or 011-123-4567
-    if (cleaned.startsWith('02')) {
-        return cleaned.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3');
-    }
-    return cleaned.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
-  }
-  if (cleaned.length === 9) {
-    // 02-123-4567
-    return cleaned.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3');
-  }
-  if (cleaned.length === 8) {
-    // 1588-1234
-    return cleaned.replace(/(\d{4})(\d{4})/, '$1-$2');
-  }
-  return value;
-};
-
-// 숫자 외의 키 입력 차단 핸들러
-export const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  const allowedKeys = [
-    'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
-    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'
-  ];
-  
-  // 기능키 허용
-  if (allowedKeys.includes(e.key)) return;
-  
-  // Ctrl/Cmd 조합키 허용 (복사, 붙여넣기 등)
-  if ((e.ctrlKey || e.metaKey) && ['a', 'c', 'v', 'x', 'z'].includes(e.key.toLowerCase())) return;
-  
-  // 숫자(0-9)가 아니면 차단
-  if (!/^[0-9]$/.test(e.key)) {
-    e.preventDefault();
-  }
-};
-
-// --- Date Logic Helpers (7 Days Rule) ---
-const getDateConstraints = () => {
-  const today = new Date();
-  const maxDate = today.toISOString().split('T')[0]; // 오늘 (미래 선택 불가)
-  
-  const minDateObj = new Date(today);
-  minDateObj.setDate(today.getDate() - 7); // 7일 전
-  const minDate = minDateObj.toISOString().split('T')[0];
-
-  return { minDate, maxDate };
-};
-
-export const validateDateRange = (startDate: string, endDate: string): boolean => {
-  if (!startDate || !endDate) return true; // 날짜가 비어있으면 검색 로직에서 처리
-
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const today = new Date();
-  // 시간 성분 제거 (날짜만 비교)
-  today.setHours(0,0,0,0);
-  start.setHours(0,0,0,0);
-  end.setHours(0,0,0,0);
-
-  const { minDate } = getDateConstraints();
-  const limitDate = new Date(minDate);
-  limitDate.setHours(0,0,0,0);
-
-  if (start > end) {
-    alert("시작일은 종료일보다 클 수 없습니다.");
-    return false;
-  }
-
-  if (end > today) {
-    alert("종료일은 오늘 날짜를 초과할 수 없습니다.");
-    return false;
-  }
-
-  if (start < limitDate) {
-    alert(`시작일은 오늘 기준 7일 전(${minDate})까지만 선택 가능합니다.`);
-    return false;
-  }
-
-  return true;
-};
+// --- Constants ---
+export const ITEMS_PER_PAGE = 10;
 
 // --- Colors & Styles Constants (Dark Mode) ---
 export const UI_STYLES = {
@@ -103,11 +12,37 @@ export const UI_STYLES = {
   secondary: 'bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm',
   danger: 'bg-red-900/40 hover:bg-red-900/60 text-red-200 border border-red-800 shadow-sm',
   success: 'bg-green-700 hover:bg-green-600 text-white shadow-sm border border-transparent',
-  // 날짜 아이콘(calendar-picker-indicator)에 invert 필터를 적용하여 흰색으로 보이게 수정
-  input: 'bg-slate-800 border border-slate-600 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm w-full text-slate-200 placeholder-slate-500 [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer',
+  input: 'bg-slate-800 border border-slate-600 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm w-full text-slate-200 placeholder-slate-500',
   label: 'block text-sm font-semibold text-slate-300 mb-1.5',
   th: 'px-4 py-3 bg-slate-900 text-center text-sm font-semibold text-slate-400 border-b border-slate-700',
   td: 'px-4 py-3 text-sm text-center text-slate-300 border-b border-slate-700/50 group-hover:bg-slate-700/30',
+};
+
+// --- Utilities ---
+export const formatPhoneNumber = (value: string) => {
+  if (!value) return value;
+  const phoneNumber = value.replace(/[^\d]/g, "");
+  const phoneNumberLength = phoneNumber.length;
+  if (phoneNumberLength < 4) return phoneNumber;
+  if (phoneNumberLength < 7) return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3)}`;
+  return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3, 7)}-${phoneNumber.slice(7, 11)}`;
+};
+
+export const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const allowedKeys = [
+    "Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete", "Enter"
+  ];
+  if (!/^[0-9]$/.test(e.key) && !allowedKeys.includes(e.key)) {
+    e.preventDefault();
+  }
+};
+
+export const validateDateRange = (startDate: string, endDate: string) => {
+  if (startDate > endDate) {
+    alert("시작일은 종료일보다 클 수 없습니다.");
+    return false;
+  }
+  return true;
 };
 
 // --- Buttons ---
@@ -130,15 +65,11 @@ export const Button: React.FC<ButtonProps> = ({ variant = 'primary', className =
 
 // --- Page Header ---
 export const PageHeader: React.FC<{ title: string; rightContent?: React.ReactNode }> = ({ title, rightContent }) => (
-  <div className="mb-4 md:mb-5 flex items-center justify-between border-b border-slate-700 pb-3 md:pb-4 min-h-[50px]">
-    <h1 className="text-lg md:text-xl font-bold text-slate-100">
+  <div className="mb-6 flex items-center justify-between border-b border-slate-700 pb-4">
+    <h1 className="text-xl font-bold text-slate-100">
       {title}
     </h1>
-    {rightContent && (
-      <div className="flex items-center">
-        {rightContent}
-      </div>
-    )}
+    {rightContent}
   </div>
 );
 
@@ -153,10 +84,9 @@ interface SearchFilterBarProps {
 export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({ 
   children, onSearch, onReset, isFiltered = false,
 }) => (
-  <div className="bg-slate-800 p-4 md:p-5 rounded-lg border border-slate-700 shadow-sm mb-5">
+  <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm mb-5">
     <div className="flex flex-col xl:flex-row gap-4 xl:items-end">
-      {/* Mobile: Stack vertically, Tablet/Desktop: Horizontal */}
-      <div className="flex-1 flex flex-col md:flex-row gap-4 md:items-end w-full md:[&>*]:flex-1 md:[&>*]:min-w-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:items-end w-full lg:[&>*]:flex-1 lg:[&>*]:min-w-0 flex-wrap">
         {children}
       </div>
       <div className="flex-shrink-0 flex gap-2 pt-2 xl:pt-0 justify-end xl:justify-start">
@@ -190,13 +120,7 @@ interface SelectGroupProps extends React.SelectHTMLAttributes<HTMLSelectElement>
 export const SelectGroup: React.FC<SelectGroupProps> = ({ label, options, className = '', ...props }) => (
   <div className={`flex flex-col w-full ${className}`}>
     {label && <label className={UI_STYLES.label}>{label}</label>}
-    <select 
-      className={`${UI_STYLES.input} appearance-none pr-10 bg-no-repeat bg-[right_0.75rem_center] bg-[length:1em_1em]`}
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8' stroke-width='2'%3e%3cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3e%3c/svg%3e")`
-      }}
-      {...props}
-    >
+    <select className={UI_STYLES.input} {...props}>
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>{opt.label}</option>
       ))}
@@ -204,90 +128,72 @@ export const SelectGroup: React.FC<SelectGroupProps> = ({ label, options, classN
   </div>
 );
 
-// --- Date Range Picker ---
-interface DateRangePickerProps {
-  startDate: string;
-  endDate: string;
-  onStartDateChange: (date: string) => void;
-  onEndDateChange: (date: string) => void;
-  label?: string;
-}
+// --- Additional Components ---
 
-export const DateRangePicker: React.FC<DateRangePickerProps> = ({ 
-  startDate, endDate, onStartDateChange, onEndDateChange, label = "기간"
-}) => {
-  const { minDate, maxDate } = getDateConstraints();
-
-  return (
-    <div className="min-w-[300px]">
-      <label className={UI_STYLES.label}>{label}</label>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <input 
-            type="date" 
-            value={startDate} 
-            onChange={(e) => onStartDateChange(e.target.value)} 
-            className={UI_STYLES.input} 
-            min={minDate}
-            max={maxDate} 
-          />
-        </div>
-        <span className="text-slate-400">~</span>
-        <div className="relative flex-1">
-          <input 
-            type="date" 
-            value={endDate} 
-            onChange={(e) => onEndDateChange(e.target.value)} 
-            className={UI_STYLES.input} 
-            min={minDate}
-            max={maxDate}
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- Status Badge ---
-// [수정] whitespace-nowrap 추가, padding 조정, min-width 추가로 깨짐 방지
 export const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
-  <span className={`inline-flex items-center justify-center px-3 py-1 rounded text-xs font-bold border whitespace-nowrap shadow-sm min-w-[64px] ${
-    status === '사용' 
+  <span className={`inline-flex items-center justify-center px-2 py-1 rounded-sm text-xs font-bold border whitespace-nowrap shadow-sm min-w-[50px] ${
+    status === '사용' || status === 'Normal' || status === '정상' || status === '처리'
       ? 'bg-green-900/30 text-green-400 border-green-800' 
-      : 'bg-red-900/30 text-red-400 border-red-800'
+      : (status === 'Fire' || status === '화재' || status === '에러' || status === '오탐') 
+        ? 'bg-red-900/30 text-red-400 border-red-800'
+        : 'bg-slate-700 text-slate-400 border-slate-600'
   }`}>
     {status}
   </span>
 );
 
-// --- Status Radio Group ---
-export const StatusRadioGroup: React.FC<{ 
-  label?: string; 
-  value: string | undefined; 
-  onChange: (val: string) => void; 
-  name?: string; 
-}> = ({ label = "사용여부", value, onChange, name = "status" }) => (
-  <div className={`flex flex-col gap-1.5 w-full`}>
+export const StatusRadioGroup: React.FC<{
+  label?: string;
+  name?: string;
+  value: string | undefined;
+  onChange: (val: string) => void;
+  options?: string[];
+}> = ({ label, name, value, onChange, options = ['사용', '미사용'] }) => (
+  <div className="flex flex-col gap-1.5 w-full">
     {label && <label className={UI_STYLES.label}>{label}</label>}
-    <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
-      <label className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+    <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
+      {options.map((opt) => (
+        <label key={opt} className="flex items-center gap-2 cursor-pointer hover:text-white">
+          <input 
+            type="radio" 
+            name={name} 
+            value={opt} 
+            checked={value === opt} 
+            onChange={() => onChange(opt)} 
+            className="accent-blue-500 w-4 h-4" 
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
+  </div>
+);
+
+export const DateRangePicker: React.FC<{
+  startDate: string;
+  endDate: string;
+  onStartDateChange: (val: string) => void;
+  onEndDateChange: (val: string) => void;
+}> = ({ startDate, endDate, onStartDateChange, onEndDateChange }) => (
+  <div className="flex items-center gap-2">
+    <div className="flex flex-col">
+        <label className="text-[10px] text-slate-400 mb-0.5 ml-1">시작일</label>
         <input 
-          type="radio" name={name} value="사용" 
-          checked={value === '사용'} 
-          onChange={() => onChange('사용')}
-          className="accent-blue-500 w-4 h-4" 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => onStartDateChange(e.target.value)} 
+            className={`${UI_STYLES.input} w-[130px]`} 
         />
-        <span>사용</span>
-      </label>
-      <label className="flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+    </div>
+    <span className="text-slate-500 mt-4">~</span>
+    <div className="flex flex-col">
+        <label className="text-[10px] text-slate-400 mb-0.5 ml-1">종료일</label>
         <input 
-          type="radio" name={name} value="미사용" 
-          checked={value === '미사용'} 
-          onChange={() => onChange('미사용')}
-          className="accent-blue-500 w-4 h-4" 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => onEndDateChange(e.target.value)} 
+            className={`${UI_STYLES.input} w-[130px]`} 
         />
-        <span>미사용</span>
-      </label>
     </div>
   </div>
 );
@@ -306,13 +212,13 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-[2px] p-4 animate-in fade-in duration-200 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
       <div 
-        className={`bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full ${width} my-auto transform transition-all scale-100 opacity-100`}
+        className={`bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full ${width} overflow-hidden transform transition-all scale-100 opacity-100 flex flex-col max-h-[90vh]`}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50 rounded-t-xl sticky top-0 z-10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50 flex-shrink-0">
           <div className="flex items-center gap-2.5 text-slate-100 font-bold text-lg">
             {icon}
             <span>{title}</span>
@@ -324,7 +230,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
             <X size={20} />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar">
           {children}
         </div>
       </div>
@@ -332,129 +238,18 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
   );
 };
 
-// ... (Search Modals remain the same: MarketSearchModal, ReceiverSearchModal)
-export const MarketSearchModal: React.FC<{
+// --- Address Search Modal (Daum Postcode API - EMBED METHOD) ---
+interface AddressSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelect: (market: Market) => void;
-}> = ({ isOpen, onClose, onSelect }) => {
-  const [list, setList] = useState<Market[]>([]);
-  const [searchName, setSearchName] = useState('');
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
-
-  const fetchMarkets = async () => {
-    const data = await MarketAPI.getList({ name: searchName });
-    setList(data);
-    setPage(1);
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      setSearchName('');
-      fetchMarkets();
-    }
-  }, [isOpen]);
-
-  const currentItems = list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="시장 찾기" width="max-w-3xl">
-      <SearchFilterBar onSearch={fetchMarkets}>
-        <InputGroup 
-          label="시장명" 
-          value={searchName} 
-          onChange={(e) => setSearchName(e.target.value)} 
-          placeholder="시장명 검색"
-          onKeyDown={(e) => e.key === 'Enter' && fetchMarkets()}
-        />
-      </SearchFilterBar>
-      <DataTable<Market>
-        columns={[
-          { header: '시장명', accessor: 'name' },
-          { header: '주소', accessor: 'address' },
-          { header: '선택', accessor: (item) => (
-            <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
-          ), width: '80px' }
-        ]} 
-        data={currentItems} 
-      />
-      <Pagination 
-        totalItems={list.length} 
-        itemsPerPage={PER_PAGE} 
-        currentPage={page} 
-        onPageChange={setPage} 
-      />
-    </Modal>
-  );
-};
-
-export const ReceiverSearchModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSelect: (receiver: Receiver) => void;
-}> = ({ isOpen, onClose, onSelect }) => {
-  const [list, setList] = useState<Receiver[]>([]);
-  const [searchMac, setSearchMac] = useState('');
-  const [page, setPage] = useState(1);
-  const PER_PAGE = 5;
-
-  const fetchReceivers = async () => {
-    const data = await ReceiverAPI.getList({ macAddress: searchMac });
-    setList(data);
-    setPage(1);
-  };
-
-  useEffect(() => {
-    if (isOpen) {
-      setSearchMac('');
-      fetchReceivers();
-    }
-  }, [isOpen]);
-
-  const currentItems = list.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="수신기 찾기" width="max-w-3xl">
-      <SearchFilterBar onSearch={fetchReceivers}>
-        <InputGroup 
-          label="MAC주소" 
-          value={searchMac} 
-          onChange={(e) => setSearchMac(e.target.value)} 
-          placeholder="MAC주소 검색"
-          onKeyDown={(e) => e.key === 'Enter' && fetchReceivers()}
-        />
-      </SearchFilterBar>
-      <DataTable<Receiver>
-        columns={[
-          { header: 'MAC주소', accessor: 'macAddress', width: '150px' },
-          { header: '설치시장', accessor: 'marketName' },
-          { header: '선택', accessor: (item) => (
-            <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
-          ), width: '80px' }
-        ]} 
-        data={currentItems} 
-      />
-      <Pagination 
-        totalItems={list.length} 
-        itemsPerPage={PER_PAGE} 
-        currentPage={page} 
-        onPageChange={setPage} 
-      />
-    </Modal>
-  );
-};
+  onComplete: (data: { address: string; zonecode: string; buildingName: string; coordinates?: {lat: string, lng: string} }) => void;
+}
 
 declare global {
   interface Window {
     daum: any;
+    kakao: any;
   }
-}
-
-export interface AddressSearchModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onComplete: (data: { address: string; zonecode: string; buildingName: string }) => void;
 }
 
 export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, onClose, onComplete }) => {
@@ -493,29 +288,38 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
              addr += ' (' + extraAddr + ')';
           }
 
-          onComplete({
-            address: addr,
-            zonecode: data.zonecode,
-            buildingName: data.buildingName
-          });
-
+          // 주소 좌표 변환 (Kakao Map Geocoder)
+          if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+             const geocoder = new window.kakao.maps.services.Geocoder();
+             geocoder.addressSearch(addr, function(result: any, status: any) {
+                 if (status === window.kakao.maps.services.Status.OK) {
+                     onComplete({
+                        address: addr,
+                        zonecode: data.zonecode,
+                        buildingName: data.buildingName,
+                        coordinates: { lat: result[0].y, lng: result[0].x }
+                     });
+                 } else {
+                     onComplete({
+                        address: addr,
+                        zonecode: data.zonecode,
+                        buildingName: data.buildingName
+                     });
+                 }
+             });
+          } else {
+             onComplete({
+                address: addr,
+                zonecode: data.zonecode,
+                buildingName: data.buildingName
+             });
+          }
           onClose();
         },
         width: '100%',
         height: '100%',
         autoClose: false,
         animation: false, 
-        theme: {
-            bgColor: "#1E293B", 
-            searchBgColor: "#0F172A", 
-            contentBgColor: "#1E293B", 
-            pageBgColor: "#1E293B", 
-            textColor: "#E2E8F0", 
-            queryTextColor: "#F1F5F9", 
-            postcodeTextColor: "#60A5FA", 
-            emphTextColor: "#60A5FA", 
-            outlineColor: "#334155" 
-        }
       }).embed(container);
     } catch (error) {
       console.error("Daum Postcode Embed Error:", error);
@@ -540,16 +344,7 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   );
 };
 
-const getMockCoordinates = (address: string) => {
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    hash = address.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const lat = (36.0 + (Math.abs(hash) % 20000) / 10000).toFixed(6);
-  const lng = (126.0 + (Math.abs(hash) % 30000) / 10000).toFixed(6);
-  return { lat, lng };
-};
-
+// --- Address Input Component ---
 export interface AddressInputProps {
   label?: string;
   required?: boolean;
@@ -557,7 +352,7 @@ export interface AddressInputProps {
   addressDetail: string;
   onAddressChange: (val: string) => void;
   onDetailChange: (val: string) => void;
-  onCoordinateChange?: (lat: string, lng: string) => void; 
+  onCoordinateChange?: (lat: string, lng: string) => void;
   className?: string;
 }
 
@@ -574,17 +369,13 @@ export const AddressInput: React.FC<AddressInputProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const detailInputRef = useRef<HTMLInputElement>(null);
 
-  const handleComplete = useCallback((data: { address: string }) => {
+  const handleComplete = useCallback((data: { address: string, coordinates?: {lat: string, lng: string} }) => {
     onAddressChange(data.address);
+    if (data.coordinates && onCoordinateChange) {
+        onCoordinateChange(data.coordinates.lat, data.coordinates.lng);
+    }
     setIsOpen(false);
     
-    if (onCoordinateChange) {
-        setTimeout(() => {
-            const { lat, lng } = getMockCoordinates(data.address);
-            onCoordinateChange(lat, lng);
-        }, 100);
-    }
-
     setTimeout(() => {
         if (detailInputRef.current) {
             detailInputRef.current.focus();
@@ -646,6 +437,7 @@ export const AddressInput: React.FC<AddressInputProps> = ({
   );
 };
 
+// --- Table Component ---
 export interface Column<T> {
   header: string;
   accessor: keyof T | ((item: T, index: number) => React.ReactNode);
@@ -703,6 +495,7 @@ export const DataTable = <T extends { id: number | string }>({ columns, data, on
   );
 };
 
+// --- Pagination ---
 interface PaginationProps {
   totalItems: number;
   itemsPerPage: number;
@@ -733,7 +526,7 @@ export const Pagination: React.FC<PaginationProps> = ({ totalItems, itemsPerPage
   };
 
   return (
-    <div className="flex items-center justify-center mt-5 px-2">
+    <div className="flex items-center justify-center mt-5 px-2 pb-4">
       <div className="flex items-center space-x-1">
         <button 
           onClick={() => onPageChange(currentPage - 1)}
@@ -769,6 +562,7 @@ export const Pagination: React.FC<PaginationProps> = ({ totalItems, itemsPerPage
   );
 };
 
+// --- Action Bar ---
 export const ActionBar: React.FC<{
   onRegister?: () => void;
   onExcel?: () => void;
@@ -793,6 +587,7 @@ export const ActionBar: React.FC<{
   </div>
 );
 
+// --- Form Section ---
 export const FormSection: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-sm mb-5 w-full">
     <h3 className="text-lg font-bold text-slate-200 mb-5 border-b border-slate-700 pb-2 flex items-center gap-2">
@@ -815,3 +610,94 @@ export const FormRow: React.FC<{ label: string; required?: boolean; children: Re
     </div>
   </div>
 );
+
+// --- API Search Modals (Reuse) ---
+
+export const MarketSearchModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (market: Market) => void;
+}> = ({ isOpen, onClose, onSelect }) => {
+  const [keyword, setKeyword] = useState('');
+  const [list, setList] = useState<Market[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (isOpen) {
+        setKeyword('');
+        setPage(1);
+        handleSearch('');
+    }
+  }, [isOpen]);
+
+  const handleSearch = async (kw: string) => {
+    const data = await MarketAPI.getList({ name: kw });
+    setList(data);
+    setPage(1);
+  };
+
+  const columns: Column<Market>[] = [
+    { header: '시장명', accessor: 'name' },
+    { header: '주소', accessor: 'address' },
+    { header: '담당자', accessor: 'managerName' },
+    { header: '선택', accessor: (item) => (
+        <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
+    ), width: '80px' }
+  ];
+
+  const currentItems = list.slice((page - 1) * 5, page * 5);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="시장 찾기" width="max-w-3xl">
+       <SearchFilterBar onSearch={() => handleSearch(keyword)}>
+          <InputGroup label="시장명" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="시장명 검색" />
+       </SearchFilterBar>
+       <DataTable columns={columns} data={currentItems} />
+       <Pagination totalItems={list.length} itemsPerPage={5} currentPage={page} onPageChange={setPage} />
+    </Modal>
+  );
+};
+
+export const ReceiverSearchModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (receiver: Receiver) => void;
+}> = ({ isOpen, onClose, onSelect }) => {
+  const [keyword, setKeyword] = useState('');
+  const [list, setList] = useState<Receiver[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (isOpen) {
+        setKeyword('');
+        setPage(1);
+        handleSearch('');
+    }
+  }, [isOpen]);
+
+  const handleSearch = async (kw: string) => {
+    const data = await ReceiverAPI.getList({ macAddress: kw });
+    setList(data);
+    setPage(1);
+  };
+
+  const columns: Column<Receiver>[] = [
+    { header: 'MAC', accessor: 'macAddress' },
+    { header: '시장명', accessor: 'marketName' },
+    { header: '선택', accessor: (item) => (
+        <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
+    ), width: '80px' }
+  ];
+
+  const currentItems = list.slice((page - 1) * 5, page * 5);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="수신기 찾기" width="max-w-3xl">
+       <SearchFilterBar onSearch={() => handleSearch(keyword)}>
+          <InputGroup label="MAC주소" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="MAC 검색" />
+       </SearchFilterBar>
+       <DataTable columns={columns} data={currentItems} />
+       <Pagination totalItems={list.length} itemsPerPage={5} currentPage={page} onPageChange={setPage} />
+    </Modal>
+  );
+};

@@ -1,13 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, 
-  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, AddressInput, UI_STYLES, ITEMS_PER_PAGE,
-  formatPhoneNumber, handlePhoneKeyDown, StatusRadioGroup
+  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, AddressInput,
+  formatPhoneNumber, StatusBadge
 } from '../components/CommonUI';
 import { Market } from '../types';
 import { MarketAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
-import { Search, Upload, Paperclip, X } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 10;
 
 export const MarketManagement: React.FC = () => {
   const [view, setView] = useState<'list' | 'form'>('list');
@@ -24,10 +25,12 @@ export const MarketManagement: React.FC = () => {
   const [searchManager, setSearchManager] = useState('');
   const [isFiltered, setIsFiltered] = useState(false);
   
-  // 폼 입력 상태
-  const [formData, setFormData] = useState<Partial<Market>>({});
-  const [mapImageFile, setMapImageFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // 폼 입력 상태 (Form Input State)
+  const [formName, setFormName] = useState('');
+  const [formAddress, setFormAddress] = useState('');
+  const [formAddressDetail, setFormAddressDetail] = useState('');
+  const [formManagerName, setFormManagerName] = useState('');
+  const [formManagerPhone, setFormManagerPhone] = useState('');
   
   const fetchMarkets = async (overrides?: { name?: string, address?: string, managerName?: string }) => {
     setLoading(true);
@@ -69,22 +72,23 @@ export const MarketManagement: React.FC = () => {
 
   const handleRegister = () => { 
     setSelectedMarket(null);
-    setFormData({ 
-      status: 'Normal',
-      usageStatus: '사용',
-      enableMarketSms: '미사용',
-      enableStoreSms: '미사용'
-    });
-    setMapImageFile(null);
-    if(fileInputRef.current) fileInputRef.current.value = '';
+    // 폼 초기화
+    setFormName('');
+    setFormAddress('');
+    setFormAddressDetail('');
+    setFormManagerName('');
+    setFormManagerPhone('');
     setView('form'); 
   };
   
   const handleEdit = (market: Market) => { 
     setSelectedMarket(market);
-    setFormData({ ...market });
-    setMapImageFile(null);
-    if(fileInputRef.current) fileInputRef.current.value = '';
+    // 폼 데이터 바인딩
+    setFormName(market.name);
+    setFormAddress(market.address);
+    setFormAddressDetail(market.addressDetail || '');
+    setFormManagerName(market.managerName || '');
+    setFormManagerPhone(market.managerPhone || '');
     setView('form'); 
   };
   
@@ -103,96 +107,27 @@ export const MarketManagement: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name) { alert('시장명을 입력해주세요.'); return; }
-    if (!formData.address) { alert('주소를 입력해주세요.'); return; }
+    if (!formName) { alert('시장명을 입력해주세요.'); return; }
+    if (!formAddress) { alert('주소를 입력해주세요.'); return; }
+
+    // 폼 데이터 구성
+    const newMarket: Market = {
+      id: selectedMarket?.id || 0,
+      name: formName,
+      address: formAddress, 
+      addressDetail: formAddressDetail, // 상세 주소 저장
+      managerName: formManagerName,
+      managerPhone: formManagerPhone,
+      status: selectedMarket?.status || 'Normal',
+    };
 
     try {
-      let uploadedUrl = formData.mapImage;
-      if (mapImageFile) {
-        uploadedUrl = await MarketAPI.uploadMapImage(mapImageFile);
-      }
-
-      // 폼 데이터 구성
-      const newMarket: Market = {
-        ...formData as Market,
-        id: selectedMarket?.id || 0,
-        mapImage: uploadedUrl,
-        // status is monitoring status, usually not edited manually unless for testing, preserve or default
-        status: selectedMarket?.status || 'Normal',
-      };
-
       await MarketAPI.save(newMarket);
       alert('저장되었습니다.');
       setView('list');
       fetchMarkets();
-    } catch (e: any) {
-      alert('저장 실패: ' + e.message);
-    }
-  };
-
-  const handleDelete = async () => {
-    if(selectedMarket && confirm('정말 삭제하시겠습니까?')) {
-        try {
-            await MarketAPI.delete(selectedMarket.id);
-            alert('삭제되었습니다.');
-            setView('list');
-            fetchMarkets();
-        } catch(e) {
-            alert('삭제 실패');
-        }
-    }
-  };
-
-  // Image Handling
-  const handleFileSelectClick = () => {
-    if (formData.mapImage || mapImageFile) {
-      alert("등록된 이미지를 삭제해 주세요.");
-      return;
-    }
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setMapImageFile(e.target.files[0]);
-    }
-  };
-
-  const handleRemoveFile = () => {
-    if (confirm("이미지를 삭제하시겠습니까?")) {
-        setFormData({ ...formData, mapImage: undefined });
-        setMapImageFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const getFileName = () => {
-     if (mapImageFile) return mapImageFile.name;
-     if (formData.mapImage) {
-        try {
-           const url = new URL(formData.mapImage);
-           return decodeURIComponent(url.pathname.split('/').pop() || 'image.jpg');
-        } catch {
-           return '지도_이미지.jpg';
-        }
-     }
-     return '';
-  };
-
-  const handleDownload = async () => {
-    if (mapImageFile) {
-        const url = URL.createObjectURL(mapImageFile);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = mapImageFile.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        return;
-    }
-    if (formData.mapImage) {
-        window.open(formData.mapImage, '_blank');
+    } catch (e) {
+      alert('저장 실패');
     }
   };
 
@@ -201,12 +136,8 @@ export const MarketManagement: React.FC = () => {
     { header: '시장명', accessor: 'name' },
     { header: '주소', accessor: (m) => `${m.address} ${m.addressDetail || ''}` },
     { header: '담당자명', accessor: 'managerName' },
-    { header: '담당자연락처', accessor: (m) => formatPhoneNumber(m.managerPhone) },
-    { header: '상태', accessor: (m: Market) => (
-      <span className={`whitespace-nowrap ${m.status === 'Fire' ? 'text-red-400 font-bold' : (m.status === 'Error' ? 'text-orange-400' : 'text-slate-400')}`}>
-        {m.status}
-      </span>
-    )},
+    { header: '담당자연락처', accessor: (m) => formatPhoneNumber(m.managerPhone || '') },
+    { header: '상태', accessor: (m: Market) => <StatusBadge status={m.status} />, width: '120px' },
   ];
 
   // -- Pagination Logic --
@@ -223,105 +154,57 @@ export const MarketManagement: React.FC = () => {
           <FormSection title="시장 정보">
               <FormRow label="시장명" required>
                 <InputGroup 
-                  value={formData.name || ''} 
-                  onChange={(e) => setFormData({...formData, name: e.target.value})} 
+                  value={formName} 
+                  onChange={(e) => setFormName(e.target.value)} 
                   required 
                 />
               </FormRow>
               
+              {/* AddressInput 컴포넌트 사용 (공통 UI/규칙 적용) */}
               <div className="col-span-1 md:col-span-2">
                 <AddressInput 
                    label="주소"
                    required
-                   address={formData.address || ''}
-                   addressDetail={formData.addressDetail || ''}
-                   onAddressChange={(val) => setFormData(prev => ({...prev, address: val}))}
-                   onDetailChange={(val) => setFormData(prev => ({...prev, addressDetail: val}))}
-                   onCoordinateChange={(lat, lng) => setFormData(prev => ({...prev, latitude: lat, longitude: lng}))}
+                   address={formAddress}
+                   addressDetail={formAddressDetail}
+                   onAddressChange={setFormAddress}
+                   onDetailChange={setFormAddressDetail}
                 />
               </div>
 
               <FormRow label="위도">
-                 <InputGroup 
-                    value={formData.latitude || ''}
-                    onChange={(e) => setFormData({...formData, latitude: e.target.value})}
-                    placeholder="위도" 
-                 />
+                 <InputGroup placeholder="위도" />
               </FormRow>
 
               <FormRow label="경도">
-                 <InputGroup 
-                    value={formData.longitude || ''}
-                    onChange={(e) => setFormData({...formData, longitude: e.target.value})}
-                    placeholder="경도" 
-                 />
+                 <InputGroup placeholder="경도" />
               </FormRow>
 
               <FormRow label="담당자명">
                 <InputGroup 
-                  value={formData.managerName || ''} 
-                  onChange={(e) => setFormData({...formData, managerName: e.target.value})} 
+                  value={formManagerName} 
+                  onChange={(e) => setFormManagerName(e.target.value)} 
                 />
               </FormRow>
 
               <FormRow label="담당자 연락처">
                 <InputGroup 
-                  value={formData.managerPhone || ''} 
-                  onChange={(e) => setFormData({...formData, managerPhone: e.target.value})}
-                  onKeyDown={handlePhoneKeyDown}
-                  inputMode="numeric"
-                  placeholder="숫자만 입력"
-                  maxLength={13} 
+                  value={formManagerPhone} 
+                  onChange={(e) => setFormManagerPhone(e.target.value)} 
                 />
               </FormRow>
 
-              <FormRow label="사용여부">
-                 <StatusRadioGroup 
-                    label="" 
-                    name="usageStatus"
-                    value={formData.usageStatus}
-                    onChange={(val) => setFormData({...formData, usageStatus: val as any})}
-                 />
-              </FormRow>
-
               <FormRow label="시장지도 이미지" className="col-span-1 md:col-span-2">
-                 <div className="flex flex-col gap-2 w-full">
-                    <div className="flex items-center gap-2">
-                        <input 
-                            type="file" 
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            className="hidden" 
-                            accept="image/*"
-                        />
-                        <Button type="button" variant="secondary" onClick={handleFileSelectClick} icon={<Upload size={16} />}>
-                            파일 선택
-                        </Button>
-                        
-                        {(formData.mapImage || mapImageFile) && (
-                            <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600">
-                            <Paperclip size={14} className="text-slate-400" />
-                            <span 
-                                onClick={handleDownload}
-                                className={`text-sm ${formData.mapImage || mapImageFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                                title="클릭하여 다운로드"
-                            >
-                                {getFileName()}
-                            </span>
-                            <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
-                                <X size={16} />
-                            </button>
-                            </div>
-                        )}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">최대 10MB, jpg/png/gif 지원</p>
+                 <div className="flex gap-2 w-full">
+                    <InputGroup type="file" className="border-0 p-0 text-slate-300 flex-1" />
+                    <Button type="button" variant="secondary">업로드</Button>
                  </div>
+                 <p className="text-xs text-slate-500 mt-1">최대 10MB, jpg/png/gif 지원</p>
               </FormRow>
           </FormSection>
 
           <div className="flex justify-center gap-3 mt-8">
              <Button type="submit" variant="primary" className="w-32">{selectedMarket ? '수정' : '등록'}</Button>
-             {selectedMarket && <Button type="button" variant="danger" onClick={handleDelete} className="w-32">삭제</Button>}
              <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
           </div>
         </form>
@@ -355,7 +238,7 @@ export const MarketManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-2">
         <span className="text-sm text-slate-400">
           전체 <span className="text-blue-400">{markets.length}</span> 건
-          (페이지 {currentPage})
+          (페이지 {currentPage}/{totalPages || 1})
         </span>
         <ActionBar onRegister={handleRegister} onExcel={handleExcel} />
       </div>

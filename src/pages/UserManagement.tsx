@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, 
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, Modal, UI_STYLES,
-  formatPhoneNumber, handlePhoneKeyDown, ITEMS_PER_PAGE, StatusBadge // Import StatusBadge
+  formatPhoneNumber, StatusBadge
 } from '../components/CommonUI';
 import { User, RoleItem } from '../types';
 import { UserAPI, RoleAPI, CommonAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
 
+const ITEMS_PER_PAGE = 10;
 const MODAL_ITEMS_PER_PAGE = 5;
 
 // 정규식 상수
@@ -50,7 +51,6 @@ export const UserManagement: React.FC = () => {
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [phone, setPhone] = useState(''); // Added phone state for input control
   
   // --- ID Creation Modal States ---
   const [isIdModalOpen, setIsIdModalOpen] = useState(false);
@@ -113,7 +113,6 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(null); 
     setInputUserId('');
     setDepartmentName('');
-    setPhone('');
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
@@ -125,7 +124,6 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(user); 
     setInputUserId(user.userId);
     setDepartmentName(user.department || '');
-    setPhone(user.phone || '');
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
@@ -259,7 +257,7 @@ export const UserManagement: React.FC = () => {
       userId: inputUserId,
       name: (form.elements.namedItem('name') as HTMLInputElement).value,
       role: (form.elements.namedItem('role') as HTMLSelectElement).value,
-      phone: phone, // Use controlled state
+      phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
       department: departmentName,
       status: (form.elements.namedItem('status') as RadioNodeList).value as '사용' | '미사용',
       smsReceive: (form.elements.namedItem('smsReceive') as RadioNodeList).value as '수신' | '미수신',
@@ -301,20 +299,20 @@ export const UserManagement: React.FC = () => {
   const modalIndexOfLast = modalCurrentPage * MODAL_ITEMS_PER_PAGE;
   const modalIndexOfFirst = modalIndexOfLast - MODAL_ITEMS_PER_PAGE;
   const modalCurrentItems = companyList.slice(modalIndexOfFirst, modalIndexOfLast);
-  const modalTotalPages = Math.ceil(companyList.length / MODAL_ITEMS_PER_PAGE);
+  // const modalTotalPages = Math.ceil(companyList.length / MODAL_ITEMS_PER_PAGE);
 
   // -- Columns --
   const columns: Column<User>[] = [
-    { header: 'No', accessor: 'id', width: '60px' },
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '사용자 ID', accessor: 'userId' },
     { header: '성명', accessor: 'name' },
     { header: '소속/업체명', accessor: 'department' },
     { 
       header: '연락처', 
-      accessor: (user) => formatPhoneNumber(user.phone) // Format phone number
+      accessor: (user) => formatPhoneNumber(user.phone) 
     },
     { header: '역할', accessor: 'role' },
-    { header: '상태', accessor: (user: User) => <StatusBadge status={user.status} />, width: '100px' },
+    { header: '상태', accessor: (user: User) => <StatusBadge status={user.status} />, width: '120px' },
   ];
 
   const modalColumns: Column<CompanyItem>[] = [
@@ -330,8 +328,8 @@ export const UserManagement: React.FC = () => {
     return (
       <>
         <PageHeader title={selectedUser ? "사용자 수정" : "사용자 신규등록"} />
-        <form onSubmit={handleSave} key={selectedUser ? selectedUser.id : 'new-entry'} autoComplete="off">
-          <FormSection title={selectedUser ? "사용자 수정" : "사용자 신규등록"}>
+        <form onSubmit={handleSave}>
+          <FormSection title="기본 정보">
             {/* 1행: 사용자 ID (아이디 만들기 모달 트리거) */}
             <FormRow label="사용자 ID" required>
               <div className="flex gap-2 w-full">
@@ -345,7 +343,6 @@ export const UserManagement: React.FC = () => {
                    placeholder={selectedUser ? "아이디" : "아이디 만들기 버튼을 눌러주세요"} 
                    required 
                    inputClassName={!selectedUser ? "cursor-pointer" : ""}
-                   autoComplete="off"
                  />
                  {!selectedUser && (
                    <Button type="button" variant="secondary" onClick={handleOpenIdModal} className="whitespace-nowrap">
@@ -355,7 +352,7 @@ export const UserManagement: React.FC = () => {
               </div>
             </FormRow>
             <FormRow label="성명" required>
-              <InputGroup name="name" defaultValue={selectedUser?.name} placeholder="사용자 성명" required autoComplete="off" />
+              <InputGroup name="name" defaultValue={selectedUser?.name} placeholder="사용자 성명" required />
             </FormRow>
 
             {/* 2행: 비밀번호, 비밀번호 확인 */}
@@ -365,8 +362,7 @@ export const UserManagement: React.FC = () => {
                   type="password" 
                   value={password}
                   onChange={(e) => handlePasswordChange(e.target.value)}
-                  placeholder="" 
-                  autoComplete="new-password"
+                  placeholder="********" 
                 />
                 <p className={`text-xs ${passwordError ? 'text-red-400 font-medium' : 'text-slate-500'}`}>
                   {passwordError || '비밀번호는 영문, 숫자, 특수문자 포함 6자 ~ 12자로 생성해 주세요.'}
@@ -379,8 +375,7 @@ export const UserManagement: React.FC = () => {
                   type="password" 
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
-                  placeholder=""
-                  autoComplete="new-password" 
+                  placeholder="********" 
                 />
                 {/* 비밀번호 불일치 안내문 */}
                 {password && passwordConfirm && password !== passwordConfirm && (
@@ -410,16 +405,7 @@ export const UserManagement: React.FC = () => {
 
             {/* 4행: 연락처, SMS 수신 여부 */}
             <FormRow label="연락처" required>
-              <InputGroup 
-                name="phone" 
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))} // 숫자만 허용
-                onKeyDown={handlePhoneKeyDown} // [NEW] 숫자 외 키 차단
-                inputMode="numeric" // [NEW] 모바일 키패드
-                placeholder="숫자만 입력하세요" 
-                required 
-                maxLength={11}
-              />
+              <InputGroup name="phone" defaultValue={selectedUser?.phone} placeholder="010-0000-0000" required />
             </FormRow>
             <FormRow label="SMS 수신 여부">
               <div className={`${UI_STYLES.input} flex gap-6 items-center`}>
