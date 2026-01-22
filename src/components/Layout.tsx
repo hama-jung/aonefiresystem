@@ -89,7 +89,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isPwModalOpen, setIsPwModalOpen] = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', new: '', confirm: '' });
 
-  const [currentUser, setCurrentUser] = useState<{name: string, userId: string} | null>(null);
+  const [currentUser, setCurrentUser] = useState<{name: string, userId: string, role: string} | null>(null);
 
   // 화면 크기에 따른 모바일 여부 상태
   const [isMobileView, setIsMobileView] = useState(window.innerWidth < 1024);
@@ -188,17 +188,36 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }
   };
 
-  // --- Menu Filtering Logic ---
+  // --- Menu Filtering Logic (권한 적용) ---
   const getVisibleMenus = (menus: MenuItemDB[]): MenuItemDB[] => {
+    const role = currentUser?.role || 'Guest';
+
     return menus
       .filter(item => {
-        if (isMobileView) return item.isVisibleMobile;
-        return item.isVisiblePc;
+        // 1. PC/Mobile Visibility Check
+        if (isMobileView) {
+            if (!item.isVisibleMobile) return false;
+        } else {
+            if (!item.isVisiblePc) return false;
+        }
+
+        // 2. Role-based Permission Check
+        // 관리자/시스템관리자는 모든 메뉴 접근 가능 (일반적으로)
+        // 여기서는 명시된 3가지 롤에 대해서만 필터링 적용
+        if (role === '총판관리자' && item.allowDistributor === false) return false;
+        if (role === '시장관리자' && item.allowMarket === false) return false;
+        if (role === '지자체' && item.allowLocal === false) return false;
+
+        return true;
       })
       .map(item => ({
         ...item,
         children: item.children ? getVisibleMenus(item.children) : undefined
-      }));
+      }))
+      // 자식 메뉴가 모두 필터링되어 없어진 부모 폴더 처리 (선택적)
+      // 현재 로직에서는 폴더 자체가 권한이 있으면 표시하고, 내용이 없으면 빈 폴더로 둠.
+      // 필요시 .filter(item => !item.path && (!item.children || item.children.length === 0) ? false : true) 추가 가능
+      ;
   };
 
   const visibleMenuItems = getVisibleMenus(menuTree);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup,
   Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, Modal, UI_STYLES, AddressInput,
-  formatPhoneNumber, handlePhoneKeyDown // Added import
+  formatPhoneNumber, handlePhoneKeyDown 
 } from '../components/CommonUI';
 import { Store, Market } from '../types';
 import { StoreAPI, MarketAPI } from '../services/api';
@@ -123,11 +123,12 @@ export const StoreManagement: React.FC = () => {
   };
 
   // --- Handlers: Form Image ---
-  const handleFileClick = (e: React.MouseEvent<HTMLInputElement>) => {
+  const handleFileSelectClick = () => {
     if (formData.storeImage || storeImageFile) {
-      e.preventDefault();
       alert("등록된 이미지를 삭제해 주세요.");
+      return;
     }
+    fileInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,6 +156,12 @@ export const StoreManagement: React.FC = () => {
         }
      }
      return '';
+  };
+
+  const handleDownload = () => {
+    if (formData.storeImage) {
+      window.open(formData.storeImage, '_blank');
+    }
   };
 
   // --- Handlers: Market Modal ---
@@ -458,19 +465,36 @@ export const StoreManagement: React.FC = () => {
                <InputGroup 
                  value={formData.detectorId || ''} 
                  onChange={(e) => setFormData({...formData, detectorId: e.target.value})} 
-                 placeholder="예: 05"
+                 placeholder="예: 01"
                  maxLength={2}
                />
             </FormRow>
-            <FormRow label="모드">
-               <SelectGroup 
-                  options={[{value:'복합',label:'복합'}, {value:'열',label:'열'}, {value:'연기',label:'연기'}]}
-                  value={formData.mode || '복합'}
-                  onChange={(e) => setFormData({...formData, mode: e.target.value as any})}
-               />
+
+            {/* 8. 사용여부 */}
+            <FormRow label="사용여부">
+               <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input 
+                        type="radio" name="status" value="사용" 
+                        checked={formData.status === '사용'} 
+                        onChange={() => setFormData({...formData, status: '사용'})}
+                        className="accent-blue-500" 
+                    />
+                    <span>사용</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input 
+                        type="radio" name="status" value="미사용" 
+                        checked={formData.status === '미사용'} 
+                        onChange={() => setFormData({...formData, status: '미사용'})}
+                        className="accent-blue-500" 
+                    />
+                    <span>미사용</span>
+                  </label>
+               </div>
             </FormRow>
 
-            {/* 8. 비고 */}
+            {/* 9. 비고 */}
             <FormRow label="비고" className="col-span-1 md:col-span-2">
                <InputGroup 
                  value={formData.memo || ''} 
@@ -478,177 +502,61 @@ export const StoreManagement: React.FC = () => {
                />
             </FormRow>
 
-            {/* 9. 이미지 (수정 시에만 노출) */}
-            {selectedStore && (
-              <FormRow label="상가 이미지" className="col-span-1 md:col-span-2">
-                  <div className="flex flex-col gap-2 w-full">
-                    <InputGroup 
-                        ref={fileInputRef}
-                        type="file" 
-                        onChange={handleFileChange}
-                        onClick={handleFileClick}
-                        className="border-0 p-0 text-slate-300 w-full" 
-                    />
-                    {(formData.storeImage || storeImageFile) && (
-                        <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600 w-fit">
-                          <Paperclip size={14} className="text-slate-400" />
-                          <span 
-                              onClick={() => formData.storeImage && window.open(formData.storeImage, '_blank')}
-                              className={`text-sm ${formData.storeImage ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                              title={formData.storeImage ? "클릭하여 다운로드" : "저장 전 파일입니다"}
-                          >
-                              {getFileName()}
-                          </span>
-                          <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
-                              <X size={16} />
-                          </button>
-                        </div>
-                    )}
-                  </div>
-              </FormRow>
-            )}
-
-            {/* 10. 상가 사용여부 (Required) */}
-            <FormRow label="상가 사용여부" required className="col-span-1 md:col-span-2">
-               <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                      type="radio" name="status" value="사용" 
-                      checked={formData.status === '사용'} 
-                      onChange={() => setFormData({...formData, status: '사용'})}
-                      className="accent-blue-500" 
-                    />
-                    <span>사용</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                      type="radio" name="status" value="미사용" 
-                      checked={formData.status === '미사용'} 
-                      onChange={() => setFormData({...formData, status: '미사용'})}
-                      className="accent-blue-500" 
-                    />
-                    <span>미사용</span>
-                  </label>
-                </div>
+            {/* 10. 상가 이미지 (수정 모드일 때만 활성화) */}
+            <FormRow label="상가 이미지" className="col-span-1 md:col-span-2">
+                 {selectedStore ? (
+                    <div className="flex flex-col gap-2 w-full">
+                       <div className="flex items-center gap-2">
+                          <input 
+                             type="file" 
+                             ref={fileInputRef}
+                             onChange={handleFileChange}
+                             className="hidden" 
+                             accept="image/*"
+                          />
+                          <Button type="button" variant="secondary" onClick={handleFileSelectClick} icon={<Upload size={16} />}>
+                             파일 선택
+                          </Button>
+                          
+                          {(formData.storeImage || storeImageFile) && (
+                             <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600">
+                                <Paperclip size={14} className="text-slate-400" />
+                                <span 
+                                    onClick={handleDownload}
+                                    className={`text-sm ${formData.storeImage ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                                    title={formData.storeImage ? "클릭하여 다운로드" : "저장 전 파일입니다"}
+                                >
+                                    {getFileName()}
+                                </span>
+                                <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
+                                    <X size={16} />
+                                </button>
+                             </div>
+                          )}
+                       </div>
+                       <p className="text-xs text-slate-500 mt-1">최대 10MB, jpg/png/gif 지원 (수정 시에만 가능)</p>
+                    </div>
+                 ) : (
+                    <div className="flex items-center h-[42px] px-3 bg-slate-800/50 border border-slate-700 rounded text-slate-500 text-sm italic w-full">
+                       신규 등록 시에는 이미지를 첨부할 수 없습니다. 등록 후 수정 단계에서 진행해 주세요.
+                    </div>
+                 )}
             </FormRow>
           </FormSection>
 
           <div className="flex justify-center gap-3 mt-8">
              <Button type="submit" variant="primary" className="w-32">{selectedStore ? '수정' : '등록'}</Button>
-             {selectedStore && (
-               <Button type="button" variant="danger" onClick={handleDelete} className="w-32">삭제</Button>
-             )}
              <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
           </div>
         </form>
 
-        {/* Market Select Modal */}
-        <Modal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} title="소속 시장 선택" width="max-w-3xl">
+        {/* Market Modal */}
+        <Modal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} title="시장 찾기" width="max-w-3xl">
            <SearchFilterBar onSearch={fetchMarkets}>
-              <InputGroup 
-                 label="시장명" 
-                 value={marketSearchName} 
-                 onChange={(e) => setMarketSearchName(e.target.value)} 
-                 placeholder="시장명 검색"
-              />
+              <InputGroup label="시장명" value={marketSearchName} onChange={(e) => setMarketSearchName(e.target.value)} placeholder="시장명 검색" />
            </SearchFilterBar>
            <DataTable columns={marketColumns} data={modalCurrentMarkets} />
-           <Pagination 
-              totalItems={marketList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={marketModalPage} onPageChange={setMarketModalPage} 
-           />
-        </Modal>
-      </>
-    );
-  }
-
-  // --- VIEW: EXCEL ---
-  if (view === 'excel') {
-    return (
-      <>
-        <PageHeader title="상가 엑셀 신규 등록" />
-        <FormSection title="엑셀 일괄 등록">
-            {/* 1. 소속 시장 선택 */}
-            <FormRow label="소속 시장" required className="col-span-1 md:col-span-2">
-               <div className="flex gap-2 w-full max-w-md">
-                 <div 
-                   onClick={openMarketModal}
-                   className="flex-1 relative cursor-pointer"
-                 >
-                    <input 
-                       type="text"
-                       value={excelMarket?.name || ''} 
-                       placeholder="등록할 시장을 선택하세요" 
-                       readOnly 
-                       className={`${UI_STYLES.input} cursor-pointer hover:bg-slate-700/50 pr-8`}
-                    />
-                    <Search className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
-                 </div>
-                 <Button type="button" variant="secondary" onClick={openMarketModal}>찾기</Button>
-               </div>
-            </FormRow>
-
-            {/* 2. 파일 선택 */}
-            <FormRow label="엑셀 파일 선택" required className="col-span-1 md:col-span-2">
-                <div className="flex flex-col gap-2">
-                   <InputGroup 
-                      type="file" 
-                      accept=".xlsx, .xls"
-                      onChange={handleExcelFileChange}
-                      className="border-0 p-0 text-slate-300 w-full"
-                   />
-                   <p className="text-xs text-slate-400">
-                     * 수신기MAC(4자리), 중계기ID(2자리), 감지기번호(2자리), 모드(복합/열/연기) 컬럼을 포함해야 합니다.
-                   </p>
-                </div>
-            </FormRow>
-
-            {/* 3. 샘플 다운로드 */}
-            <FormRow label="샘플 양식" className="col-span-1 md:col-span-2">
-                <Button type="button" variant="secondary" onClick={handleSampleDownload} icon={<Upload size={14} />}>
-                   엑셀 샘플 다운로드
-                </Button>
-            </FormRow>
-        </FormSection>
-
-        {/* 미리보기 테이블 */}
-        {excelData.length > 0 && (
-          <div className="mt-8">
-             <h3 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h3>
-             <DataTable<Store> 
-               columns={[
-                  {header:'상가명', accessor:'name'},
-                  {header:'대표자', accessor:'managerName'},
-                  {header:'연락처', accessor:'managerPhone'},
-                  {header:'수신기MAC', accessor:'receiverMac'},
-                  {header:'중계기ID', accessor:'repeaterId'},
-                  {header:'감지기번호', accessor:'detectorId'},
-                  {header:'모드', accessor:'mode'},
-               ]}
-               data={excelData.slice(0, 50)} // Preview only first 50
-             />
-             {excelData.length > 50 && <p className="text-center text-slate-500 text-sm mt-2">...외 {excelData.length - 50}건</p>}
-          </div>
-        )}
-
-        <div className="flex justify-center gap-3 mt-8">
-            <Button type="button" variant="primary" onClick={handleExcelSave} className="w-32" disabled={excelData.length === 0}>일괄 등록</Button>
-            <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
-        </div>
-
-        {/* Market Select Modal (Reused) */}
-        <Modal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} title="소속 시장 선택" width="max-w-3xl">
-           <SearchFilterBar onSearch={fetchMarkets}>
-              <InputGroup 
-                 label="시장명" 
-                 value={marketSearchName} 
-                 onChange={(e) => setMarketSearchName(e.target.value)} 
-                 placeholder="시장명 검색"
-              />
-           </SearchFilterBar>
-           <DataTable columns={marketColumns} data={modalCurrentMarkets} />
-           <Pagination 
-              totalItems={marketList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={marketModalPage} onPageChange={setMarketModalPage} 
-           />
+           <Pagination totalItems={marketList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={marketModalPage} onPageChange={setMarketModalPage} />
         </Modal>
       </>
     );
@@ -659,53 +567,26 @@ export const StoreManagement: React.FC = () => {
     <>
       <PageHeader title="상가 관리" />
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
-         <InputGroup 
-            label="주소" 
-            value={searchAddress} 
-            onChange={(e) => setSearchAddress(e.target.value)} 
-            placeholder="주소 입력"
-         />
-         <InputGroup 
-            label="시장명" 
-            value={searchMarket} 
-            onChange={(e) => setSearchMarket(e.target.value)} 
-            placeholder="시장명 입력"
-         />
-         <InputGroup 
-            label="상가명" 
-            value={searchStore} 
-            onChange={(e) => setSearchStore(e.target.value)} 
-            placeholder="상가명 입력"
-         />
+        <InputGroup label="상가명" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} placeholder="상가명 입력" />
+        <InputGroup label="소속시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} placeholder="시장명 입력" />
+        <InputGroup label="주소" value={searchAddress} onChange={(e) => setSearchAddress(e.target.value)} placeholder="주소 입력" />
       </SearchFilterBar>
-
       <div className="flex justify-between items-center mb-2">
-         <span className="text-sm text-slate-400">
-           전체 <strong className="text-blue-400">{stores.length}</strong> 건 
-           (페이지 {currentPage}/{totalPages || 1})
-         </span>
-         <div className="flex gap-2">
-            <Button variant="success" onClick={handleListExcelDownload} icon={<Paperclip size={16} />}>엑셀 다운로드</Button>
-            <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
-            <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
-         </div>
+        <span className="text-sm text-slate-400">
+          전체 <span className="text-blue-400">{stores.length}</span> 건
+          (페이지 {currentPage})
+        </span>
+        <div className="flex gap-2">
+           <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+           <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
+           <Button variant="success" onClick={handleListExcelDownload} icon={<Search size={16} />}>엑셀 다운로드</Button>
+        </div>
       </div>
-
       {loading ? (
         <div className="text-center py-20 text-slate-500">Loading...</div>
       ) : (
-        <DataTable columns={[
-          { header: 'No', accessor: 'id', width: '60px' },
-          { header: '소속시장', accessor: 'marketName' },
-          { header: '상가명', accessor: 'name' },
-          { header: '대표자', accessor: 'managerName' },
-          { header: '대표자연락처', accessor: (s) => formatPhoneNumber(s.managerPhone) || '-' }, // Formatted
-          { header: '상태', accessor: (s) => (
-             <span className={s.status === '사용' ? 'text-green-400' : 'text-red-400'}>{s.status}</span>
-          )},
-        ]} data={currentItems} onRowClick={handleEdit} />
+        <DataTable columns={columns} data={currentItems} onRowClick={handleEdit} />
       )}
-
       <Pagination 
         totalItems={stores.length}
         itemsPerPage={ITEMS_PER_PAGE}

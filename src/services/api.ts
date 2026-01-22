@@ -42,29 +42,30 @@ const MOCK_DISTRIBUTORS: Distributor[] = [
   }
 ];
 
+// Mock Menus: Updated with permission flags
 const MOCK_MENUS: MenuItemDB[] = [
-  { id: 1, label: '대시보드', path: '/dashboard', icon: 'Home', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
-  { id: 2, label: '시스템 관리', icon: 'Settings', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
-  { id: 3, parentId: 2, label: '사용자 관리', path: '/users', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
-  { id: 4, parentId: 2, label: '총판 관리', path: '/distributors', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
-  { id: 5, parentId: 2, label: '시장 관리', path: '/markets', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
-  { id: 6, parentId: 2, label: '상가 관리', path: '/stores', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
-  { id: 7, parentId: 2, label: '문자 전송', path: '/sms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true },
-  { id: 8, parentId: 2, label: '롤 관리', path: '/roles', sortOrder: 6, isVisiblePc: true, isVisibleMobile: true },
-  { id: 9, parentId: 2, label: '작업 일지', path: '/work-logs', sortOrder: 7, isVisiblePc: true, isVisibleMobile: true },
-  { id: 10, parentId: 2, label: '메뉴 관리', path: '/menus', sortOrder: 8, isVisiblePc: true, isVisibleMobile: true },
-  { id: 11, parentId: 2, label: '공통코드 관리', path: '/common-codes', sortOrder: 9, isVisiblePc: true, isVisibleMobile: true },
-  { id: 12, label: '기기 관리', icon: 'Cpu', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
-  { id: 13, parentId: 12, label: 'R형 수신기', path: '/receivers', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
-  { id: 14, parentId: 12, label: '중계기 관리', path: '/repeaters', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
-  { id: 15, parentId: 12, label: '화재감지기', path: '/detectors', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
-  { id: 16, parentId: 12, label: '발신기 관리', path: '/transmitters', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
-  { id: 17, parentId: 12, label: '경종 관리', path: '/alarms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true },
-  { id: 18, label: '데이터 관리', icon: 'Activity', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
-  { id: 19, parentId: 18, label: '화재 이력 관리', path: '/fire-history', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true },
-  { id: 20, parentId: 18, label: '기기 상태 관리', path: '/device-status', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true },
-  { id: 21, parentId: 18, label: '데이터 수신 관리', path: '/data-reception', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true },
-  { id: 22, parentId: 18, label: 'UART 통신', path: '/uart-communication', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true },
+  { id: 1, label: '대시보드', path: '/dashboard', icon: 'Home', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 2, label: '시스템 관리', icon: 'Settings', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 3, parentId: 2, label: '사용자 관리', path: '/users', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 4, parentId: 2, label: '총판 관리', path: '/distributors', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 5, parentId: 2, label: '시장 관리', path: '/markets', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: false, allowLocal: true },
+  { id: 6, parentId: 2, label: '상가 관리', path: '/stores', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 7, parentId: 2, label: '문자 전송', path: '/sms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: false },
+  { id: 8, parentId: 2, label: '롤 관리', path: '/roles', sortOrder: 6, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 9, parentId: 2, label: '작업 일지', path: '/work-logs', sortOrder: 7, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 10, parentId: 2, label: '메뉴 관리', path: '/menus', sortOrder: 8, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 11, parentId: 2, label: '공통코드 관리', path: '/common-codes', sortOrder: 9, isVisiblePc: true, isVisibleMobile: true, allowDistributor: false, allowMarket: false, allowLocal: false },
+  { id: 12, label: '기기 관리', icon: 'Cpu', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 13, parentId: 12, label: 'R형 수신기', path: '/receivers', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 14, parentId: 12, label: '중계기 관리', path: '/repeaters', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 15, parentId: 12, label: '화재감지기', path: '/detectors', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 16, parentId: 12, label: '발신기 관리', path: '/transmitters', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 17, parentId: 12, label: '경종 관리', path: '/alarms', sortOrder: 5, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 18, label: '데이터 관리', icon: 'Activity', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 19, parentId: 18, label: '화재 이력 관리', path: '/fire-history', sortOrder: 1, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 20, parentId: 18, label: '기기 상태 관리', path: '/device-status', sortOrder: 2, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 21, parentId: 18, label: '데이터 수신 관리', path: '/data-reception', sortOrder: 3, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: true, allowLocal: true },
+  { id: 22, parentId: 18, label: 'UART 통신', path: '/uart-communication', sortOrder: 4, isVisiblePc: true, isVisibleMobile: true, allowDistributor: true, allowMarket: false, allowLocal: false },
 ];
 
 // --- 2. Helper Utilities ---
@@ -685,6 +686,8 @@ export const MenuAPI = {
   },
 
   updateVisibilities: async (updates: any) => {
+    // Upsert expects an array of objects to update/insert
+    // We map the updates to match the DB schema
     const { error } = await supabase.from('menus').upsert(updates);
     if (error) throw new Error(error.message);
     return true;

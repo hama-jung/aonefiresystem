@@ -48,7 +48,6 @@ export const MenuManagement: React.FC = () => {
       setDisplayMenus(flatList);
       
       // 2. Prepare Parent Options (only Root items can be parents for now, or 1 level deep)
-      // Filter items that are roots to be potential parents for new items
       const roots = tree.map(m => ({ value: m.id, label: m.label }));
       setParentOptions([{ value: '', label: '최상위 메뉴 (Root)' }, ...roots]);
 
@@ -72,7 +71,7 @@ export const MenuManagement: React.FC = () => {
   };
 
   // --- Toggle Handler (Local Update Only) ---
-  const handleToggle = (id: number, field: 'isVisiblePc' | 'isVisibleMobile', currentValue: boolean) => {
+  const handleToggle = (id: number, field: keyof MenuItemDB, currentValue: boolean) => {
     setDisplayMenus(prev => prev.map(m => m.id === id ? { ...m, [field]: !currentValue } : m));
   };
 
@@ -84,7 +83,10 @@ export const MenuManagement: React.FC = () => {
         const updates = displayMenus.map(m => ({
             id: m.id,
             isVisiblePc: m.isVisiblePc,
-            isVisibleMobile: m.isVisibleMobile
+            isVisibleMobile: m.isVisibleMobile,
+            allowDistributor: m.allowDistributor,
+            allowMarket: m.allowMarket,
+            allowLocal: m.allowLocal
         }));
 
         await MenuAPI.updateVisibilities(updates);
@@ -136,6 +138,19 @@ export const MenuManagement: React.FC = () => {
     }
   };
 
+  // Common Toggle Renderer
+  const renderToggle = (item: MenuItemDisplay, field: keyof MenuItemDB) => (
+    <label className="relative inline-flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+      <input 
+        type="checkbox" 
+        checked={!!item[field]} 
+        onChange={() => handleToggle(item.id, field, !!item[field])}
+        className="sr-only peer" 
+      />
+      <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+    </label>
+  );
+
   const columns: Column<MenuItemDisplay>[] = [
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { 
@@ -152,38 +167,37 @@ export const MenuManagement: React.FC = () => {
           </span>
         </div>
       ),
-      width: '300px' 
+      width: '250px' 
     },
-    { header: '경로', accessor: (item) => item.path || <span className="text-slate-500 italic">(폴더)</span>, width: '200px' },
-    { header: '순서', accessor: 'sortOrder', width: '80px' },
+    { header: '경로', accessor: (item) => item.path || <span className="text-slate-500 italic">(폴더)</span>, width: '150px' },
+    // '순서' 컬럼 제거됨
+    
+    // --- New Permission Columns ---
     { 
-      header: 'PC 노출', 
-      accessor: (item) => (
-        <label className="relative inline-flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
-          <input 
-            type="checkbox" 
-            checked={item.isVisiblePc} 
-            onChange={() => handleToggle(item.id, 'isVisiblePc', item.isVisiblePc)}
-            className="sr-only peer" 
-          />
-          <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-        </label>
-      ),
+      header: '총판 관리자', 
+      accessor: (item) => renderToggle(item, 'allowDistributor'),
       width: '100px'
     },
     { 
+      header: '시장 관리자', 
+      accessor: (item) => renderToggle(item, 'allowMarket'),
+      width: '100px'
+    },
+    { 
+      header: '지자체', 
+      accessor: (item) => renderToggle(item, 'allowLocal'),
+      width: '80px'
+    },
+    
+    // --- Existing Visibility Columns ---
+    { 
+      header: 'PC 노출', 
+      accessor: (item) => renderToggle(item, 'isVisiblePc'),
+      width: '80px'
+    },
+    { 
       header: '모바일 노출', 
-      accessor: (item) => (
-        <label className="relative inline-flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
-          <input 
-            type="checkbox" 
-            checked={item.isVisibleMobile} 
-            onChange={() => handleToggle(item.id, 'isVisibleMobile', item.isVisibleMobile)}
-            className="sr-only peer" 
-          />
-          <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-        </label>
-      ),
+      accessor: (item) => renderToggle(item, 'isVisibleMobile'),
       width: '100px'
     },
     {
@@ -194,24 +208,22 @@ export const MenuManagement: React.FC = () => {
            <button onClick={() => handleDelete(item)} className="p-1.5 text-red-400 hover:bg-slate-700 rounded transition-colors"><Trash2 size={16}/></button>
         </div>
       ),
-      width: '100px'
+      width: '80px'
     }
   ];
 
   return (
     <>
-      <PageHeader title="메뉴 관리" />
+      <PageHeader title="메뉴별 권한 관리" />
       <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1.5">
           <div>
-            💡 <strong>Tip:</strong> PC/모바일 노출 여부를 변경한 후, 하단의 <strong>[변경사항 적용]</strong> 버튼을 눌러야 반영됩니다.
+            💡 <strong>Tip:</strong> 권한 설정을 변경한 후, 반드시 하단의 <strong>[변경사항 적용]</strong> 버튼을 눌러야 반영됩니다.
           </div>
           <div className="pl-5 text-blue-400 text-xs">
-            * 하위 메뉴가 노출되려면 상위 메뉴도 노출로 바꾸어 주어야 합니다.
+            * 권한이 OFF로 설정된 메뉴는 해당 역할의 사용자에게 보이지 않습니다.
           </div>
         </div>
-        {/* Save All Button (Top) */}
-        {/* <Button variant="primary" onClick={handleApply} icon={<CheckCircle size={16} />}>설정 일괄 적용</Button> */}
       </div>
 
       {loading ? (

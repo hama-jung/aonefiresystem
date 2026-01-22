@@ -165,11 +165,12 @@ export const RepeaterManagement: React.FC = () => {
   };
 
   // --- Image Logic ---
-  const handleFileClick = (e: React.MouseEvent<HTMLInputElement>) => {
+  const handleFileSelectClick = () => {
     if (formData.image || imageFile) {
-      e.preventDefault();
       alert("등록된 이미지를 삭제해 주세요.");
+      return;
     }
+    fileInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,6 +198,12 @@ export const RepeaterManagement: React.FC = () => {
       }
     }
     return '';
+  };
+
+  const handleDownload = () => {
+    if (formData.image) {
+      window.open(formData.image, '_blank');
+    }
   };
 
   // --- Receiver Search Modal Handlers ---
@@ -366,32 +373,44 @@ export const RepeaterManagement: React.FC = () => {
             </FormRow>
 
             {/* 이미지 수정 (수정 화면에서만) */}
-            {selectedRepeater && (
+            {selectedRepeater ? (
               <FormRow label="이미지수정" className="col-span-1 md:col-span-2">
                 <div className="flex flex-col gap-2">
                   <InputGroup 
                     ref={fileInputRef}
                     type="file" 
                     onChange={handleFileChange}
-                    onClick={handleFileClick}
-                    className="border-0 p-0 text-slate-300 w-full"
+                    className="hidden" 
+                    accept="image/*"
                   />
-                  {(formData.image || imageFile) && (
-                    <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600 w-fit">
-                      <Paperclip size={14} className="text-slate-400" />
-                      <span 
-                        onClick={() => formData.image && window.open(formData.image, '_blank')}
-                        className={`text-sm ${formData.image ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                      >
-                        {getFileName()}
-                      </span>
-                      <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
-                        <X size={16} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                      <Button type="button" variant="secondary" onClick={handleFileSelectClick} icon={<Upload size={16} />}>
+                         파일 선택
+                      </Button>
+                      
+                      {(formData.image || imageFile) && (
+                        <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600 w-fit">
+                          <Paperclip size={14} className="text-slate-400" />
+                          <span 
+                            onClick={handleDownload}
+                            className={`text-sm ${formData.image ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                          >
+                            {getFileName()}
+                          </span>
+                          <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
+                  </div>
                 </div>
               </FormRow>
+            ) : (
+                <FormRow label="이미지" className="col-span-1 md:col-span-2">
+                    <div className="flex items-center h-[42px] px-3 bg-slate-800/50 border border-slate-700 rounded text-slate-500 text-sm italic w-full">
+                       신규 등록 시에는 이미지를 첨부할 수 없습니다. 등록 후 수정 단계에서 진행해 주세요.
+                    </div>
+                </FormRow>
             )}
           </FormSection>
 

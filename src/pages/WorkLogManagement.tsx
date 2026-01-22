@@ -5,7 +5,7 @@ import {
 } from '../components/CommonUI';
 import { WorkLog, Market } from '../types';
 import { WorkLogAPI, MarketAPI } from '../services/api';
-import { Search, X, Paperclip } from 'lucide-react';
+import { Search, X, Paperclip, Upload } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 const MODAL_ITEMS_PER_PAGE = 5;
@@ -143,13 +143,13 @@ export const WorkLogManagement: React.FC = () => {
     }
   };
 
-  // --- Image Logic (Same as MarketManagement) ---
-  const handleFileClick = (e: React.MouseEvent<HTMLInputElement>) => {
-    // 이미 DB에 저장된 이미지가 있거나(formData.attachment), 현재 선택된 파일이 있으면(attachmentFile)
+  // --- Image Logic ---
+  const handleFileSelectClick = () => {
     if (formData.attachment || attachmentFile) {
-      e.preventDefault(); // 파일 선택창 열림 방지
       alert("등록된 이미지를 삭제해 주세요.");
+      return;
     }
+    fileInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,6 +177,12 @@ export const WorkLogManagement: React.FC = () => {
       }
     }
     return '';
+  };
+
+  const handleDownload = () => {
+    if (formData.attachment) {
+      window.open(formData.attachment, '_blank');
+    }
   };
 
   // --- Market Modal Handlers ---
@@ -285,23 +291,29 @@ export const WorkLogManagement: React.FC = () => {
                       ref={fileInputRef}
                       type="file" 
                       onChange={handleFileChange}
-                      onClick={handleFileClick}
-                      className="border-0 p-0 text-slate-300 w-full"
+                      className="hidden" 
+                      accept="image/*"
                     />
-                    {(formData.attachment || attachmentFile) && (
-                      <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600 w-fit">
-                        <Paperclip size={14} className="text-slate-400" />
-                        <span 
-                          onClick={() => formData.attachment && window.open(formData.attachment, '_blank')}
-                          className={`text-sm ${formData.attachment ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                        >
-                          {getFileName()}
-                        </span>
-                        <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
-                          <X size={16} />
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                        <Button type="button" variant="secondary" onClick={handleFileSelectClick} icon={<Upload size={16} />}>
+                           파일 선택
+                        </Button>
+                        
+                        {(formData.attachment || attachmentFile) && (
+                          <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600 w-fit">
+                            <Paperclip size={14} className="text-slate-400" />
+                            <span 
+                              onClick={handleDownload}
+                              className={`text-sm ${formData.attachment ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
+                            >
+                              {getFileName()}
+                            </span>
+                            <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
+                              <X size={16} />
+                            </button>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center h-[42px] px-3 bg-slate-800/50 border border-slate-700 rounded text-slate-500 text-sm italic">

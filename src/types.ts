@@ -199,7 +199,7 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-// DB 저장용 메뉴 아이템
+// DB 저장용 메뉴 아이템 (권한 컬럼 추가)
 export interface MenuItemDB {
   id: number;
   parentId?: number;
@@ -209,6 +209,11 @@ export interface MenuItemDB {
   sortOrder: number;
   isVisiblePc: boolean;
   isVisibleMobile: boolean;
+  // --- 권한 컬럼 (Role Based Access Control) ---
+  allowDistributor?: boolean; // 총판 관리자에게 보임
+  allowMarket?: boolean;      // 시장 관리자에게 보임
+  allowLocal?: boolean;       // 지자체에게 보임
+  
   children?: MenuItemDB[]; // For tree structure
 }
 
