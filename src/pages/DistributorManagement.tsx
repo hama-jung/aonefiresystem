@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, AddressInput,
-  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES
+  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES, StatusBadge
 } from '../components/CommonUI';
 import { Distributor } from '../types';
 import { DistributorAPI } from '../services/api';
@@ -162,6 +162,7 @@ export const DistributorManagement: React.FC = () => {
     { header: '담당자전화', accessor: 'managerPhone' },
     { header: 'E-mail', accessor: 'managerEmail' },
     { header: '주소', accessor: (d) => `${d.address} ${d.addressDetail}` },
+    { header: '상태', accessor: (d) => <StatusBadge status={d.status} />, width: '100px' },
   ];
 
   // -- Views --

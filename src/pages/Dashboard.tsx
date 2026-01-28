@@ -401,7 +401,13 @@ export const Dashboard: React.FC = () => {
           <div className="absolute top-0 left-0 right-0 z-20 p-3 flex gap-2 bg-gradient-to-b from-slate-900/90 to-transparent pointer-events-none">
              <div className="flex gap-2 w-full max-w-2xl pointer-events-auto">
                 <select 
-                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 shadow-lg"
+                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 shadow-lg appearance-none pr-6"
+                    style={{
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23e2e8f0' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                        backgroundPosition: 'right 0.25rem center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '1.2em 1.2em'
+                    }}
                     value={selectedSido}
                     onChange={(e) => { setSelectedSido(e.target.value); setSelectedSigungu(''); }}
                 >
@@ -410,7 +416,13 @@ export const Dashboard: React.FC = () => {
                 </select>
                 
                 <select 
-                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 shadow-lg"
+                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 shadow-lg appearance-none pr-6"
+                    style={{
+                        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23e2e8f0' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                        backgroundPosition: 'right 0.25rem center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundSize: '1.2em 1.2em'
+                    }}
                     value={selectedSigungu}
                     onChange={(e) => setSelectedSigungu(e.target.value)}
                     disabled={!selectedSido}
