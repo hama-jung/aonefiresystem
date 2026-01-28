@@ -197,9 +197,8 @@ export const DataReceptionManagement: React.FC = () => {
             onEndDateChange={setEndDate}
         />
         
-        <div className="min-w-[200px]">
-            <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-        </div>
+        {/* 설치시장 - 반응형을 위해 wrapper 제거 */}
+        <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
       </SearchFilterBar>
 
       <div className="flex justify-between items-center mb-2">

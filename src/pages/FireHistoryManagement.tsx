@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
   Pagination, Column, Modal, UI_STYLES, ITEMS_PER_PAGE,
-  DateRangePicker, validateDateRange // Import date components
+  DateRangePicker, validateDateRange 
 } from '../components/CommonUI';
 import { FireHistoryItem, CommonCode } from '../types';
 import { FireHistoryAPI, CommonCodeAPI } from '../services/api';
@@ -319,23 +319,24 @@ export const FireHistoryManagement: React.FC = () => {
             onEndDateChange={setEndDate}
         />
         
-        {/* 설치시장 검색 */}
-        <div className="min-w-[200px]">
-            <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-        </div>
+        {/* 설치시장 검색 - 반응형을 위해 wrapper 제거 */}
+        <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
 
-        {/* 화재여부 라디오 버튼 */}
-        <div className="min-w-[300px]">
+        {/* 화재여부 라디오 버튼 - 공통UI 스타일 적용 */}
+        <div className="flex flex-col gap-1.5 w-full">
             <label className={UI_STYLES.label}>화재여부</label>
-            <div className="flex gap-4 items-center h-[42px] px-2">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/> 전체
+            <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/>
+                    <span>전체</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'fire'} onChange={() => setSearchStatus('fire')} className="accent-blue-500 w-4 h-4"/> 화재
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'fire'} onChange={() => setSearchStatus('fire')} className="accent-blue-500 w-4 h-4"/>
+                    <span>화재</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'false'} onChange={() => setSearchStatus('false')} className="accent-blue-500 w-4 h-4"/> 오탐
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'false'} onChange={() => setSearchStatus('false')} className="accent-blue-500 w-4 h-4"/>
+                    <span>오탐</span>
                 </label>
             </div>
         </div>

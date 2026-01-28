@@ -262,21 +262,24 @@ export const DeviceStatusManagement: React.FC = () => {
             onEndDateChange={setEndDate}
         />
         
-        <div className="min-w-[200px]">
-            <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-        </div>
+        {/* 설치시장 - 반응형을 위해 wrapper 제거 */}
+        <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
 
-        <div className="min-w-[300px]">
+        {/* 처리여부 - 공통UI 스타일 적용 */}
+        <div className="flex flex-col gap-1.5 w-full">
             <label className={UI_STYLES.label}>처리여부</label>
-            <div className="flex gap-4 items-center h-[42px] px-2">
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/> 전체
+            <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/>
+                    <span>전체</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'processed'} onChange={() => setSearchStatus('processed')} className="accent-blue-500 w-4 h-4"/> 처리
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'processed'} onChange={() => setSearchStatus('processed')} className="accent-blue-500 w-4 h-4"/>
+                    <span>처리</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
-                    <input type="radio" checked={searchStatus === 'unprocessed'} onChange={() => setSearchStatus('unprocessed')} className="accent-blue-500 w-4 h-4"/> 미처리
+                <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                    <input type="radio" checked={searchStatus === 'unprocessed'} onChange={() => setSearchStatus('unprocessed')} className="accent-blue-500 w-4 h-4"/>
+                    <span>미처리</span>
                 </label>
             </div>
         </div>
