@@ -995,7 +995,7 @@ export const DeviceStatusAPI = {
 export const DataReceptionAPI = {
   getList: async (params?: { startDate?: string, endDate?: string, marketName?: string }) => {
     try {
-      let query = supabase.from('data_reception_logs').select('*').order('registeredAt', { ascending: false });
+      let query = supabase.from('data_reception').select('*').order('registeredAt', { ascending: false });
       
       if (params?.startDate) query = query.gte('registeredAt', params.startDate);
       if (params?.endDate) query = query.lte('registeredAt', params.endDate + ' 23:59:59');
@@ -1003,11 +1003,14 @@ export const DataReceptionAPI = {
       if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
 
       const { data, error } = await query;
-      if (error) return [];
+      if (error) {
+        console.warn('DataReceptionAPI error:', error);
+        return [];
+      }
       return data as DataReceptionItem[];
     } catch (e) { return []; }
   },
   delete: async (id: number) => {
-    return supabaseDeleter('data_reception_logs', id);
+    return supabaseDeleter('data_reception', id);
   }
 };

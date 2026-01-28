@@ -606,22 +606,14 @@ export const DetectorManagement: React.FC = () => {
     <>
       <PageHeader title="화재감지기 관리" />
       
-      {/* 5 Search Items in one row for PC (using grid-cols-5) */}
-      <div className="bg-slate-800 p-4 md:p-5 rounded-lg border border-slate-700 shadow-sm mb-5">
-        <div className="flex flex-col gap-4">
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-              <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-              <InputGroup label="설치상가" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
-              <InputGroup label="수신기MAC주소" value={searchReceiverMac} onChange={(e) => setSearchReceiverMac(e.target.value)} />
-              <InputGroup label="중계기ID" value={searchRepeaterId} onChange={(e) => setSearchRepeaterId(e.target.value)} />
-              <InputGroup label="감지기ID" value={searchDetectorId} onChange={(e) => setSearchDetectorId(e.target.value)} />
-           </div>
-           <div className="flex justify-end gap-2">
-              <Button onClick={handleSearch} icon={<Search size={18} />}>검색</Button>
-              {isFiltered && <Button onClick={handleReset} variant="secondary">전체보기</Button>}
-           </div>
-        </div>
-      </div>
+      {/* Search Bar Refactored to Common UI */}
+      <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
+          <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+          <InputGroup label="설치상가" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
+          <InputGroup label="수신기MAC주소" value={searchReceiverMac} onChange={(e) => setSearchReceiverMac(e.target.value)} />
+          <InputGroup label="중계기ID" value={searchRepeaterId} onChange={(e) => setSearchRepeaterId(e.target.value)} />
+          <InputGroup label="감지기ID" value={searchDetectorId} onChange={(e) => setSearchDetectorId(e.target.value)} />
+      </SearchFilterBar>
 
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm text-slate-400">
