@@ -380,6 +380,10 @@ export const DetectorManagement: React.FC = () => {
                 value={formData.repeaterId || '01'}
                 onChange={(e) => setFormData({...formData, repeaterId: e.target.value})}
               />
+              {/* 요청사항: 안내문구 추가 */}
+              <p className="text-xs text-blue-400 mt-1 break-keep">
+                수신기, 중계기, 감지기를 수정하면 상가의 기기 정보도 함께 수정됨에 주의하세요
+              </p>
             </FormRow>
 
             {/* 감지기 ID */}
@@ -391,17 +395,17 @@ export const DetectorManagement: React.FC = () => {
               />
             </FormRow>
 
-            {/* 설치 상가 (Multiple Selection List) */}
-            <FormRow label="설치 상가(점포 추가)" className="col-span-1 md:col-span-2">
-              <div className="flex flex-col gap-2 max-w-md">
+            {/* 설치 상가 (점포 추가) - col-span-1 (좌측) */}
+            <FormRow label="설치 상가(점포 추가)" className="col-span-1">
+              <div className="flex flex-col gap-2 w-full">
                  <div className="flex justify-end">
-                    <Button type="button" variant="secondary" onClick={openStoreModal} icon={<Search size={14} />}>상가 검색 추가</Button>
+                    <Button type="button" variant="secondary" onClick={openStoreModal} icon={<Search size={14} />} className="text-xs h-7 px-2">상가 검색</Button>
                  </div>
                  <div className="bg-slate-900 border border-slate-600 rounded p-2 h-32 overflow-y-auto custom-scrollbar">
                     {selectedStores.length === 0 && <span className="text-slate-500 text-sm p-2">등록된 상가가 없습니다.</span>}
                     {selectedStores.map((store, idx) => (
                       <div key={store.id} className="flex justify-between items-center py-1.5 px-2 border-b border-slate-700/50 last:border-0 hover:bg-slate-800">
-                        <span className="text-slate-200">{store.name}</span>
+                        <span className="text-slate-200 text-sm">{store.name}</span>
                         <button type="button" onClick={() => removeStore(store.id)} className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-slate-700">
                            <X size={14} />
                         </button>
@@ -411,30 +415,35 @@ export const DetectorManagement: React.FC = () => {
               </div>
             </FormRow>
 
-            {/* 화재발생시 SMS (Edit Only) */}
-            {selectedDetector && (
-                <FormRow label="SMS등록(최대10개)" className="col-span-1 md:col-span-2">
-                    <div className="flex flex-col gap-2 max-w-md">
-                        <div className="bg-slate-900 border border-slate-600 rounded p-2 h-24 overflow-y-auto custom-scrollbar mb-2">
-                           {smsFireList.length === 0 && <span className="text-slate-500 text-sm">등록된 번호가 없습니다.</span>}
+            {/* 화재발생시 SMS (Edit Only) - col-span-1 (우측, 상가와 나란히) */}
+            <FormRow label="SMS등록(최대10개)" className="col-span-1">
+                {selectedDetector ? (
+                    <div className="flex flex-col gap-2 w-full">
+                        <div className="bg-slate-900 border border-slate-600 rounded p-2 h-24 overflow-y-auto custom-scrollbar">
+                           {smsFireList.length === 0 && <span className="text-slate-500 text-sm p-2">등록된 번호가 없습니다.</span>}
                            {smsFireList.map((num, idx) => (
                              <div key={idx} className="flex justify-between items-center py-1 px-2 border-b border-slate-700/50 last:border-0">
-                               <span className="text-slate-200">{num}</span>
-                               <button type="button" onClick={() => removeSms(idx)} className="text-red-400 hover:text-red-300 text-sm">삭제</button>
+                               <span className="text-slate-200 text-sm">{num}</span>
+                               <button type="button" onClick={() => removeSms(idx)} className="text-red-400 hover:text-red-300 text-xs">삭제</button>
                              </div>
                            ))}
                         </div>
                         <div className="flex gap-2">
                            <InputGroup 
-                             placeholder="휴대폰 번호 입력" 
+                             placeholder="번호 입력" 
                              value={tempSmsFire}
                              onChange={(e) => setTempSmsFire(e.target.value)}
+                             className="text-sm"
                            />
-                           <Button type="button" variant="secondary" onClick={addSms} className="whitespace-nowrap">추가</Button>
+                           <Button type="button" variant="secondary" onClick={addSms} className="whitespace-nowrap text-xs h-[34px]">추가</Button>
                         </div>
                     </div>
-                </FormRow>
-            )}
+                ) : (
+                    <div className="h-32 flex items-center justify-center border border-slate-700 rounded bg-slate-800/50 text-slate-500 text-sm">
+                        * 등록 후 수정 시 가능
+                    </div>
+                )}
+            </FormRow>
 
             {/* 모드 */}
             <FormRow label="모드">
@@ -453,29 +462,34 @@ export const DetectorManagement: React.FC = () => {
               </div>
             </FormRow>
 
-            {/* 사용여부 */}
-            <FormRow label="사용여부">
-              <StatusRadioGroup 
-                label=""
-                value={formData.status} 
-                onChange={(val) => setFormData({...formData, status: val as any})} 
-              />
-            </FormRow>
-
             {/* CCTV URL */}
-            <FormRow label="CCTV URL" className="col-span-1 md:col-span-2">
+            <FormRow label="CCTV URL">
               <InputGroup 
                 value={formData.cctvUrl || ''} 
                 onChange={(e) => setFormData({...formData, cctvUrl: e.target.value})}
               />
             </FormRow>
 
-            {/* 비고 */}
+            {/* 비고 (Full Width) */}
             <FormRow label="비고" className="col-span-1 md:col-span-2">
               <InputGroup 
                 value={formData.memo || ''} 
                 onChange={(e) => setFormData({...formData, memo: e.target.value})}
               />
+            </FormRow>
+
+            {/* 사용여부 (맨 아래로 이동 + 안내문구) */}
+            <FormRow label="사용여부" className="col-span-1 md:col-span-2">
+              <div className="flex flex-col gap-2">
+                  <StatusRadioGroup 
+                    label=""
+                    value={formData.status} 
+                    onChange={(val) => setFormData({...formData, status: val as any})} 
+                  />
+                  <p className="text-xs text-red-400 font-medium">
+                    - 미사용으로 바꿀 경우, 연동되어있는 상가의 화재감지기 정보를 바꿔주십시오. 데이터는 자동연동되지 않습니다.
+                  </p>
+              </div>
             </FormRow>
           </FormSection>
 

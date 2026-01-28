@@ -288,7 +288,9 @@ export const MarketManagement: React.FC = () => {
   // --- Handlers: Distributor Modal ---
   const fetchDistributors = async () => {
     const data = await DistributorAPI.getList({ name: distSearchName });
-    setDistList(data);
+    // [수정] '미사용' 상태인 총판 제외하고 '사용'인 것만 표시
+    const activeDistributors = data.filter(d => d.status === '사용');
+    setDistList(activeDistributors);
     setDistPage(1);
   };
 
