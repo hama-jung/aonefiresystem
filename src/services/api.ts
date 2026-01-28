@@ -468,23 +468,38 @@ export const DistributorAPI = {
 export const StoreAPI = { 
   getList: async (params?: { address?: string, marketName?: string, storeName?: string, marketId?: number }) => {
     try {
-      // marketId와 marketName을 조인하여 가져옴
-      let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
+      // [수정] 조인 방식 변경: select('*, markets(name)') 대신 수동 매핑
+      // 이는 Supabase Client가 relationship을 찾지 못해 발생하는 "Could not find the 'markets' column" 에러를 방지합니다.
+      
+      let query = supabase.from('stores').select('*').order('id', { ascending: false });
       
       if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
       if (params?.address) query = query.ilike('address', `%${params.address}%`);
       if (params?.marketId) query = query.eq('marketId', params.marketId);
       
-      const { data, error } = await query;
+      const { data: stores, error } = await query;
       if (error) throw error;
 
-      if (data) {
-        let result = data.map((s: any) => ({
+      if (stores && stores.length > 0) {
+        // marketId 목록 추출
+        const marketIds = Array.from(new Set(stores.map((s: any) => s.marketId).filter((id: any) => id)));
+        
+        // 시장 정보 별도 조회
+        let marketMap: Record<number, string> = {};
+        if (marketIds.length > 0) {
+            const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+            if (markets) {
+                markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+            }
+        }
+
+        // 데이터 매핑
+        let result = stores.map((s: any) => ({
             ...s,
-            marketName: s.markets?.name || '-' // 조인된 시장 이름 매핑
+            marketName: marketMap[s.marketId] || '-' 
         }));
 
-        // marketName으로 필터링 (In-memory filtering because joining ilike is complex in basic query)
+        // marketName 필터링 (메모리상)
         if (params?.marketName) {
             result = result.filter((s: any) => s.marketName.includes(params.marketName));
         }
@@ -492,6 +507,7 @@ export const StoreAPI = {
       }
       return [];
     } catch (e) {
+      console.warn("Store Load Error:", e);
       return [];
     }
   }, 
