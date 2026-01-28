@@ -129,7 +129,7 @@ export const Dashboard: React.FC = () => {
             const allMarkets = await MarketAPI.getList();
             
             // 2. 대시보드 이벤트 데이터 로드 (화재, 고장, 통신)
-            const dashboardData = await DashboardAPI.getData();
+            const dashboardData: any = await DashboardAPI.getData();
             
             setFireData(dashboardData.fireEvents || []);
             setFaultData(dashboardData.faultEvents || []);
