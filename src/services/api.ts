@@ -3,8 +3,8 @@ import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater
 
 /**
  * [API 서비스 정책]
- * 1. 읽기(Read): Supabase 조회 실패 시에만 Mock 데이터 반환
- * 2. 쓰기(Write): 실제 DB 결과를 반환. 실패 시 에러 throw.
+ * 1. 읽기(Read): Supabase 조회 실패 시에만 Mock 데이터 반환 (Manual Join 방식 사용으로 안정성 확보)
+ * 2. 쓰기(Write): 실제 DB 결과를 반환. 상가 저장 시 기기 자동 동기화 로직 포함.
  */
 
 // --- 1. MOCK DATA (Fallback) ---
@@ -89,7 +89,8 @@ async function syncDistributorManagedMarkets(distributorId: number) {
     .eq('id', distributorId);
 }
 
-// 상가 저장 시 관련 기기(수신기, 중계기, 감지기) 자동 생성 및 연결 함수
+// [핵심] 상가 저장 시 관련 기기(수신기, 중계기, 감지기) 자동 생성 및 동기화 함수
+// 이 함수가 "시스템관리 > 기기관리"와 "현장기기관리"의 데이터를 일치시켜줍니다.
 async function syncDevicesFromStore(store: Store) {
   if (!store.marketId || !store.receiverMac) return;
 
@@ -130,7 +131,7 @@ async function syncDevicesFromStore(store: Store) {
         rpt = newRpt;
       }
 
-      // 3. 감지기 동기화 (없으면 생성)
+      // 3. 감지기 동기화 (없으면 생성, 있으면 모드 업데이트)
       if (store.detectorId) {
         let { data: det } = await supabase
           .from('detectors')
@@ -143,6 +144,7 @@ async function syncDevicesFromStore(store: Store) {
         let detectorId = det?.id;
 
         if (!detectorId) {
+          // 존재하지 않으면 신규 생성
           const { data: newDet } = await supabase.from('detectors').insert({
             marketId: store.marketId,
             receiverMac: store.receiverMac,
@@ -152,24 +154,24 @@ async function syncDevicesFromStore(store: Store) {
             status: '사용'
           }).select().single();
           detectorId = newDet?.id;
+        } else {
+          // 이미 존재하면, 상가에서 설정한 모드(열/연기 등)로 감지기 정보 업데이트
+          await supabase.from('detectors').update({
+            mode: store.mode || '복합'
+          }).eq('id', detectorId);
         }
 
-        // 4. 감지기-상가 연결 (detector_stores)
+        // 4. 감지기-상가 연결 (detector_stores) 갱신
+        // 상가가 다른 감지기로 변경되었을 수 있으므로, 기존 이 상가의 연결을 모두 끊고 새로 연결합니다.
         if (detectorId && store.id) {
-          // 이미 연결되어 있는지 확인 후 없으면 추가 (onConflict 무시를 위해 upsert 사용 안함)
-          const { data: link } = await supabase
-            .from('detector_stores')
-            .select('*')
-            .eq('detectorId', detectorId)
-            .eq('storeId', store.id)
-            .single();
+          // 기존 연결 삭제 (이 상가에 연결된 모든 감지기 링크 제거)
+          await supabase.from('detector_stores').delete().eq('storeId', store.id);
           
-          if (!link) {
-             await supabase.from('detector_stores').insert({
-               detectorId: detectorId,
-               storeId: store.id
-             });
-          }
+          // 새 연결 생성
+          await supabase.from('detector_stores').insert({
+             detectorId: detectorId,
+             storeId: store.id
+          });
         }
       }
     }
@@ -179,7 +181,7 @@ async function syncDevicesFromStore(store: Store) {
   }
 }
 
-// Generic Supabase Reader
+// Generic Supabase Reader (Manual Join 사용)
 async function supabaseReader<T>(
   table: string, 
   params?: Record<string, string>, 
@@ -206,8 +208,7 @@ async function supabaseReader<T>(
     // [DEBUG LOG]
     console.log(`[API] Reading ${table}:`, { 
         dataLength: data?.length || 0, 
-        error: error?.message, 
-        dataSample: data ? data.slice(0, 2) : 'null' 
+        error: error?.message
     });
 
     if (error) {
@@ -511,7 +512,10 @@ export const StoreAPI = {
   save: async (store: Store) => {
     const { marketName, ...dbData } = store;
     const savedStore = await supabaseSaver('stores', dbData as Store);
+    
+    // [중요] 상가 저장 후 관련 기기(수신기, 중계기, 감지기) 데이터 동기화
     await syncDevicesFromStore(savedStore);
+    
     return savedStore;
   }, 
   delete: async (id: number) => {
@@ -533,6 +537,7 @@ export const StoreAPI = {
     if (error) throw error;
 
     if (data) {
+        // 일괄 등록 시에도 각 상가별 기기 데이터 동기화 수행
         for (const store of data) {
             await syncDevicesFromStore(store as Store);
         }
@@ -562,17 +567,31 @@ export const CommonCodeAPI = {
 export const WorkLogAPI = { 
   getList: async (params?: { marketName?: string }) => {
     try {
-      let query = supabase.from('work_logs').select('*, markets(name)').order('workDate', { ascending: false });
+      // Manual Join: 1. Get Logs
+      let query = supabase.from('work_logs').select('*').order('workDate', { ascending: false });
       
-      const { data, error } = await query;
-      
-      console.log("[API] Reading work_logs:", { length: data?.length, error: error?.message });
+      const { data: logs, error } = await query;
+      console.log("[API] Reading work_logs:", { length: logs?.length, error: error?.message });
 
-      if (!error && data) {
-        let result = data.map((log: any) => ({
+      if (error) throw error;
+
+      if (logs && logs.length > 0) {
+        // Manual Join: 2. Get Markets
+        const marketIds = Array.from(new Set(logs.map((l: any) => l.marketId).filter((id: any) => id)));
+        let marketMap: Record<number, string> = {};
+        
+        if (marketIds.length > 0) {
+            const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+            if (markets) {
+                markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+            }
+        }
+
+        let result = logs.map((log: any) => ({
           ...log,
-          marketName: log.markets?.name || 'Unknown'
+          marketName: marketMap[log.marketId] || 'Unknown'
         }));
+
         if (params?.marketName) {
             result = result.filter((l: any) => l.marketName.includes(params.marketName));
         }
@@ -580,6 +599,7 @@ export const WorkLogAPI = {
       }
       return [];
     } catch(e) {
+      console.warn("WorkLog Load Error:", e);
       return [];
     }
   }, 
@@ -605,16 +625,34 @@ export const WorkLogAPI = {
 export const ReceiverAPI = { 
   getList: async (params?: { marketName?: string, macAddress?: string, ip?: string, emergencyPhone?: string }) => {
     try {
-      let query = supabase.from('receivers').select('*, markets(name)').order('id', { ascending: false });
+      // Manual Join: 1. Get Receivers
+      let query = supabase.from('receivers').select('*').order('id', { ascending: false });
       if (params?.macAddress) query = query.ilike('macAddress', `%${params.macAddress}%`);
       if (params?.ip) query = query.ilike('ip', `%${params.ip}%`);
       if (params?.emergencyPhone) query = query.ilike('emergencyPhone', `%${params.emergencyPhone}%`);
       
-      const { data, error } = await query;
-      console.log("[API] Reading receivers:", { length: data?.length, error: error?.message });
+      const { data: receivers, error } = await query;
+      console.log("[API] Reading receivers:", { length: receivers?.length, error: error?.message });
 
-      if (!error && data) {
-        let result = data.map((r: any) => ({ ...r, marketName: r.markets?.name }));
+      if (error) throw error;
+
+      if (receivers && receivers.length > 0) {
+        // Manual Join: 2. Get Markets
+        const marketIds = Array.from(new Set(receivers.map((r: any) => r.marketId).filter((id: any) => id)));
+        let marketMap: Record<number, string> = {};
+        
+        if (marketIds.length > 0) {
+            const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+            if (markets) {
+                markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+            }
+        }
+
+        let result = receivers.map((r: any) => ({
+            ...r,
+            marketName: marketMap[r.marketId] || '-'
+        }));
+
         if (params?.marketName) {
             result = result.filter(r => r.marketName?.includes(params.marketName));
         }
@@ -680,15 +718,32 @@ export const ReceiverAPI = {
 export const RepeaterAPI = { 
   getList: async (params?: any) => {
     try {
-      let query = supabase.from('repeaters').select('*, markets(name)').order('id', { ascending: false });
+      // Manual Join
+      let query = supabase.from('repeaters').select('*').order('id', { ascending: false });
       if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
       if (params?.repeaterId) query = query.eq('repeaterId', params.repeaterId);
       
-      const { data, error } = await query;
-      console.log("[API] Reading repeaters:", { length: data?.length, error: error?.message });
+      const { data: repeaters, error } = await query;
+      console.log("[API] Reading repeaters:", { length: repeaters?.length, error: error?.message });
 
-      if (!error && data) {
-        let result = data.map((r: any) => ({ ...r, marketName: r.markets?.name }));
+      if (error) throw error;
+
+      if (repeaters && repeaters.length > 0) {
+        const marketIds = Array.from(new Set(repeaters.map((r: any) => r.marketId).filter((id: any) => id)));
+        let marketMap: Record<number, string> = {};
+        
+        if (marketIds.length > 0) {
+            const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+            if (markets) {
+                markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+            }
+        }
+
+        let result = repeaters.map((r: any) => ({
+            ...r,
+            marketName: marketMap[r.marketId] || '-'
+        }));
+
         if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
         return result as Repeater[];
       }
@@ -754,7 +809,8 @@ export const RepeaterAPI = {
 export const DetectorAPI = { 
   getList: async (params?: any) => {
     try {
-      let query = supabase.from('detectors').select('*, markets(name)').order('id', { ascending: false });
+      // Manual Join
+      let query = supabase.from('detectors').select('*').order('id', { ascending: false });
       if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
       
       const { data: detectors, error } = await query;
@@ -762,19 +818,40 @@ export const DetectorAPI = {
 
       if (error || !detectors) return [];
 
+      // 1. Get Markets
+      const marketIds = Array.from(new Set(detectors.map((d: any) => d.marketId).filter((id: any) => id)));
+      let marketMap: Record<number, string> = {};
+      if (marketIds.length > 0) {
+          const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+          if (markets) {
+              markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+          }
+      }
+
+      // 2. Get Stores (Junction)
       const detectorIds = detectors.map(d => d.id);
-      const { data: junctions } = await supabase
-        .from('detector_stores')
-        .select('detectorId, storeId, stores(name)')
-        .in('detectorId', detectorIds);
+      
+      /* Manual Junction Join Logic */
+      // 2.1 Get Junctions
+      const { data: rawJunctions } = await supabase.from('detector_stores').select('*').in('detectorId', detectorIds);
+      
+      // 2.2 Get Store Names
+      let storeMap: Record<number, string> = {};
+      if (rawJunctions && rawJunctions.length > 0) {
+          const storeIds = Array.from(new Set(rawJunctions.map((j: any) => j.storeId)));
+          const { data: storeData } = await supabase.from('stores').select('id, name').in('id', storeIds);
+          if (storeData) {
+              storeData.forEach((s: any) => { storeMap[s.id] = s.name; });
+          }
+      }
 
       let result = detectors.map((d: any) => {
-        const myJunctions = junctions?.filter((j: any) => j.detectorId === d.id) || [];
-        const stores = myJunctions.map((j: any) => ({ id: j.storeId, name: j.stores?.name }));
+        const myJunctions = rawJunctions?.filter((j: any) => j.detectorId === d.id) || [];
+        const stores = myJunctions.map((j: any) => ({ id: j.storeId, name: storeMap[j.storeId] || 'Unknown' }));
         
         return {
             ...d,
-            marketName: d.markets?.name,
+            marketName: marketMap[d.marketId] || '-',
             stores: stores
         };
       });
@@ -860,11 +937,22 @@ export const DetectorAPI = {
 export const TransmitterAPI = { 
   getList: async (params?: any) => {
     try {
-        let query = supabase.from('transmitters').select('*, markets(name)').order('id', { ascending: false });
+        // Manual Join
+        let query = supabase.from('transmitters').select('*').order('id', { ascending: false });
         const { data, error } = await query;
         console.log("[API] Reading transmitters:", { length: data?.length, error: error?.message });
+        
         if (!error && data) {
-            let result = data.map((t: any) => ({ ...t, marketName: t.markets?.name }));
+            const marketIds = Array.from(new Set(data.map((t: any) => t.marketId).filter((id: any) => id)));
+            let marketMap: Record<number, string> = {};
+            if (marketIds.length > 0) {
+                const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+                if (markets) {
+                    markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+                }
+            }
+
+            let result = data.map((t: any) => ({ ...t, marketName: marketMap[t.marketId] || '-' }));
             if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
             return result as Transmitter[];
         }
@@ -883,11 +971,22 @@ export const TransmitterAPI = {
 export const AlarmAPI = { 
   getList: async (params?: any) => {
     try {
-        let query = supabase.from('alarms').select('*, markets(name)').order('id', { ascending: false });
+        // Manual Join
+        let query = supabase.from('alarms').select('*').order('id', { ascending: false });
         const { data, error } = await query;
         console.log("[API] Reading alarms:", { length: data?.length, error: error?.message });
+        
         if (!error && data) {
-            let result = data.map((a: any) => ({ ...a, marketName: a.markets?.name }));
+            const marketIds = Array.from(new Set(data.map((a: any) => a.marketId).filter((id: any) => id)));
+            let marketMap: Record<number, string> = {};
+            if (marketIds.length > 0) {
+                const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
+                if (markets) {
+                    markets.forEach((m: any) => { marketMap[m.id] = m.name; });
+                }
+            }
+
+            let result = data.map((a: any) => ({ ...a, marketName: marketMap[a.marketId] || '-' }));
             if (params?.marketName) result = result.filter(r => r.marketName?.includes(params.marketName));
             return result as Alarm[];
         }
