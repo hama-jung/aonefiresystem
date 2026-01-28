@@ -70,6 +70,96 @@ async function syncDistributorManagedMarkets(distributorId: number) {
     .eq('id', distributorId);
 }
 
+// 상가 저장 시 관련 기기(수신기, 중계기, 감지기) 자동 생성 및 연결 함수
+async function syncDevicesFromStore(store: Store) {
+  if (!store.marketId || !store.receiverMac) return;
+
+  try {
+    // 1. 수신기 동기화 (없으면 생성)
+    let { data: rcv } = await supabase
+      .from('receivers')
+      .select('id')
+      .eq('macAddress', store.receiverMac)
+      .eq('marketId', store.marketId)
+      .single();
+
+    if (!rcv) {
+      const { data: newRcv } = await supabase.from('receivers').insert({
+        marketId: store.marketId,
+        macAddress: store.receiverMac,
+        status: '사용'
+      }).select().single();
+      rcv = newRcv;
+    }
+
+    // 2. 중계기 동기화 (없으면 생성)
+    if (store.repeaterId) {
+      let { data: rpt } = await supabase
+        .from('repeaters')
+        .select('id')
+        .eq('receiverMac', store.receiverMac)
+        .eq('repeaterId', store.repeaterId)
+        .single();
+
+      if (!rpt) {
+        const { data: newRpt } = await supabase.from('repeaters').insert({
+          marketId: store.marketId,
+          receiverMac: store.receiverMac,
+          repeaterId: store.repeaterId,
+          status: '사용'
+        }).select().single();
+        rpt = newRpt;
+      }
+
+      // 3. 감지기 동기화 (없으면 생성)
+      if (store.detectorId) {
+        let { data: det } = await supabase
+          .from('detectors')
+          .select('id')
+          .eq('receiverMac', store.receiverMac)
+          .eq('repeaterId', store.repeaterId)
+          .eq('detectorId', store.detectorId)
+          .single();
+
+        let detectorId = det?.id;
+
+        if (!detectorId) {
+          const { data: newDet } = await supabase.from('detectors').insert({
+            marketId: store.marketId,
+            receiverMac: store.receiverMac,
+            repeaterId: store.repeaterId,
+            detectorId: store.detectorId,
+            mode: store.mode || '복합',
+            status: '사용'
+          }).select().single();
+          detectorId = newDet?.id;
+        }
+
+        // 4. 감지기-상가 연결 (detector_stores)
+        if (detectorId && store.id) {
+          // 이미 연결되어 있는지 확인 후 없으면 추가 (onConflict 무시를 위해 upsert 사용 안함)
+          const { data: link } = await supabase
+            .from('detector_stores')
+            .select('*')
+            .eq('detectorId', detectorId)
+            .eq('storeId', store.id)
+            .single();
+          
+          if (!link) {
+             await supabase.from('detector_stores').insert({
+               detectorId: detectorId,
+               storeId: store.id
+             });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("Device sync failed during store save:", e);
+    // 메인 로직(상가 저장)은 성공했으므로 여기서는 에러를 throw하지 않고 로그만 남김
+  }
+}
+
 // Generic Supabase Reader
 async function supabaseReader<T>(
   table: string, 
@@ -408,7 +498,12 @@ export const StoreAPI = {
   save: async (store: Store) => {
     // DB에 없는 필드 제거 (marketName)
     const { marketName, ...dbData } = store;
-    return supabaseSaver('stores', dbData as Store);
+    const savedStore = await supabaseSaver('stores', dbData as Store);
+    
+    // [NEW] 상가 저장 시 연결된 기기 정보가 있다면, 해당 기기 자동 생성 및 연결
+    await syncDevicesFromStore(savedStore);
+
+    return savedStore;
   }, 
   delete: async (id: number) => {
     return supabaseDeleter('stores', id);
@@ -425,8 +520,15 @@ export const StoreAPI = {
   }, 
   saveBulk: async (stores: Store[]) => {
     const storesToInsert = stores.map(({ id, marketName, ...rest }) => rest);
-    const { error } = await supabase.from('stores').insert(storesToInsert);
+    const { data, error } = await supabase.from('stores').insert(storesToInsert).select();
     if (error) throw error;
+
+    // [NEW] Bulk Insert된 상가들에 대해서도 기기 동기화 수행
+    if (data) {
+        for (const store of data) {
+            await syncDevicesFromStore(store as Store);
+        }
+    }
     return true;
   } 
 };
@@ -618,6 +720,21 @@ export const DetectorAPI = {
         const junctions = stores.map(s => ({ detectorId: savedId, storeId: s.id }));
         const { error } = await supabase.from('detector_stores').insert(junctions);
         if (error) throw new Error('상가 연결 저장 실패: ' + error.message);
+
+        // [NEW] 감지기 정보가 업데이트되면, 연결된 상가들의 기기 정보도 역으로 업데이트
+        // (receiverMac, repeaterId, detectorId, mode 동기화)
+        const storeIds = stores.map(s => s.id);
+        const { error: updateError } = await supabase
+            .from('stores')
+            .update({
+                receiverMac: saveData.receiverMac,
+                repeaterId: saveData.repeaterId,
+                detectorId: saveData.detectorId,
+                mode: saveData.mode
+            })
+            .in('id', storeIds);
+        
+        if (updateError) console.warn("Failed to sync store device info", updateError);
     }
     
     return savedDetector;
