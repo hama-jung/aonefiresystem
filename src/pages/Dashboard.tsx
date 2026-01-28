@@ -230,7 +230,7 @@ export const Dashboard: React.FC = () => {
     return () => resizeObserver.disconnect();
   }, [mapInstance]);
 
-  // 4. Map Markers Update (Status Linked & Filtered & Styled POI)
+  // 4. Map Markers Update (Smart Radar Style)
   useEffect(() => {
     if (mapInstance) {
         // 기존 마커(CustomOverlay) 및 인포윈도우 제거
@@ -262,26 +262,42 @@ export const Dashboard: React.FC = () => {
                 const isFire = market.status === 'Fire';
                 const isError = market.status === 'Error';
                 
-                // --- Custom POI Styling ---
-                const colorClass = isFire ? 'bg-red-600' : (isError ? 'bg-orange-500' : 'bg-emerald-500');
-                const ringClass = isFire ? 'bg-red-500' : (isError ? 'bg-orange-400' : 'bg-emerald-400');
+                // --- Smart Radar Target Styling ---
+                // Colors
+                const ringColor = isFire ? 'border-red-500' : (isError ? 'border-orange-400' : 'border-cyan-400');
+                const coreColor = isFire ? 'bg-red-600' : (isError ? 'bg-orange-500' : 'bg-cyan-500');
+                const glowColor = isFire ? 'shadow-red-500/50' : (isError ? 'shadow-orange-500/50' : 'shadow-cyan-500/50');
                 
-                // HTML Content for Custom Overlay
+                // Animation Speed: Fire is fast, Error is medium, Normal is slow
+                const spinDuration = isFire ? 'duration-1000' : (isError ? 'duration-[3000ms]' : 'duration-[8000ms]');
+                const pingAnimation = isFire ? 'animate-ping' : (isError ? 'animate-pulse' : '');
+
+                // HTML Content for Custom Overlay (Radar Style)
                 const content = document.createElement('div');
                 content.innerHTML = `
-                  <div class="relative flex items-center justify-center w-8 h-8 group cursor-pointer">
-                    <!-- Pulsing Ring (Always active for Fire/Error, Hover for Normal) -->
-                    <span class="absolute inline-flex h-full w-full rounded-full opacity-60 ${ringClass} ${isFire || isError ? 'animate-ping' : 'group-hover:animate-ping'}"></span>
+                  <div class="relative flex items-center justify-center w-12 h-12 group cursor-pointer">
+                    <!-- Outer Rotating Ring (Target Lock) -->
+                    <div class="absolute inset-0 border-2 border-dashed rounded-full ${ringColor} opacity-70 animate-spin ${spinDuration}"></div>
                     
-                    <!-- Core Dot with Glow -->
-                    <span class="relative inline-flex rounded-full h-4 w-4 ${colorClass} border-2 border-slate-900 shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10 transition-transform group-hover:scale-110"></span>
+                    <!-- Inner Pulsing Ring (Shockwave) -->
+                    <div class="absolute inset-2 border border-solid rounded-full ${ringColor} opacity-50 ${pingAnimation}"></div>
                     
-                    <!-- Smart Tooltip (Hover) -->
-                    <div class="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-slate-900/95 text-white text-xs px-2 py-1.5 rounded border border-slate-600 shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap pointer-events-none z-20 flex flex-col items-center">
-                      <span class="font-bold">${market.name}</span>
-                      ${isFire ? '<span class="text-[10px] text-red-400 font-bold mt-0.5">🔥 화재발생</span>' : ''}
-                      ${isError ? '<span class="text-[10px] text-orange-400 font-bold mt-0.5">⚠️ 장애발생</span>' : ''}
-                      <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-600"></div>
+                    <!-- Core Dot (The Target) -->
+                    <div class="relative w-3 h-3 rounded-full ${coreColor} shadow-[0_0_15px] ${glowColor} z-10 transition-transform group-hover:scale-125"></div>
+                    
+                    <!-- Glassmorphism Tooltip (Hover) -->
+                    <div class="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 
+                                bg-slate-900/80 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg 
+                                border border-slate-600/50 shadow-2xl opacity-0 group-hover:opacity-100 
+                                transition-all duration-300 translate-y-2 group-hover:translate-y-0
+                                whitespace-nowrap pointer-events-none z-50 flex flex-col items-center min-w-[120px]">
+                      <span class="font-bold text-[13px] tracking-wide">${market.name}</span>
+                      ${isFire ? '<span class="text-red-400 font-bold mt-1 animate-pulse">🚨 FIRE DETECTED</span>' : ''}
+                      ${isError ? '<span class="text-orange-400 font-bold mt-1">⚠️ SYSTEM FAULT</span>' : ''}
+                      ${!isFire && !isError ? '<span class="text-cyan-400 text-[10px] mt-1 font-mono">SYSTEM NORMAL</span>' : ''}
+                      
+                      <!-- Tooltip Arrow -->
+                      <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/80"></div>
                     </div>
                   </div>
                 `;

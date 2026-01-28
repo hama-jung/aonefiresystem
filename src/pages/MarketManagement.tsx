@@ -288,7 +288,6 @@ export const MarketManagement: React.FC = () => {
   // --- Handlers: Distributor Modal ---
   const fetchDistributors = async () => {
     const data = await DistributorAPI.getList({ name: distSearchName });
-    // [수정] '미사용' 상태인 총판 제외하고 '사용'인 것만 표시
     const activeDistributors = data.filter(d => d.status === '사용');
     setDistList(activeDistributors);
     setDistPage(1);
@@ -600,20 +599,20 @@ export const MarketManagement: React.FC = () => {
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
         <InputGroup 
           label="현장명" 
-          value={searchName}
-          onChange={(e) => setSearchName(e.target.value)}
+          value={searchName} 
+          onChange={(e) => setSearchName(e.target.value)} 
           placeholder="현장명 입력" 
         />
         <InputGroup 
           label="주소" 
-          value={searchAddress}
-          onChange={(e) => setSearchAddress(e.target.value)}
+          value={searchAddress} 
+          onChange={(e) => setSearchAddress(e.target.value)} 
           placeholder="주소 입력" 
         />
         <InputGroup 
           label="담당자" 
-          value={searchManager}
-          onChange={(e) => setSearchManager(e.target.value)}
+          value={searchManager} 
+          onChange={(e) => setSearchManager(e.target.value)} 
           placeholder="담당자 입력" 
         />
       </SearchFilterBar>
