@@ -302,7 +302,7 @@ export const FireHistoryManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="화재이력관리" />
+      <PageHeader title="화재 이력 관리" />
       
       {/* Disclaimer */}
       <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">

@@ -212,7 +212,7 @@ export const MenuManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="메뉴별 권한 관리" />
+      <PageHeader title="메뉴 관리" />
       <div className="mb-4 p-4 bg-blue-900/20 border border-blue-800 rounded-lg text-sm text-blue-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex flex-col gap-1.5">
           <div>

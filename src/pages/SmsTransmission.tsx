@@ -281,39 +281,34 @@ export const SmsTransmission: React.FC = () => {
     const historyFirstIdx = historyLastIdx - ITEMS_PER_PAGE;
     const currentHistory = filteredHistory.slice(historyFirstIdx, historyLastIdx);
 
+    const historyRightContent = (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
+           <button 
+              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
+              className="text-slate-400 hover:text-white"
+           >
+              ◀
+           </button>
+           <span className="text-lg font-bold text-slate-200 min-w-[140px] text-center">
+              {currentDate.getFullYear()}년 {String(currentDate.getMonth() + 1).padStart(2, '0')}월
+           </span>
+           <button 
+              onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
+              className="text-slate-400 hover:text-white"
+           >
+              ▶
+           </button>
+        </div>
+        <Button onClick={() => setView('compose')} variant="secondary" className="h-[46px]" icon={<ArrowLeft size={16} />}>
+           이전으로
+        </Button>
+      </div>
+    );
+
     return (
       <>
-        <div className="flex items-center justify-between mb-6 border-b border-slate-700 pb-4">
-          <div className="flex items-center gap-4">
-             <h1 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-                전송 목록 (결과)
-             </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-4 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
-               <button 
-                  onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}
-                  className="text-slate-400 hover:text-white"
-               >
-                  ◀
-               </button>
-               <span className="text-lg font-bold text-slate-200 min-w-[140px] text-center">
-                  {currentDate.getFullYear()}년 {String(currentDate.getMonth() + 1).padStart(2, '0')}월
-               </span>
-               <button 
-                  onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}
-                  className="text-slate-400 hover:text-white"
-               >
-                  ▶
-               </button>
-            </div>
-            <Button onClick={() => setView('compose')} variant="secondary" className="h-[46px]" icon={<ArrowLeft size={16} />}>
-               이전으로
-            </Button>
-          </div>
-        </div>
-
-        {/* 통계 바 삭제됨 */}
+        <PageHeader title="문자 전송" rightContent={historyRightContent} />
 
         <DataTable columns={historyColumns} data={currentHistory} />
         <Pagination 

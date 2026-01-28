@@ -187,7 +187,7 @@ export const DistributorManagement: React.FC = () => {
   if (view === 'form') {
     return (
       <>
-        <PageHeader title={selectedDistributor ? "총판 수정" : "총판 등록"} />
+        <PageHeader title="총판 관리" />
         <form onSubmit={handleSave}>
           <FormSection title={selectedDistributor ? "총판 수정" : "총판 등록"}>
               {/* 총판명 (Full Width) */}
@@ -205,9 +205,8 @@ export const DistributorManagement: React.FC = () => {
                      required
                      address={formData.address || ''}
                      addressDetail={formData.addressDetail || ''}
-                     onAddressChange={(val) => setFormData(prev => ({...prev, address: val}))}
-                     onDetailChange={(val) => setFormData(prev => ({...prev, addressDetail: val}))}
-                     onCoordinateChange={(lat, lng) => setFormData(prev => ({...prev, latitude: lat, longitude: lng}))}
+                     onAddressChange={(val) => setFormData({...formData, address: val})}
+                     onDetailChange={(val) => setFormData({...formData, addressDetail: val})}
                   />
               </div>
 
@@ -358,7 +357,7 @@ export const DistributorManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm text-slate-400">
            전체 <strong className="text-blue-400">{distributors.length}</strong> 건 
-           (페이지 {currentPage})
+           (페이지 {currentPage}/{totalPages || 1})
          </span>
          <ActionBar onRegister={handleRegister} onExcel={handleExcel} />
       </div>

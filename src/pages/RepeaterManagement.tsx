@@ -464,7 +464,7 @@ export const RepeaterManagement: React.FC = () => {
   if (view === 'excel') {
     return (
       <>
-        <PageHeader title="중계기 엑셀 신규 등록" />
+        <PageHeader title="중계기 관리" />
         <FormSection title="엑셀 일괄 등록">
             {/* 1. 소속 시장 선택 */}
             <FormRow label="소속 시장" required className="col-span-1 md:col-span-2">

@@ -194,7 +194,7 @@ export const CommonCodeManagement: React.FC = () => {
   if (view === 'excel') {
     return (
       <>
-        <PageHeader title="공통코드 엑셀 신규 등록" />
+        <PageHeader title="공통코드 관리" />
         <FormSection title="엑셀 일괄 등록">
             <FormRow label="엑셀 파일 선택" required className="col-span-1 md:col-span-2">
                 <div className="flex flex-col gap-2">

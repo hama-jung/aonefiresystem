@@ -277,32 +277,37 @@ export const StoreManagement: React.FC = () => {
 
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
 
-      // Map excel rows to Store objects
-      const parsedStores: Store[] = data.map((row: any, idx: number) => ({
-        id: 0, // new
-        marketId: excelMarket.id,
-        marketName: excelMarket.name,
-        name: row['상가명'] || `상가_${idx+1}`,
-        managerName: row['대표자명'] || '',
-        managerPhone: row['대표자연락처'] || '',
-        status: '사용',
-        receiverMac: row['수신기MAC'] ? String(row['수신기MAC']) : '',
-        repeaterId: row['중계기ID'] ? String(row['중계기ID']) : '',
-        detectorId: row['감지기번호'] ? String(row['감지기번호']) : '',
-        mode: row['모드'] || '복합',
-        handlingItems: row['취급품목'] || '',
-        address: row['주소'] || '',
-        addressDetail: row['상세주소'] || '',
-        memo: row['비고'] || '',
-      }));
+        // Map excel rows to Store objects
+        const parsedStores: Store[] = data.map((row: any, idx: number) => ({
+          id: 0, // new
+          marketId: excelMarket.id,
+          marketName: excelMarket.name,
+          name: row['상가명'] || `상가_${idx+1}`,
+          managerName: row['대표자명'] || row['대표자'] || '',
+          managerPhone: row['상가전화번호'] || row['대표자연락처'] || '',
+          status: '사용',
+          receiverMac: row['수신기MAC'] ? String(row['수신기MAC']) : '',
+          repeaterId: row['중계기ID'] ? String(row['중계기ID']) : '',
+          detectorId: row['감지기번호'] ? String(row['감지기번호']) : '',
+          mode: row['모드'] || '복합',
+          handlingItems: row['취급품목'] || '',
+          address: row['주소(도로명)'] || row['주소'] || '',
+          addressDetail: row['상세주소'] || '',
+          memo: row['비고'] || '',
+        }));
 
-      setExcelData(parsedStores);
+        setExcelData(parsedStores);
+      } catch (e) {
+        console.error(e);
+        alert("엑셀 파일 처리 중 오류가 발생했습니다. 파일 형식을 확인해주세요.");
+      }
     };
     reader.readAsBinaryString(file);
   };
@@ -331,16 +336,18 @@ export const StoreManagement: React.FC = () => {
       // 엑셀 샘플 데이터를 동적으로 생성
       const sampleData = [
         {
-          '상가명': '샘플상가',
-          '대표자명': '홍길동',
-          '대표자연락처': '010-1234-5678',
+          '구분': '1',
           '수신기MAC': '1A2B',
           '중계기ID': '01',
           '감지기번호': '01',
           '모드': '복합',
-          '취급품목': '의류, 잡화',
-          '주소': '서울시 강남구 테헤란로 123',
+          '상가명': '샘플상가',
+          '상가전화번호': '02-1234-5678',
+          '대표자': '홍길동',
+          '대표자연락처': '010-1234-5678',
+          '주소(도로명)': '서울시 강남구 테헤란로 123',
           '상세주소': '1층 101호',
+          '취급품목': '의류',
           '비고': '비고 내용'
         }
       ];
@@ -563,6 +570,149 @@ export const StoreManagement: React.FC = () => {
         </form>
 
         {/* Market Modal */}
+        <Modal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} title="시장 찾기" width="max-w-3xl">
+           <SearchFilterBar onSearch={fetchMarkets}>
+              <InputGroup label="시장명" value={marketSearchName} onChange={(e) => setMarketSearchName(e.target.value)} placeholder="시장명 검색" />
+           </SearchFilterBar>
+           <DataTable columns={marketColumns} data={modalCurrentMarkets} />
+           <Pagination totalItems={marketList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={marketModalPage} onPageChange={setMarketModalPage} />
+        </Modal>
+      </>
+    );
+  }
+
+  // --- VIEW: EXCEL ---
+  if (view === 'excel') {
+    return (
+      <>
+        <PageHeader title="기기 관리" />
+        
+        {/* Form Section */}
+        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-sm mb-5 w-full">
+            <h3 className="text-lg font-bold text-slate-200 mb-5 border-b border-slate-700 pb-2 flex items-center gap-2">
+                <span className="w-1 h-5 bg-blue-500 rounded-sm"></span>
+                엑셀 파일 업로드
+            </h3>
+            
+            <div className="flex flex-col gap-6">
+                {/* 1. 시장 선택 */}
+                <div className="flex flex-col gap-1.5 w-full">
+                    <label className={UI_STYLES.label}>시장</label>
+                    <div className="flex gap-2 w-full max-w-4xl">
+                        <div onClick={openMarketModal} className="flex-1 relative cursor-pointer">
+                            <input 
+                                type="text"
+                                value={excelMarket?.name || ''} 
+                                placeholder="시장을 선택하세요" 
+                                readOnly 
+                                className={`${UI_STYLES.input} cursor-pointer hover:bg-slate-700/50 pr-8`}
+                            />
+                            <Search className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
+                        </div>
+                        <Button type="button" variant="primary" onClick={openMarketModal} className="w-24">찾기</Button>
+                    </div>
+                </div>
+
+                {/* 2. 엑셀 파일 선택 & 샘플 다운로드 */}
+                <div className="flex flex-col gap-1.5 w-full">
+                    <label className={UI_STYLES.label}>엑셀</label>
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                        <div className="flex items-center gap-2">
+                            <label className="cursor-pointer">
+                                <span className={`${UI_STYLES.secondary} inline-flex items-center px-4 py-2 rounded-md text-sm`}>
+                                    파일 선택
+                                </span>
+                                <input 
+                                    type="file" 
+                                    accept=".xlsx, .xls"
+                                    onChange={handleExcelFileChange}
+                                    className="hidden"
+                                />
+                            </label>
+                            <span className="text-slate-400 text-sm">
+                                {excelData.length > 0 ? `파일 로드됨 (${excelData.length}건)` : '선택된 파일 없음'}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button type="button" variant="primary" onClick={handleSampleDownload} className="bg-blue-500 hover:bg-blue-400 text-xs px-3">
+                                엑셀샘플다운로드
+                            </Button>
+                            <Button type="button" variant="primary" onClick={handleExcelRegister} className="bg-blue-500 hover:bg-blue-400 text-xs px-3" disabled>
+                                엑셀업로드
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Preview Table */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-sm overflow-hidden mb-6">
+            <div className="p-3 bg-slate-900 border-b border-slate-700">
+                <h3 className="text-sm font-bold text-slate-300">전체 {excelData.length} 개</h3>
+            </div>
+            
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-700 text-xs">
+                    <thead className="bg-blue-900/20">
+                        <tr>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">구분</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">수신기MAC</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">중계기ID</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">감지기번호</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">모드</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">상가명</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">상가전화번호</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">대표자</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">대표자연락처</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">주소(도로명)</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">상세주소</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold border-r border-slate-700">취급품목</th>
+                            <th className="px-3 py-2 text-center text-blue-200 font-semibold">비고</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700 bg-slate-800">
+                        {excelData.length > 0 ? (
+                            excelData.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-slate-700/50">
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{idx + 1}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.receiverMac}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.repeaterId}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.detectorId}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.mode}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.name}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">-</td> {/* 상가전화번호 필드 없음 */}
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.managerName}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.managerPhone}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50 max-w-[150px] truncate" title={row.address}>{row.address}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50 max-w-[100px] truncate" title={row.addressDetail}>{row.addressDetail}</td>
+                                    <td className="px-2 py-2 text-center border-r border-slate-700/50">{row.handlingItems}</td>
+                                    <td className="px-2 py-2 text-center max-w-[100px] truncate" title={row.memo}>{row.memo}</td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={13} className="px-6 py-20 text-center text-slate-500">
+                                    데이터가 없습니다.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {/* Bottom Buttons */}
+        <div className="flex justify-center gap-3 mt-8 pb-10">
+            <Button type="button" variant="primary" onClick={handleExcelSave} className="w-32 bg-blue-500 hover:bg-blue-400" disabled={excelData.length === 0}>
+                신규등록
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32 bg-slate-300 hover:bg-slate-200 text-slate-800 border-slate-300">
+                취소
+            </Button>
+        </div>
+
+        {/* Market Search Modal */}
         <Modal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} title="시장 찾기" width="max-w-3xl">
            <SearchFilterBar onSearch={fetchMarkets}>
               <InputGroup label="시장명" value={marketSearchName} onChange={(e) => setMarketSearchName(e.target.value)} placeholder="시장명 검색" />

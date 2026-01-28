@@ -339,9 +339,9 @@ export const MarketManagement: React.FC = () => {
   if (view === 'form') {
     return (
       <>
-        <PageHeader title={selectedMarket ? "현장 수정" : "현장 등록"} />
+        <PageHeader title="현장 관리" />
         <form onSubmit={handleSave}>
-          <FormSection title="시장 기본 정보">
+          <FormSection title={selectedMarket ? "현장 수정" : "현장 등록"}>
               {/* 1. 총판 & 시장명 */}
               <FormRow label="총판" className="col-span-1">
                  <div className="flex gap-2 w-full">
