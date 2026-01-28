@@ -30,8 +30,11 @@ export const usePageTitle = (defaultTitle: string) => {
 const menuItems: MenuItem[] = [
   { 
     label: '대시보드', 
-    path: '/dashboard', 
-    icon: <Home size={16} /> 
+    icon: <Home size={16} />,
+    children: [
+      { label: '대시보드1', path: '/dashboard' },
+      { label: '대시보드2', path: '/dashboard2' },
+    ]
   },
   { 
     label: '시스템 관리', 
