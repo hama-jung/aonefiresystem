@@ -39,6 +39,25 @@ const MOCK_DISTRIBUTORS: Distributor[] = [
   }
 ];
 
+const MOCK_DASHBOARD = {
+  stats: [
+    { label: '최근 화재 발생', value: 2, type: 'fire', color: 'bg-red-500' },
+    { label: '최근 고장 발생', value: 5, type: 'fault', color: 'bg-orange-500' },
+    { label: '통신 이상', value: 1, type: 'error', color: 'bg-gray-500' },
+  ],
+  fireEvents: [
+    { id: 1, msg: '인천광역시 부평구 진라도김치 화재 감지', time: '2024-05-25 12:39:15', marketName: '부평자유시장' },
+    { id: 2, msg: '대전광역시 서구 약초마을 화재 감지 알림', time: '2024-06-25 08:59:15', marketName: '대전중앙시장' },
+  ],
+  faultEvents: [
+    { id: 1, msg: '중계기 02 감지기 01 감지기 통신이상', time: '2024-06-25 10:06:53', marketName: '부평자유시장' },
+    { id: 2, msg: '중계기 15 감지기 11 감지기 통신이상', time: '2024-06-25 08:01:51', marketName: '대전중앙시장' },
+  ],
+  commEvents: [
+    { id: 1, market: '부평자유시장', address: '인천 부평구', receiver: 'R-01' }
+  ]
+};
+
 // --- 2. Helper Utilities ---
 
 // 파일명 안전 변환 함수
@@ -317,7 +336,6 @@ export const CommonAPI = {
 export const MarketAPI = {
   getList: async (params?: { name?: string, address?: string, managerName?: string }) => {
     try {
-      // 1. 시장 목록 조회 (조인 없이 기본 조회)
       let query = supabase.from('markets').select('*').order('id', { ascending: false });
       
       if (params?.name) query = query.ilike('name', `%${params.name}%`);
@@ -328,15 +346,12 @@ export const MarketAPI = {
       
       if (error) {
          console.warn(`Supabase read error on markets:`, error.message);
-         // Fallback to MOCK_MARKETS on error
          return MOCK_MARKETS.map(m => ({...m, distributorName: '미창'}));
       }
       
       if (markets && markets.length > 0) {
-        // 2. 총판 ID 수집
         const distIds = Array.from(new Set(markets.map(m => m.distributorId).filter(id => id != null)));
         
-        // 3. 총판 정보 조회 (수동 매핑)
         let distMap: Record<number, string> = {};
         if (distIds.length > 0) {
             const { data: dists } = await supabase.from('distributors').select('id, name').in('id', distIds);
@@ -345,7 +360,6 @@ export const MarketAPI = {
             }
         }
 
-        // 4. 데이터 매핑 반환
         return markets.map((m: any) => ({
           ...m,
           distributorName: m.distributorId ? (distMap[m.distributorId] || '-') : '-'
@@ -357,18 +371,15 @@ export const MarketAPI = {
     }
   },
   save: async (market: Market) => {
-    // 1. 기존 데이터 조회 (변경 전 distributorId 확인용)
     let oldDistributorId = null;
     if (market.id) {
         const { data } = await supabase.from('markets').select('distributorId').eq('id', market.id).single();
         oldDistributorId = data?.distributorId;
     }
 
-    // 2. 시장 데이터 저장 (distributorName은 DB컬럼이 아니므로 제외)
     const { distributorName, ...dbData } = market;
     const savedMarket = await supabaseSaver('markets', dbData as Market);
 
-    // 3. 총판-시장 동기화 (distributorId가 변경되었을 수 있으므로)
     if (savedMarket.distributorId) {
         await syncDistributorManagedMarkets(savedMarket.distributorId);
     }
@@ -376,7 +387,6 @@ export const MarketAPI = {
         await syncDistributorManagedMarkets(oldDistributorId);
     }
 
-    // [추가 기능] 시장 사용여부(usageStatus)가 '미사용'으로 변경되면, 해당 시장의 모든 상가(stores)도 '미사용'으로 변경
     if (savedMarket.usageStatus === '미사용' && savedMarket.id) {
         await supabase
             .from('stores')
@@ -387,13 +397,8 @@ export const MarketAPI = {
     return { ...savedMarket, distributorName };
   },
   delete: async (id: number) => {
-    // 삭제 전 해당 시장의 총판 ID 확인
     const { data: market } = await supabase.from('markets').select('distributorId').eq('id', id).single();
-    
-    // 삭제 수행
     const result = await supabaseDeleter('markets', id);
-
-    // 해당 총판의 관리 시장 목록 동기화
     if (market?.distributorId) {
         await syncDistributorManagedMarkets(market.distributorId);
     }
@@ -419,30 +424,22 @@ export const DistributorAPI = {
     return supabaseReader<Distributor>('distributors', params as any, ['address', 'name', 'managerName'], MOCK_DISTRIBUTORS);
   },
   save: async (dist: Distributor) => {
-    // 1. 총판 데이터 저장
     const savedDist = await supabaseSaver('distributors', dist);
     const distId = savedDist.id;
 
-    // 2. 관리 시장 목록(managedMarkets) 동기화 (Foreign Key 업데이트)
-    // 리스트에 있는 시장 이름들은 이 총판 ID로 업데이트
     if (dist.managedMarkets && dist.managedMarkets.length > 0) {
         await supabase
             .from('markets')
             .update({ distributorId: distId })
-            .in('name', dist.managedMarkets); // 이름 기준 매칭 (주의: 이름 중복 시 다수 업데이트될 수 있음)
+            .in('name', dist.managedMarkets);
     }
 
-    // 이 총판에 속해있었으나 리스트에서 제외된 시장들은 NULL 처리
-    // (현재 DB상 이 총판 ID를 가지고 있으나, 새 리스트에는 없는 시장들)
     if (dist.managedMarkets) {
-        // A. 현재 이 총판의 ID를 가진 모든 시장 조회
         const { data: currentLinked } = await supabase.from('markets').select('id, name').eq('distributorId', distId);
-        
         if (currentLinked) {
             const marketsToUnlink = currentLinked
                 .filter(m => !dist.managedMarkets.includes(m.name))
                 .map(m => m.id);
-            
             if (marketsToUnlink.length > 0) {
                 await supabase
                     .from('markets')
@@ -452,15 +449,11 @@ export const DistributorAPI = {
         }
     }
 
-    // 3. 최종적으로 DB 상태 기준으로 managedMarkets 배열 재정렬 (Source of Truth 보장)
     await syncDistributorManagedMarkets(distId);
-
     return savedDist;
   },
   delete: async (id: number) => {
-    // 총판 삭제 시 연결된 시장들의 distributorId를 NULL로 변경
     await supabase.from('markets').update({ distributorId: null }).eq('distributorId', id);
-    
     return supabaseDeleter('distributors', id);
   }
 };
@@ -468,9 +461,6 @@ export const DistributorAPI = {
 export const StoreAPI = { 
   getList: async (params?: { address?: string, marketName?: string, storeName?: string, marketId?: number }) => {
     try {
-      // [수정] 조인 방식 변경: select('*, markets(name)') 대신 수동 매핑
-      // 이는 Supabase Client가 relationship을 찾지 못해 발생하는 "Could not find the 'markets' column" 에러를 방지합니다.
-      
       let query = supabase.from('stores').select('*').order('id', { ascending: false });
       
       if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
@@ -481,10 +471,7 @@ export const StoreAPI = {
       if (error) throw error;
 
       if (stores && stores.length > 0) {
-        // marketId 목록 추출
         const marketIds = Array.from(new Set(stores.map((s: any) => s.marketId).filter((id: any) => id)));
-        
-        // 시장 정보 별도 조회
         let marketMap: Record<number, string> = {};
         if (marketIds.length > 0) {
             const { data: markets } = await supabase.from('markets').select('id, name').in('id', marketIds);
@@ -493,13 +480,11 @@ export const StoreAPI = {
             }
         }
 
-        // 데이터 매핑
         let result = stores.map((s: any) => ({
             ...s,
             marketName: marketMap[s.marketId] || '-' 
         }));
 
-        // marketName 필터링 (메모리상)
         if (params?.marketName) {
             result = result.filter((s: any) => s.marketName.includes(params.marketName));
         }
@@ -512,13 +497,9 @@ export const StoreAPI = {
     }
   }, 
   save: async (store: Store) => {
-    // DB에 없는 필드 제거 (marketName)
     const { marketName, ...dbData } = store;
     const savedStore = await supabaseSaver('stores', dbData as Store);
-    
-    // [NEW] 상가 저장 시 연결된 기기 정보가 있다면, 해당 기기 자동 생성 및 연결
     await syncDevicesFromStore(savedStore);
-
     return savedStore;
   }, 
   delete: async (id: number) => {
@@ -539,7 +520,6 @@ export const StoreAPI = {
     const { data, error } = await supabase.from('stores').insert(storesToInsert).select();
     if (error) throw error;
 
-    // [NEW] Bulk Insert된 상가들에 대해서도 기기 동기화 수행
     if (data) {
         for (const store of data) {
             await syncDevicesFromStore(store as Store);
@@ -549,7 +529,6 @@ export const StoreAPI = {
   } 
 };
 
-// ... (Rest of existing code remains the same)
 export const CommonCodeAPI = { 
   getList: async (params?: { groupName?: string, name?: string }) => {
     return supabaseReader<CommonCode>('common_codes', params as any, ['groupName', 'name', 'code']);
@@ -629,6 +608,17 @@ export const ReceiverAPI = {
     } catch(e) { return []; }
   }, 
   save: async (receiver: Receiver) => {
+    const { data: existing } = await supabase
+        .from('receivers')
+        .select('id')
+        .eq('macAddress', receiver.macAddress)
+        .neq('id', receiver.id)
+        .single();
+    
+    if (existing) {
+        throw new Error('이미 등록된 기기입니다. (MAC 중복)');
+    }
+
     const { marketName, ...saveData } = receiver;
     return supabaseSaver('receivers', saveData as Receiver);
   }, 
@@ -646,6 +636,24 @@ export const ReceiverAPI = {
     return '';
   }, 
   saveBulk: async (data: Receiver[]) => {
+    const macs = data.map(r => r.macAddress);
+    const duplicateInExcel = macs.filter((item, index) => macs.indexOf(item) !== index);
+    if (duplicateInExcel.length > 0) {
+        throw new Error(`엑셀 파일 내에 중복된 MAC 주소가 있습니다: ${duplicateInExcel.join(', ')}`);
+    }
+
+    if (macs.length > 0) {
+        const { data: existing } = await supabase
+            .from('receivers')
+            .select('macAddress')
+            .in('macAddress', macs);
+        
+        if (existing && existing.length > 0) {
+            const duplicates = existing.map(r => r.macAddress).join(', ');
+            throw new Error(`이미 등록된 기기가 포함되어 있습니다: ${duplicates}`);
+        }
+    }
+
     const insertData = data.map(({ id, marketName, ...rest }) => rest);
     const { error } = await supabase.from('receivers').insert(insertData);
     if (error) throw error;
@@ -670,6 +678,18 @@ export const RepeaterAPI = {
     } catch(e) { return []; }
   }, 
   save: async (repeater: Repeater) => {
+    const { data: existing } = await supabase
+        .from('repeaters')
+        .select('id')
+        .eq('receiverMac', repeater.receiverMac)
+        .eq('repeaterId', repeater.repeaterId)
+        .neq('id', repeater.id)
+        .single();
+
+    if (existing) {
+        throw new Error('이미 등록된 기기입니다. (중계기ID 중복)');
+    }
+
     const { marketName, ...saveData } = repeater;
     return supabaseSaver('repeaters', saveData as Repeater);
   }, 
@@ -687,6 +707,25 @@ export const RepeaterAPI = {
     return '';
   }, 
   saveBulk: async (data: Repeater[]) => {
+    const keys = data.map(r => `${r.receiverMac}_${r.repeaterId}`);
+    const duplicateInExcel = keys.filter((item, index) => keys.indexOf(item) !== index);
+    if (duplicateInExcel.length > 0) {
+        throw new Error(`엑셀 파일 내에 중복된 중계기가 있습니다.`);
+    }
+
+    for (const item of data) {
+        const { data: existing } = await supabase
+            .from('repeaters')
+            .select('id')
+            .eq('receiverMac', item.receiverMac)
+            .eq('repeaterId', item.repeaterId)
+            .single();
+        
+        if (existing) {
+            throw new Error(`이미 등록된 기기가 포함되어 있습니다 (MAC: ${item.receiverMac}, ID: ${item.repeaterId})`);
+        }
+    }
+
     const insertData = data.map(({ id, marketName, ...rest }) => rest);
     const { error } = await supabase.from('repeaters').insert(insertData);
     if (error) throw error;
@@ -725,6 +764,19 @@ export const DetectorAPI = {
     } catch(e) { return []; }
   }, 
   save: async (detector: Detector) => {
+    const { data: existing } = await supabase
+        .from('detectors')
+        .select('id')
+        .eq('receiverMac', detector.receiverMac)
+        .eq('repeaterId', detector.repeaterId)
+        .eq('detectorId', detector.detectorId)
+        .neq('id', detector.id)
+        .single();
+
+    if (existing) {
+        throw new Error('이미 등록된 기기입니다. (감지기ID 중복)');
+    }
+
     const { marketName, stores, ...saveData } = detector;
     
     const savedDetector = await supabaseSaver('detectors', saveData as Detector);
@@ -737,8 +789,6 @@ export const DetectorAPI = {
         const { error } = await supabase.from('detector_stores').insert(junctions);
         if (error) throw new Error('상가 연결 저장 실패: ' + error.message);
 
-        // [NEW] 감지기 정보가 업데이트되면, 연결된 상가들의 기기 정보도 역으로 업데이트
-        // (receiverMac, repeaterId, detectorId, mode 동기화)
         const storeIds = stores.map(s => s.id);
         const { error: updateError } = await supabase
             .from('stores')
@@ -759,9 +809,30 @@ export const DetectorAPI = {
     return supabaseDeleter('detectors', id);
   }, 
   saveBulk: async (data: Detector[]) => {
+    const keys = data.map(d => `${d.receiverMac}_${d.repeaterId}_${d.detectorId}`);
+    const duplicateInExcel = keys.filter((item, index) => keys.indexOf(item) !== index);
+    if (duplicateInExcel.length > 0) {
+        throw new Error(`엑셀 파일 내에 중복된 감지기가 있습니다.`);
+    }
+
+    for (const item of data) {
+        const { data: existing } = await supabase
+            .from('detectors')
+            .select('id')
+            .eq('receiverMac', item.receiverMac)
+            .eq('repeaterId', item.repeaterId)
+            .eq('detectorId', item.detectorId)
+            .single();
+        
+        if (existing) {
+            throw new Error(`이미 등록된 기기가 포함되어 있습니다 (MAC: ${item.receiverMac}, RPT: ${item.repeaterId}, DET: ${item.detectorId})`);
+        }
+    }
+
     const insertData = data.map(({ id, marketName, stores, ...rest }) => rest);
     const { error } = await supabase.from('detectors').insert(insertData);
     if (error) throw error;
+    
     return true;
   } 
 };
@@ -810,93 +881,24 @@ export const AlarmAPI = {
   } 
 };
 
-// --- Log & Data APIs ---
+// --- New APIs ---
 
-export const FireHistoryAPI = { 
-  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
-    let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
-    
-    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
-    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
-    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
-    if (params?.status && params.status !== 'all') {
-        if (params.status === 'fire') query = query.eq('falseAlarmStatus', '화재');
-        else if (params.status === 'false') query = query.eq('falseAlarmStatus', '오탐');
-    }
-
-    const { data, error } = await query;
-    if (error) {
-        console.warn(error);
-        return [];
-    }
-    return data as FireHistoryItem[];
-  }, 
-  save: async (id: number, type: string, note: string) => {
-    const { error } = await supabase.from('fire_history').update({ falseAlarmStatus: type, note }).eq('id', id);
-    if (error) throw new Error(error.message);
-    return true;
-  }, 
-  delete: async (id: number) => {
-    return supabaseDeleter('fire_history', id);
-  } 
+export const DashboardAPI = {
+  getData: async () => {
+    // In a real app, this would aggregate data from fire_logs, device_status, etc.
+    // For now, returning Mock data as per previous implementation pattern for Dashboard
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(MOCK_DASHBOARD), 500);
+    });
+  }
 };
 
-export const DeviceStatusAPI = { 
-  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
-    let query = supabase.from('device_status').select('*').order('registeredAt', { ascending: false });
-    
-    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
-    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
-    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
-    if (params?.status && params.status !== 'all') {
-        if (params.status === 'processed') query = query.eq('processStatus', '처리');
-        else if (params.status === 'unprocessed') query = query.eq('processStatus', '미처리');
-    }
-
-    const { data } = await query;
-    return (data || []) as DeviceStatusItem[];
-  }, 
-  save: async (id: number, status: string, note: string) => {
-    const { error } = await supabase.from('device_status').update({ processStatus: status, note }).eq('id', id);
-    if (error) throw new Error(error.message);
-    return true;
-  }, 
-  delete: async (id: number) => {
-    return supabaseDeleter('device_status', id);
-  } 
-};
-
-export const DataReceptionAPI = { 
-  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string }) => {
-    let query = supabase.from('data_reception').select('*').order('registeredAt', { ascending: false });
-    
-    if (params?.startDate) query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
-    if (params?.endDate) query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
-    if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
-
-    const { data } = await query;
-    return (data || []) as DataReceptionItem[];
-  }, 
-  delete: async (id: number) => {
-    return supabaseDeleter('data_reception', id);
-  } 
-};
-
-export const MenuAPI = { 
+export const MenuAPI = {
   getAll: async () => {
-    const { data, error } = await supabase
-      .from('menus')
-      .select('*')
-      .order('sortOrder', { ascending: true });
-    
-    if (error || !data || data.length === 0) {
-      return []; // Return empty if error or no data
-    }
-    return data as MenuItemDB[];
+    return supabaseReader<MenuItemDB>('menus', undefined, undefined, []);
   },
-  
   getTree: async () => {
-    const list = await MenuAPI.getAll();
+    const list = await supabaseReader<MenuItemDB>('menus', undefined, undefined, []);
     const buildTree = (items: MenuItemDB[], parentId: number | null = null): MenuItemDB[] => {
       return items
         .filter(item => (item.parentId || null) === parentId)
@@ -908,78 +910,104 @@ export const MenuAPI = {
     };
     return buildTree(list);
   },
-
-  updateVisibilities: async (updates: any) => {
+  save: async (menu: MenuItemDB) => {
+    const { children, ...data } = menu; // Exclude children from save
+    return supabaseSaver('menus', data as any);
+  },
+  delete: async (id: number) => {
+    return supabaseDeleter('menus', id);
+  },
+  updateVisibilities: async (updates: Partial<MenuItemDB>[]) => {
+    // Supabase upsert for bulk update
     const { error } = await supabase.from('menus').upsert(updates);
     if (error) throw new Error(error.message);
     return true;
-  }, 
-  save: async (m: MenuItemDB) => {
-    return supabaseSaver('menus', m);
-  }, 
-  delete: async (id: number) => {
-    return supabaseDeleter('menus', id);
-  } 
+  }
 };
 
-export const DashboardAPI = { 
-    getData: async () => {
-        try {
-            const { data: fireLogs, count: fireCount } = await supabase
-                .from('fire_history')
-                .select('*', { count: 'exact' })
-                .eq('falseAlarmStatus', '등록')
-                .order('registeredAt', { ascending: false })
-                .limit(20);
+export const FireHistoryAPI = {
+  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
+    try {
+      let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
+      
+      if (params?.startDate) query = query.gte('registeredAt', params.startDate);
+      // Add 1 day to endDate to include the full end date or use logic to cover the day
+      if (params?.endDate) query = query.lte('registeredAt', params.endDate + ' 23:59:59');
+      
+      if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+      
+      if (params?.status && params.status !== 'all') {
+          if (params.status === 'fire') query = query.eq('falseAlarmStatus', '화재');
+          else if (params.status === 'false') query = query.eq('falseAlarmStatus', '오탐');
+      }
 
-            const { data: faultLogs, count: faultCount } = await supabase
-                .from('device_status')
-                .select('*', { count: 'exact' })
-                .eq('deviceStatus', '에러')
-                .neq('errorCode', '04')
-                .order('registeredAt', { ascending: false })
-                .limit(20);
+      const { data, error } = await query;
+      if (error) return []; // or mock
+      return data as FireHistoryItem[];
+    } catch (e) { return []; }
+  },
+  save: async (id: number, status: string, note: string) => {
+    const { error } = await supabase
+        .from('fire_history')
+        .update({ falseAlarmStatus: status, note: note })
+        .eq('id', id);
+    if (error) throw new Error(error.message);
+    return true;
+  },
+  delete: async (id: number) => {
+    return supabaseDeleter('fire_history', id);
+  }
+};
 
-            const { data: commLogs, count: commCount } = await supabase
-                .from('device_status')
-                .select('*', { count: 'exact' })
-                .eq('errorCode', '04')
-                .order('registeredAt', { ascending: false })
-                .limit(20);
+export const DeviceStatusAPI = {
+  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string, status?: string }) => {
+    try {
+      let query = supabase.from('device_status').select('*').order('registeredAt', { ascending: false });
+      
+      if (params?.startDate) query = query.gte('registeredAt', params.startDate);
+      if (params?.endDate) query = query.lte('registeredAt', params.endDate + ' 23:59:59');
+      
+      if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+      
+      if (params?.status && params.status !== 'all') {
+          if (params.status === 'processed') query = query.eq('processStatus', '처리');
+          else if (params.status === 'unprocessed') query = query.eq('processStatus', '미처리');
+      }
 
-            return {
-                stats: [
-                    { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-600' },
-                    { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
-                    { label: '통신 이상', value: commCount || 0, type: 'error', color: 'bg-slate-600' },
-                ],
-                fireEvents: (fireLogs || []).map((l: any) => ({
-                    id: l.id,
-                    msg: `${l.marketName} - ${l.detectorInfoChamber || '화재감지'}`,
-                    time: l.registeredAt,
-                    marketName: l.marketName,
-                    type: 'fire'
-                })),
-                faultEvents: (faultLogs || []).map((l: any) => ({
-                    id: l.id,
-                    msg: `${l.marketName} ${l.deviceType} ${l.deviceId} 에러`,
-                    time: l.registeredAt,
-                    marketName: l.marketName,
-                    type: 'fault'
-                })),
-                commEvents: (commLogs || []).map((l: any) => ({
-                    id: l.id,
-                    market: l.marketName,
-                    address: `${l.deviceType} ${l.deviceId}`,
-                    receiver: l.receiverMac,
-                    time: l.registeredAt
-                })),
-            };
-        } catch (e) {
-            console.error("Dashboard Load Error:", e);
-            return {
-                stats: [], fireEvents: [], faultEvents: [], commEvents: []
-            };
-        }
-    } 
+      const { data, error } = await query;
+      if (error) return [];
+      return data as DeviceStatusItem[];
+    } catch (e) { return []; }
+  },
+  save: async (id: number, status: string, note: string) => {
+    const { error } = await supabase
+        .from('device_status')
+        .update({ processStatus: status, note: note })
+        .eq('id', id);
+    if (error) throw new Error(error.message);
+    return true;
+  },
+  delete: async (id: number) => {
+    return supabaseDeleter('device_status', id);
+  }
+};
+
+export const DataReceptionAPI = {
+  getList: async (params?: { startDate?: string, endDate?: string, marketName?: string }) => {
+    try {
+      let query = supabase.from('data_reception_logs').select('*').order('registeredAt', { ascending: false });
+      
+      if (params?.startDate) query = query.gte('registeredAt', params.startDate);
+      if (params?.endDate) query = query.lte('registeredAt', params.endDate + ' 23:59:59');
+      
+      if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
+
+      const { data, error } = await query;
+      if (error) return [];
+      return data as DataReceptionItem[];
+    } catch (e) { return []; }
+  },
+  delete: async (id: number) => {
+    return supabaseDeleter('data_reception_logs', id);
+  }
 };
