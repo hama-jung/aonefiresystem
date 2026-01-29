@@ -261,27 +261,31 @@ export const Dashboard: React.FC = () => {
     return () => resizeObserver.disconnect();
   }, [mapInstance]);
 
-  // 4. Map Markers Update (유연한 필터링 및 자동 줌)
+  // 4. Map Markers Update (마커 실종 방지 및 최적화 버전)
   useEffect(() => {
     if (!mapInstance) return;
 
-    // 1. 기존 마커 제거
+    // 1. 기존 마커 및 오버레이 제거 (청소)
     markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
-    // 2. 필터링 로직 개선 (데이터 매칭률 향상)
+    // 2. 현재 선택된 지역에 맞는 시장 데이터 필터링
     const filteredMarkets = markets.filter(market => {
         const addr = market.address || "";
         
-        // 시/도 비교: 앞 2글자만 추출하여 유연하게 비교 (예: 서울특별시 -> 서울)
+        // 시/도 비교: 앞쪽에서 매칭되는지 확인 (타 지역 주소에 포함된 경우 제외)
         if (selectedSido) {
             const sidoShort = selectedSido.substring(0, 2); 
-            if (!addr.includes(sidoShort)) return false;
+            // 주소 시작 부분(약 15자 이내)에 시/도 명이 있는지 확인
+            const addressPrefix = addr.substring(0, 15); 
+            if (!addressPrefix.includes(sidoShort)) return false;
         }
         
-        // 시/군/구 비교
+        // 시/군/구 비교 (공백 제거 후 비교로 유연성 확보)
         if (selectedSigungu) {
-            if (!addr.includes(selectedSigungu)) return false;
+            const cleanSigungu = selectedSigungu.replace(/\s+/g, '');
+            const cleanAddr = addr.replace(/\s+/g, '');
+            if (!cleanAddr.includes(cleanSigungu)) return false;
         }
         return true;
     });
@@ -289,7 +293,7 @@ export const Dashboard: React.FC = () => {
     const bounds = new window.kakao.maps.LatLngBounds();
     let hasValidMarkers = false;
 
-    // 3. 마커 생성
+    // 3. 필터링된 데이터로 마커 생성
     filteredMarkets.forEach((market) => {
         if (market.latitude && market.longitude) {
             const lat = parseFloat(market.latitude);
@@ -343,10 +347,13 @@ export const Dashboard: React.FC = () => {
         }
     });
 
-    // 4. 지도 이동 로직 (영역 자동 맞춤)
+    // 4. 지도 시점 조정 (핵심 로직)
     if (hasValidMarkers) {
-        // 마커가 있으면 마커들이 다 보이도록 영역 조정
-        mapInstance.setBounds(bounds);
+        // [중요] 마커가 있다면 마커들이 다 보이도록 영역 조정 (자동 확대/축소)
+        // 지도가 렌더링될 시간을 확보하기 위해 setTimeout 사용
+        setTimeout(() => {
+            mapInstance.setBounds(bounds);
+        }, 100);
     } else if (selectedSido) {
         // 마커가 없더라도 선택한 지역의 중심 좌표로 이동
         const regionInfo = SIDO_COORDINATES[selectedSido];
@@ -357,8 +364,7 @@ export const Dashboard: React.FC = () => {
         }
     } else {
         // 초기화 또는 검색어 없을 때: 전체 보기 (레벨 13)
-        // handleResetMap 함수와 동일한 좌표
-        if (!selectedSido && !selectedSigungu && !searchMarketMap && markets.length > 0) {
+        if (!selectedSigungu && !searchMarketMap && markets.length > 0) {
              const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475);
              mapInstance.setLevel(13);
              mapInstance.panTo(moveLatLon);
