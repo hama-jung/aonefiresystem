@@ -213,9 +213,9 @@ export const Dashboard: React.FC = () => {
       try {
         window.kakao.maps.load(() => {
             const options = {
-                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (12 -> 13)
+                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (13 -> 14: 지도 축소)
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
-                level: 13
+                level: 14
             };
             const map = new window.kakao.maps.Map(mapContainer.current, options);
             const zoomControl = new window.kakao.maps.ZoomControl();
@@ -363,10 +363,10 @@ export const Dashboard: React.FC = () => {
             mapInstance.panTo(moveLatLon);
         }
     } else {
-        // 초기화 또는 검색어 없을 때: 전체 보기 (레벨 13)
+        // 초기화 또는 검색어 없을 때: 전체 보기 (레벨 14: 대한민국 전체 보기)
         if (!selectedSigungu && !searchMarketMap && markets.length > 0) {
              const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475);
-             mapInstance.setLevel(13);
+             mapInstance.setLevel(14); // 초기화 시에도 14레벨 적용
              mapInstance.panTo(moveLatLon);
         }
     }
@@ -382,7 +382,7 @@ export const Dashboard: React.FC = () => {
       setSearchMarketMap('');
       if (mapInstance) {
           const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475);
-          mapInstance.setLevel(13); // 초기 레벨과 동일하게 13으로 복귀
+          mapInstance.setLevel(14); // 초기 레벨과 동일하게 14으로 복귀
           mapInstance.panTo(moveLatLon);
       }
   };
