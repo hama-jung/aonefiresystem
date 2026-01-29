@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Role Enum은 레거시 호환을 위해 유지하되, 실제로는 string으로 처리됨
@@ -24,7 +25,12 @@ export interface User {
   role: string; // Enum 대신 string으로 변경하여 동적 롤 지원
   phone: string;
   email?: string;
-  department?: string;
+  
+  // 소속 정보 (정규화)
+  department?: string; // 화면 표시용 (Join된 이름 또는 직접 입력값)
+  distributorId?: number; // [NEW] 총판 ID
+  marketId?: number;      // [NEW] 시장 ID
+  
   status: '사용' | '미사용';
   smsReceive?: '수신' | '미수신'; // SMS 수신 여부 추가
 }
@@ -50,7 +56,7 @@ export interface Market {
   enableStoreSms?: '사용' | '미사용';        // 상가주인 문자전송여부
   enableMultiMedia?: '사용' | '미사용';      // 다매체전송 여부
   multiMediaType?: '복합' | '열' | '연기';   // 다매체 타입
-  usageStatus?: '사용' | '미사용';           // 시장 사용여부 (설정값) - Note: Market still uses usageStatus to distinguish from live status
+  usageStatus?: '사용' | '미사용';           // 시장 사용여부 (설정값)
   enableDeviceFaultSms?: '사용' | '미사용';  // 기기고장 문자전송여부
   enableCctvUrl?: '사용' | '미사용';         // 화재문자시 CCTV URL 포함여부
 
@@ -65,15 +71,13 @@ export interface Market {
 
 export interface Store {
   id: number;
-  marketId: number;       // 소속 시장 ID
+  marketId: number;       // 소속 시장 ID (DB: market_id)
   marketName?: string;    // 소속 시장명 (Join용)
   name: string;           // 상가명
   
-  // 담당자 -> 대표자로 용어 변경 (DB 컬럼은 기존 호환성을 위해 managerName 유지 가능하지만 UI는 대표자로 표기)
   managerName?: string;   // 대표자명
   managerPhone?: string;  // 대표자 연락처
   
-  // --- 추가된 필드 ---
   address?: string;       // 주소
   addressDetail?: string; // 상세주소
   latitude?: string;      // 위도
@@ -84,7 +88,6 @@ export interface Store {
   storeImage?: string;    // 상가 이미지 URL
   memo?: string;          // 비고
 
-  // --- 기기 정보 (엑셀 등록 및 상세 정보) ---
   receiverMac?: string;   // 수신기 MAC (4자리)
   repeaterId?: string;    // 중계기 ID (2자리)
   detectorId?: string;    // 감지기 번호 (2자리)
@@ -93,106 +96,100 @@ export interface Store {
 
 export interface Receiver {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
   macAddress: string;
   ip?: string;
   dns?: string;
   emergencyPhone?: string;
-  transmissionInterval?: string; // '01시간' ~ '23시간'
+  transmissionInterval?: string;
   image?: string;
   status: '사용' | '미사용';
-  // [NEW] Coordinates
   x_pos?: number;
   y_pos?: number;
 }
 
 export interface Repeater {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
   receiverMac: string;
-  repeaterId: string; // '01' ~ '20'
-  alarmStatus: '사용' | '미사용'; // 경종 사용여부
+  repeaterId: string;
+  alarmStatus: '사용' | '미사용'; 
   location?: string;
   image?: string;
   status: '사용' | '미사용';
-  // [NEW] Coordinates
   x_pos?: number;
   y_pos?: number;
 }
 
 export interface Detector {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
   
-  // Updated for multiple stores
   stores?: { id: number; name: string }[]; 
   
   receiverMac: string;
-  repeaterId: string; // '01' ~ '20'
-  detectorId: string; // '01' ~ '20'
+  repeaterId: string;
+  detectorId: string;
   mode: '복합' | '열' | '연기';
   cctvUrl?: string;
-  status: '사용' | '미사용'; // Renamed from usageStatus
-  smsList?: string[]; // 화재 발생시 SMS (수정 시에만 관리)
+  status: '사용' | '미사용'; 
+  smsList?: string[]; 
   memo?: string;
-  // [NEW] Coordinates
   x_pos?: number;
   y_pos?: number;
 }
 
 export interface Transmitter {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
   receiverMac: string;
-  repeaterId: string; // '01' ~ '20'
-  transmitterId: string; // '01' ~ '20'
-  status: '사용' | '미사용'; // Renamed from usageStatus
+  repeaterId: string;
+  transmitterId: string;
+  status: '사용' | '미사용';
   memo?: string;
-  // [NEW] Coordinates
   x_pos?: number;
   y_pos?: number;
 }
 
 export interface Alarm {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
   receiverMac: string;
-  repeaterId: string; // '01' ~ '20'
-  alarmId: string; // '01' ~ '20'
-  status: '사용' | '미사용'; // Renamed from usageStatus
+  repeaterId: string;
+  alarmId: string;
+  status: '사용' | '미사용';
   memo?: string;
-  // [NEW] Coordinates
   x_pos?: number;
   y_pos?: number;
 }
 
 export interface Distributor {
   id: number;
-  name: string;           // 총판명
-  address: string;        // 주소 (기본)
-  addressDetail: string;  // 상세 주소 (5,7F 등)
-  latitude: string;       // 위도
-  longitude: string;      // 경도
-  managerName: string;    // 담당자명
-  managerPhone: string;   // 담당자 전화
-  managerEmail: string;   // 담당자 이메일
-  memo: string;           // 비고
+  name: string;           
+  address: string;        
+  addressDetail: string;  
+  latitude: string;       
+  longitude: string;      
+  managerName: string;    
+  managerPhone: string;   
+  managerEmail: string;   
+  memo: string;           
   status: '사용' | '미사용';
-  managedMarkets: string[]; // 관리 시장 목록 (이름)
+  managedMarkets: string[]; 
 }
 
 export interface WorkLog {
   id: number;
-  marketId: number;
+  marketId: number;    // DB: market_id
   marketName?: string; // Join
-  workDate: string; // YYYY-MM-DD
+  workDate: string;
   content: string;
-  attachment?: string; // 이미지 URL
+  attachment?: string;
   created_at?: string;
 }
 
@@ -206,7 +203,6 @@ export interface FireEvent {
   location: string;
 }
 
-// UI 렌더링용 메뉴 아이템
 export interface MenuItem {
   id?: number;
   label: string;
@@ -215,121 +211,74 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-// DB 저장용 메뉴 아이템 (권한 컬럼 추가)
 export interface MenuItemDB {
   id: number;
   parentId?: number;
   label: string;
   path?: string;
-  icon?: string; // String name of the icon
+  icon?: string; 
   sortOrder: number;
   isVisiblePc: boolean;
   isVisibleMobile: boolean;
-  // --- 권한 컬럼 (Role Based Access Control) ---
-  allowDistributor?: boolean; // 총판 관리자에게 보임
-  allowMarket?: boolean;      // 시장 관리자에게 보임
-  allowLocal?: boolean;       // 지자체에게 보임
-  
-  children?: MenuItemDB[]; // For tree structure
+  allowDistributor?: boolean;
+  allowMarket?: boolean;
+  allowLocal?: boolean;
+  children?: MenuItemDB[]; 
 }
 
-// 공통코드
 export interface CommonCode {
   id: number;
-  code: string;       // 공통코드
-  name: string;       // 공통코드명
-  description: string; // 공통코드 상세
-  groupCode: string;  // 공통그룹코드
-  groupName: string;  // 공통그룹코드명
+  code: string;       
+  name: string;       
+  description: string;
+  groupCode: string;  
+  groupName: string;  
   status: '사용' | '미사용';
 }
 
-// --- Data Management Logs ---
+// --- Data Management Logs (Updated Types) ---
 
-export interface FireLog {
-  id: number;
-  marketName: string;
-  storeName: string;
-  receiverMac: string;
-  repeaterId: string;
-  detectorId: string;
-  eventType: string; // '화재', '고장'
-  eventDetail: string;
-  occurrenceTime: string;
-}
-
-export interface DeviceStatusLog {
-  id: number;
-  receiverMac: string;
-  repeaterId: string;
-  detectorId: string;
-  battery: string;
-  signal: string;
-  temperature: string;
-  smoke_value: string;
-  status: string;
-  loggedAt: string;
-}
-
-export interface DataReceptionLog {
-  id: number;
-  marketName: string;
-  receiverMac: string;
-  packetType: string;
-  dataSize: number;
-  result: string;
-  receivedAt: string;
-}
-
-export interface RawUartLog {
-  id: number;
-  direction: 'RX' | 'TX';
-  receiverMac: string;
-  rawData: string;
-  created_at: string;
-}
-
-// 화재 이력 관리 아이템 (Mock 데이터용)
 export interface FireHistoryItem {
   id: number;
-  marketName: string;
+  marketId?: number; // [NEW] DB: market_id
+  marketName?: string; // Join via market_id
   receiverMac: string;
-  receiverStatus: string; // 공통코드 (예: '10', '35')
+  receiverStatus: string; 
   repeaterId: string;
-  repeaterStatus: string; // 공통코드 (예: '35', '49')
-  detectorInfoChamber?: string; // 감지기ID_챔버
-  detectorInfoTemp?: string; // 감지기ID_온도
-  registrar: string; // 등록자
-  registeredAt: string; // 등록일
-  falseAlarmStatus: string; // 오탐여부 (예: '등록', '화재', '오탐')
-  note?: string; // 오탐 등록 비고
+  repeaterStatus: string; 
+  detectorInfoChamber?: string; 
+  detectorInfoTemp?: string; 
+  registrar: string; 
+  registeredAt: string; 
+  falseAlarmStatus: string; 
+  note?: string; 
 }
 
-// 기기 상태 관리 아이템
 export interface DeviceStatusItem {
   id: number;
-  marketName: string;
+  marketId?: number; // [NEW] DB: market_id
+  marketName?: string; // Join via market_id
   receiverMac: string;
   repeaterId: string;
-  deviceType: string; // '수신기', '감지기' 등
+  deviceType: string; 
   deviceId: string;
-  deviceStatus: string; // '정상', '에러' 등
-  errorCode: string; // 공통코드 (Hidden in UI)
+  deviceStatus: string; 
+  errorCode: string; 
   registeredAt: string;
   processStatus: '처리' | '미처리';
   note?: string;
 }
 
-// [NEW] 데이터 수신 관리 아이템
 export interface DataReceptionItem {
   id: number;
-  marketName: string;
-  logType: string; // 로그유형 (예: 62)
-  receiverId: string; // 수신기 (예: 0909)
-  repeaterId: string; // 중계기 (예: 03)
-  receivedData: string; // 수신데이터 (Long Hex String)
-  commStatus: string; // 감지기통신상태 (Long Hex String)
-  batteryStatus: string; // 감지기배터리상태 (Long Hex String)
-  chamberStatus: string; // 감지기챔버상태 (Long Hex String)
-  registeredAt: string; // 등록일
+  marketId?: number; // [NEW] DB: market_id
+  marketName?: string; // Join via market_id
+  logType: string; 
+  receiverId: string; 
+  repeaterId: string; 
+  receivedData: string; 
+  commStatus: string; 
+  batteryStatus: string; 
+  chamberStatus: string; 
+  registeredAt: string; 
 }

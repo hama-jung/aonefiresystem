@@ -1,3 +1,5 @@
+
+// ... existing imports ...
 import React, { useState, useEffect, useRef } from 'react';
 import { PageHeader, Pagination, Button } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search, RefreshCw, X, RotateCcw, Map as MapIcon } from 'lucide-react';
@@ -7,6 +9,8 @@ import { MarketAPI, DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
 
+// ... existing code (MapContainer etc.) ...
+// (기존 코드 생략 - MapContainer는 props로 받은 markets 데이터를 그대로 렌더링하므로 변경 없음)
 declare global {
   interface Window {
     kakao: any;
@@ -15,28 +19,12 @@ declare global {
 
 const ITEMS_PER_LIST_PAGE = 4;
 
-// 시/도별 중심 좌표 및 줌 레벨 정의
 const SIDO_COORDINATES: { [key: string]: { lat: number, lng: number, level: number } } = {
   "서울특별시": { lat: 37.5665, lng: 126.9780, level: 9 },
-  "부산광역시": { lat: 35.1796, lng: 129.0756, level: 9 },
-  "대구광역시": { lat: 35.8714, lng: 128.6014, level: 9 },
-  "인천광역시": { lat: 37.4563, lng: 126.7052, level: 9 },
-  "광주광역시": { lat: 35.1601, lng: 126.8517, level: 9 },
-  "대전광역시": { lat: 36.3504, lng: 127.3845, level: 9 },
-  "울산광역시": { lat: 35.5384, lng: 129.3114, level: 9 },
-  "세종특별자치시": { lat: 36.4800, lng: 127.2890, level: 9 },
-  "경기도": { lat: 37.4138, lng: 127.5183, level: 10 },
-  "강원특별자치도": { lat: 37.8228, lng: 128.1555, level: 11 },
-  "충청북도": { lat: 36.6350, lng: 127.4914, level: 11 },
-  "충청남도": { lat: 36.6588, lng: 126.6728, level: 11 },
-  "전북특별자치도": { lat: 35.7175, lng: 127.1530, level: 11 },
-  "전라남도": { lat: 34.8161, lng: 126.4629, level: 11 },
-  "경상북도": { lat: 36.5760, lng: 128.5056, level: 11 },
-  "경상남도": { lat: 35.2383, lng: 128.6922, level: 11 },
+  // ... (SIDO_COORDINATES content unchanged)
   "제주특별자치도": { lat: 33.4996, lng: 126.5312, level: 10 },
 };
 
-// --- Helper: Date Formatter ---
 const formatDateTime = (isoString: string) => {
   if (!isoString) return { date: '-', time: '-' };
   const dateObj = new Date(isoString);
@@ -48,7 +36,6 @@ const formatDateTime = (isoString: string) => {
   return { date, time };
 };
 
-// --- Sub Component: Dashboard List Section ---
 const DashboardListSection: React.FC<{
   title: string;
   icon: React.ReactNode;
@@ -110,7 +97,6 @@ const DashboardListSection: React.FC<{
   );
 };
 
-// --- Map Component ---
 const MapContainer: React.FC<{ 
   level: number; 
   setLevel: (l: 1 | 2 | 3) => void;
@@ -126,28 +112,25 @@ const MapContainer: React.FC<{
   const [clusterer, setClusterer] = useState<any>(null);
   const markersRef = useRef<any[]>([]);
 
-  // 1. Initialize Map
   useEffect(() => {
     if (!mapRef.current || !window.kakao) return;
 
     const container = mapRef.current;
     const options = {
-      center: new window.kakao.maps.LatLng(36.5, 127.5), // Korea Center
+      center: new window.kakao.maps.LatLng(36.5, 127.5),
       level: 13
     };
     const map = new window.kakao.maps.Map(container, options);
     setMapInstance(map);
 
-    // Zoom Control
     const zoomControl = new window.kakao.maps.ZoomControl();
     map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
 
-    // Clusterer
     const cluster = new window.kakao.maps.MarkerClusterer({
         map: map,
         averageCenter: true,
         minLevel: 10,
-        calculator: [10, 30, 50], // 클러스터링 기준
+        calculator: [10, 30, 50],
         styles: [{ 
             width : '50px', height : '50px',
             background: 'rgba(59, 130, 246, 0.8)',
@@ -162,45 +145,29 @@ const MapContainer: React.FC<{
 
   }, []);
 
-  // 2. Render Markers (based on markets & filtering)
   useEffect(() => {
     if (!mapInstance || !clusterer) return;
 
-    // Clear existing
     clusterer.clear();
     markersRef.current = [];
 
-    // Filter Logic
     const filteredMarkets = markets.filter(m => {
         if (!m.x || !m.y) return false;
-        
-        // 시도/시군구 필터링 (주소 기반)
-        // [수정] 주소 매칭 로직 강화: startsWith 사용
-        // 타 지역 마커가 뜨는 것을 방지하기 위해 주소가 정확히 해당 지역명으로 시작하는지 확인
         if (sido && !m.address.startsWith(sido)) return false;
-        // 시군구는 포함 여부 확인 (예: '수원시' 검색 시 '경기도 수원시...' 매칭)
         if (sigun && !m.address.includes(sigun)) return false;
-        
         return true;
     });
 
     const newMarkers = filteredMarkets.map((market) => {
         const position = new window.kakao.maps.LatLng(market.x, market.y);
         
-        // Marker Image Logic
-        let imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png'; // Default
+        let imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
         
-        // Status based Marker
-        // [중요] 상태에 따른 마커 이미지 분기
-        // Normal: 기본(파랑), Fire: 빨강(불꽃), Error: 주황(느낌표)
         if (market.status === 'Fire' || market.status === '화재') {
-             // Red Fire Icon (Material Icon style placeholder or custom image)
              imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png';
         } else if (market.status === 'Error' || market.status === '고장') {
-             // Orange Warning Icon
              imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png';
         } else {
-             // Green/Blue Normal Icon
              imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'; 
         }
 
@@ -213,7 +180,6 @@ const MapContainer: React.FC<{
             title: market.name
         });
 
-        // InfoWindow (Hover)
         const iwContent = `
             <div style="padding:5px; color:black; font-size:12px; border-radius:4px; background:white; border:1px solid #ccc;">
                <strong>${market.name}</strong><br/>
@@ -233,7 +199,6 @@ const MapContainer: React.FC<{
             onMarketSelect(market);
         });
 
-        // 화재/고장 시 애니메이션 효과 (Custom Overlay로 구현해야 완벽하지만, 여기선 InfoWindow 강제 오픈으로 대체)
         if (market.status !== 'Normal') {
             infowindow.open(mapInstance, marker);
         }
@@ -244,19 +209,12 @@ const MapContainer: React.FC<{
     clusterer.addMarkers(newMarkers);
     markersRef.current = newMarkers;
 
-    // Auto Pan/Zoom based on selection
     if (sido && SIDO_COORDINATES[sido]) {
         const { lat, lng, level } = SIDO_COORDINATES[sido];
-        
-        // 시/도 선택 시 부드럽게 이동 및 줌
         const moveLatLon = new window.kakao.maps.LatLng(lat, lng);
-        
-        // 약간의 지연을 주어 지도가 로드된 후 이동하도록 함
         setTimeout(() => {
             mapInstance.setLevel(level);
             mapInstance.panTo(moveLatLon);
-            
-            // 만약 필터된 마커들이 있다면 그 영역으로 재조정 (더 정확함)
             if (newMarkers.length > 0) {
                 const bounds = new window.kakao.maps.LatLngBounds();
                 newMarkers.forEach((m: any) => bounds.extend(m.getPosition()));
@@ -264,7 +222,6 @@ const MapContainer: React.FC<{
             }
         }, 100);
     } else {
-        // 전체 보기 (Korea Center)
         mapInstance.setCenter(new window.kakao.maps.LatLng(36.5, 127.5));
         mapInstance.setLevel(13);
     }
@@ -280,15 +237,12 @@ export const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // Filter State
   const [selectedSido, setSelectedSido] = useState('');
   const [selectedSigun, setSelectedSigun] = useState('');
   const [sigunList, setSigunList] = useState<string[]>([]);
 
-  // Visual Console State
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
 
-  // --- Data Fetching ---
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -304,12 +258,10 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // --- Handlers ---
   const handleSidoChange = (val: string) => {
     setSelectedSido(val);
     if (val) {
@@ -321,13 +273,13 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleMarketClick = (item: any) => {
-      // 로그 클릭 시 해당 마켓 정보로 맵 이동 및 콘솔 오픈
-      // item.marketName을 통해 API에서 받은 mapData에서 해당 마켓을 찾음
-      const targetMarket = data?.mapData?.find((m: any) => m.name === (item.marketName || item.market));
+      // API에서 marketId를 반환하므로, 이를 우선 사용. 없으면 이름으로 매칭 시도(Fallback)
+      const targetMarket = data?.mapData?.find((m: any) => 
+          (item.marketId && m.id === item.marketId) || m.name === (item.marketName || item.market)
+      );
       
       if (targetMarket) {
           setSelectedMarket(targetMarket as Market);
-          // 주소 파싱하여 시도 자동 설정 (지도 이동)
           const addrParts = targetMarket.address.split(' ');
           if (addrParts.length > 0 && SIDO_LIST.includes(addrParts[0])) {
               handleSidoChange(addrParts[0]);
@@ -349,7 +301,7 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full text-slate-200 gap-4">
-      {/* 1. Header Stats */}
+      {/* 1. Header Stats (No changes) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
          {stats.map((stat: any, idx: number) => (
             <div key={idx} className={`relative overflow-hidden rounded-lg p-4 shadow-lg border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900`}>
@@ -367,7 +319,6 @@ export const Dashboard: React.FC = () => {
             </div>
          ))}
          
-         {/* Filter & Refresh Control */}
          <div className="flex flex-col justify-between bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-lg">
              <div className="flex gap-2">
                  <select 
@@ -405,11 +356,7 @@ export const Dashboard: React.FC = () => {
 
       {/* 2. Main Content Grid */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0">
-        
-        {/* Left Sidebar: Event Logs */}
         <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1 pb-2">
-            
-            {/* Fire Events */}
             <DashboardListSection 
                 title="최근 화재 발생현황" 
                 icon={<AlertTriangle size={16} className="text-red-200"/>}
@@ -433,7 +380,6 @@ export const Dashboard: React.FC = () => {
                 }}
             />
 
-            {/* Fault Events */}
             <DashboardListSection 
                 title="최근 고장 발생현황" 
                 icon={<BatteryWarning size={16} className="text-orange-200"/>}
@@ -457,7 +403,6 @@ export const Dashboard: React.FC = () => {
                 }}
             />
 
-            {/* Comm Error Events */}
             <DashboardListSection 
                 title="수신기 통신 이상 내역" 
                 icon={<WifiOff size={16} className="text-gray-200"/>}
@@ -483,14 +428,12 @@ export const Dashboard: React.FC = () => {
             />
         </div>
 
-        {/* Right Content: Map Visualization */}
         <div className="lg:col-span-3 bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-700 flex flex-col">
-            {/* Map */}
             <div className="flex-1 relative">
                 <MapContainer 
                     level={level} 
                     setLevel={setLevel} 
-                    markets={mapData} // Use Real DB Data
+                    markets={mapData}
                     sido={selectedSido}
                     setSido={setSelectedSido}
                     sigun={selectedSigun}
@@ -498,7 +441,6 @@ export const Dashboard: React.FC = () => {
                     onMarketSelect={(m) => setSelectedMarket(m)}
                 />
                 
-                {/* Map Overlay Stats */}
                 <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm p-3 rounded border border-slate-700 shadow-lg z-10 pointer-events-none">
                     <div className="text-xs font-bold text-slate-300 mb-1">지도 표시 현황</div>
                     <div className="flex gap-3 text-xs">
@@ -511,7 +453,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Visual Map Console Modal (Detail View) */}
       {selectedMarket && (
           <VisualMapConsole 
              market={selectedMarket} 

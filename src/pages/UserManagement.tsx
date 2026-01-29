@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, 
@@ -18,7 +19,7 @@ const PW_REGEX = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{6,12}$/;
 
 // 업체 목록 아이템 인터페이스
 interface CompanyItem {
-  id: string;
+  id: string; // 'D_1' or 'M_1'
   name: string;
   type: string;
   manager: string;
@@ -46,8 +47,12 @@ export const UserManagement: React.FC = () => {
   const [isIdChecked, setIsIdChecked] = useState(false); // 중복체크 여부
   const [inputUserId, setInputUserId] = useState('');
   
+  // [UPDATED] Department ID Management
+  const [departmentName, setDepartmentName] = useState(''); // Display Name
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null); // Actual ID
+  const [selectedCompanyType, setSelectedCompanyType] = useState<'distributor' | 'market' | null>(null);
+
   // Controlled Inputs for Validation
-  const [departmentName, setDepartmentName] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -113,6 +118,8 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(null); 
     setInputUserId('');
     setDepartmentName('');
+    setSelectedCompanyId(null);
+    setSelectedCompanyType(null);
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
@@ -124,16 +131,27 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(user); 
     setInputUserId(user.userId);
     setDepartmentName(user.department || '');
+    // Pre-fill ID info from user object
+    if (user.distributorId) {
+        setSelectedCompanyId(user.distributorId);
+        setSelectedCompanyType('distributor');
+    } else if (user.marketId) {
+        setSelectedCompanyId(user.marketId);
+        setSelectedCompanyType('market');
+    } else {
+        setSelectedCompanyId(null);
+        setSelectedCompanyType(null);
+    }
+
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
-    setIsIdChecked(true); // 수정 모드는 이미 존재하는 아이디이므로 체크된 것으로 간주
+    setIsIdChecked(true); 
     setView('form'); 
   };
 
   // --- ID Modal Handlers ---
   const handleOpenIdModal = () => {
-    // 신규 등록일 때만 모달 오픈
     if (!selectedUser) {
       setModalIdInput('');
       setIdCheckResult(null);
@@ -143,7 +161,7 @@ export const UserManagement: React.FC = () => {
 
   const handleModalIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setModalIdInput(e.target.value);
-    setIdCheckResult(null); // 입력 변경 시 결과 초기화 (사용 버튼 비활성화)
+    setIdCheckResult(null);
   };
 
   const handleIdModalCheck = async () => {
@@ -151,19 +169,15 @@ export const UserManagement: React.FC = () => {
       alert('아이디를 입력해주세요.');
       return;
     }
-
-    // 1. 정규식 검사
     if (!ID_REGEX.test(modalIdInput)) {
       setIdCheckResult({ message: '아이디는 영문, 숫자 포함 6자 ~ 12자로 생성해주세요.', available: false });
       return;
     }
-
     try {
       const exists = await UserAPI.checkDuplicate(modalIdInput);
-      
       if (exists) {
         setIdCheckResult({ message: `${modalIdInput}는 사용불가능합니다.`, available: false });
-        setModalIdInput(''); // 사용 불가능하면 입력창 초기화
+        setModalIdInput('');
       } else {
         setIdCheckResult({ message: `${modalIdInput}는 사용가능합니다.`, available: true });
       }
@@ -208,8 +222,14 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleSelectCompany = (company: CompanyItem) => {
-    // 확인 절차 없이 즉시 반영
+    // [UPDATED] Parse ID and Type from "D_1" or "M_1"
+    const [typePrefix, idStr] = company.id.split('_');
+    const id = parseInt(idStr, 10);
+
     setDepartmentName(company.name);
+    setSelectedCompanyId(id);
+    setSelectedCompanyType(typePrefix === 'D' ? 'distributor' : 'market');
+    
     setIsCompanyModalOpen(false);
   };
 
@@ -230,13 +250,11 @@ export const UserManagement: React.FC = () => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
 
-    // 아이디 중복체크 확인 (신규 등록일 경우)
     if (!selectedUser && !isIdChecked) {
       alert('아이디 만들기를 진행해주세요.');
       return;
     }
 
-    // 비밀번호 검사 (신규 or 변경 시)
     if (!selectedUser || password) {
        if (!password) {
          alert('비밀번호를 입력해주세요.');
@@ -258,10 +276,15 @@ export const UserManagement: React.FC = () => {
       name: (form.elements.namedItem('name') as HTMLInputElement).value,
       role: (form.elements.namedItem('role') as HTMLSelectElement).value,
       phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
+      
+      // [UPDATED] Save IDs instead of text (text is fallback)
       department: departmentName,
+      distributorId: selectedCompanyType === 'distributor' ? selectedCompanyId! : undefined,
+      marketId: selectedCompanyType === 'market' ? selectedCompanyId! : undefined,
+
       status: (form.elements.namedItem('status') as RadioNodeList).value as '사용' | '미사용',
       smsReceive: (form.elements.namedItem('smsReceive') as RadioNodeList).value as '수신' | '미수신',
-      password: password || undefined, // 비밀번호 변경 시 함께 전송
+      password: password || undefined,
     };
 
     try {
@@ -306,7 +329,7 @@ export const UserManagement: React.FC = () => {
     { header: 'No', accessor: 'id', width: '60px' },
     { header: '사용자 ID', accessor: 'userId' },
     { header: '성명', accessor: 'name' },
-    { header: '소속/업체명', accessor: 'department' },
+    { header: '소속/업체명', accessor: 'department' }, // Display joined name
     { 
       header: '연락처', 
       accessor: (user) => formatPhoneNumber(user.phone) 
@@ -454,13 +477,14 @@ export const UserManagement: React.FC = () => {
           </div>
         </form>
 
-        {/* 아이디 만들기 모달 */}
+        {/* 아이디 만들기 모달 (Existing) */}
         <Modal 
           isOpen={isIdModalOpen} 
           onClose={() => setIsIdModalOpen(false)} 
           title="아이디 만들기" 
           width="max-w-md"
         >
+          {/* ... (Existing modal content) ... */}
           <div className="flex flex-col gap-6">
              <div className="space-y-2">
                 <label className="text-sm font-semibold text-slate-300">사용자 ID</label>
@@ -472,7 +496,6 @@ export const UserManagement: React.FC = () => {
                    />
                    <Button onClick={handleIdModalCheck} className="whitespace-nowrap">확인</Button>
                 </div>
-                {/* 결과 메시지 표시 영역 */}
                 <div className="min-h-[20px]">
                    {idCheckResult ? (
                       <p className={`text-sm font-bold ${idCheckResult.available ? 'text-blue-400' : 'text-red-400'}`}>
@@ -506,7 +529,7 @@ export const UserManagement: React.FC = () => {
           </div>
         </Modal>
 
-        {/* 업체 찾기 모달 */}
+        {/* 업체 찾기 모달 (Updated Columns) */}
         <Modal 
           isOpen={isCompanyModalOpen} 
           onClose={() => setIsCompanyModalOpen(false)} 
@@ -534,7 +557,7 @@ export const UserManagement: React.FC = () => {
     );
   }
 
-  // -- List View --
+  // -- List View (Existing) --
   return (
     <>
       <PageHeader title="사용자 관리" />
