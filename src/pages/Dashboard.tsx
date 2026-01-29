@@ -17,13 +17,13 @@ const ITEMS_PER_LIST_PAGE = 4;
 
 // 시/도별 중심 좌표 및 줌 레벨 정의
 const SIDO_COORDINATES: { [key: string]: { lat: number, lng: number, level: number } } = {
-  "서울특별시": { lat: 37.5665, lng: 126.9780, level: 8 },
-  "부산광역시": { lat: 35.1796, lng: 129.0756, level: 8 },
-  "대구광역시": { lat: 35.8714, lng: 128.6014, level: 8 },
+  "서울특별시": { lat: 37.5665, lng: 126.9780, level: 9 },
+  "부산광역시": { lat: 35.1796, lng: 129.0756, level: 9 },
+  "대구광역시": { lat: 35.8714, lng: 128.6014, level: 9 },
   "인천광역시": { lat: 37.4563, lng: 126.7052, level: 9 },
-  "광주광역시": { lat: 35.1601, lng: 126.8517, level: 8 },
-  "대전광역시": { lat: 36.3504, lng: 127.3845, level: 8 },
-  "울산광역시": { lat: 35.5384, lng: 129.3114, level: 8 },
+  "광주광역시": { lat: 35.1601, lng: 126.8517, level: 9 },
+  "대전광역시": { lat: 36.3504, lng: 127.3845, level: 9 },
+  "울산광역시": { lat: 35.5384, lng: 129.3114, level: 9 },
   "세종특별자치시": { lat: 36.4800, lng: 127.2890, level: 9 },
   "경기도": { lat: 37.4138, lng: 127.5183, level: 10 },
   "강원특별자치도": { lat: 37.8228, lng: 128.1555, level: 11 },
@@ -213,7 +213,7 @@ export const Dashboard: React.FC = () => {
       try {
         window.kakao.maps.load(() => {
             const options = {
-                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (14 -> 13)
+                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (12 -> 13)
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
                 level: 13
             };
@@ -261,30 +261,43 @@ export const Dashboard: React.FC = () => {
     return () => resizeObserver.disconnect();
   }, [mapInstance]);
 
-  // 4. Map Markers Update (마커 실종 방지 및 최적화 버전)
+  // 4. Map Markers Update (유연한 필터링 및 자동 줌)
   useEffect(() => {
-    if (!mapInstance || !markets.length) return;
+    if (!mapInstance) return;
 
-    // 1. 기존 마커 및 오버레이 제거 (청소)
+    // 1. 기존 마커 제거
     markersRef.current.forEach(m => m.setMap(null));
     markersRef.current = [];
 
-    // 2. 현재 선택된 지역에 맞는 시장 데이터 필터링
+    // 2. 필터링 로직 개선 (데이터 매칭률 향상)
     const filteredMarkets = markets.filter(market => {
         const addr = market.address || "";
-        if (selectedSido && !addr.includes(selectedSido)) return false;
-        if (selectedSigungu && !addr.includes(selectedSigungu)) return false;
+        
+        // 시/도 비교: 앞 2글자만 추출하여 유연하게 비교 (예: 서울특별시 -> 서울)
+        if (selectedSido) {
+            const sidoShort = selectedSido.substring(0, 2); 
+            if (!addr.includes(sidoShort)) return false;
+        }
+        
+        // 시/군/구 비교
+        if (selectedSigungu) {
+            if (!addr.includes(selectedSigungu)) return false;
+        }
         return true;
     });
 
     const bounds = new window.kakao.maps.LatLngBounds();
     let hasValidMarkers = false;
 
-    // 3. 필터링된 데이터로 마커 생성
+    // 3. 마커 생성
     filteredMarkets.forEach((market) => {
         if (market.latitude && market.longitude) {
             const lat = parseFloat(market.latitude);
             const lng = parseFloat(market.longitude);
+            
+            // 좌표 유효성 검사
+            if (isNaN(lat) || isNaN(lng)) return;
+
             const markerPosition = new window.kakao.maps.LatLng(lat, lng);
             bounds.extend(markerPosition);
             hasValidMarkers = true;
@@ -298,20 +311,20 @@ export const Dashboard: React.FC = () => {
             
             const content = document.createElement('div');
             content.innerHTML = `
-                <div class="relative flex flex-col items-center justify-center w-12 h-12 group cursor-pointer" title="${market.name} (클릭하여 관제화면 진입)">
-                  ${(isFire || isError) ? `<div class="absolute inset-0 rounded-full ${ringColor} opacity-75 animate-ping"></div>` : ''}
-                  <div class="relative z-10 w-10 h-10 rounded-full ${bgColor} border-2 border-white shadow-lg flex items-center justify-center text-white transition-transform transform group-hover:scale-110">
-                      <span class="material-icons-round text-[22px] leading-none">${iconName}</span>
-                  </div>
-                  <div class="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 
-                              bg-slate-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg 
-                              border border-slate-600/50 shadow-2xl opacity-0 group-hover:opacity-100 
-                              transition-all duration-300 translate-y-2 group-hover:translate-y-0
-                              whitespace-nowrap pointer-events-none z-50 flex flex-col items-center min-w-[120px]">
-                    <span class="font-bold text-[13px] tracking-wide">${market.name}</span>
-                    <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/90"></div>
-                  </div>
+              <div class="relative flex flex-col items-center justify-center w-12 h-12 group cursor-pointer" title="${market.name} (클릭하여 관제화면 진입)">
+                ${(isFire || isError) ? `<div class="absolute inset-0 rounded-full ${ringColor} opacity-75 animate-ping"></div>` : ''}
+                <div class="relative z-10 w-10 h-10 rounded-full ${bgColor} border-2 border-white shadow-lg flex items-center justify-center text-white transition-transform transform group-hover:scale-110">
+                    <span class="material-icons-round text-[22px] leading-none">${iconName}</span>
                 </div>
+                <div class="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 
+                            bg-slate-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg 
+                            border border-slate-600/50 shadow-2xl opacity-0 group-hover:opacity-100 
+                            transition-all duration-300 translate-y-2 group-hover:translate-y-0
+                            whitespace-nowrap pointer-events-none z-50 flex flex-col items-center min-w-[120px]">
+                  <span class="font-bold text-[13px] tracking-wide">${market.name}</span>
+                  <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/90"></div>
+                </div>
+              </div>
             `;
 
             const customOverlay = new window.kakao.maps.CustomOverlay({
@@ -330,12 +343,10 @@ export const Dashboard: React.FC = () => {
         }
     });
 
-    // 4. 지도 시점 조정 (핵심 로직)
+    // 4. 지도 이동 로직 (영역 자동 맞춤)
     if (hasValidMarkers) {
-        // [중요] 마커가 있다면 마커들이 다 보이도록 영역 조정 (자동 확대/축소)
-        setTimeout(() => {
-            mapInstance.setBounds(bounds);
-        }, 100);
+        // 마커가 있으면 마커들이 다 보이도록 영역 조정
+        mapInstance.setBounds(bounds);
     } else if (selectedSido) {
         // 마커가 없더라도 선택한 지역의 중심 좌표로 이동
         const regionInfo = SIDO_COORDINATES[selectedSido];
@@ -344,7 +355,16 @@ export const Dashboard: React.FC = () => {
             mapInstance.setLevel(regionInfo.level);
             mapInstance.panTo(moveLatLon);
         }
+    } else {
+        // 초기화 또는 검색어 없을 때: 전체 보기 (레벨 13)
+        // handleResetMap 함수와 동일한 좌표
+        if (!selectedSido && !selectedSigungu && !searchMarketMap && markets.length > 0) {
+             const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475);
+             mapInstance.setLevel(13);
+             mapInstance.panTo(moveLatLon);
+        }
     }
+
   }, [mapInstance, markets, selectedSido, selectedSigungu]); 
 
   // --- Handlers ---
