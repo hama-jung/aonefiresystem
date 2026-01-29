@@ -18,9 +18,9 @@ function cleanPayload<T>(item: T): Partial<T> {
   const payload: any = { ...item };
   
   // 1. 제거할 필드 목록 (UI용 가상 필드 및 Join 객체)
-  // 주의: 'marketId'는 Stores 테이블 호환성을 위해 여기서 무조건 삭제하지 않음
   const keysToRemove = [
     'marketName', 'distributorName', 'stores',
+    'marketId', // DB는 market_id를 사용하므로, camelCase인 marketId는 제거 대상
     'markets', 'distributors', 'users', 'roles'
   ];
   
@@ -183,18 +183,16 @@ export const StoreAPI = {
       
       if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
       if (params?.address) query = query.ilike('address', `%${params.address}%`);
-      
-      // Handle both cases for backward compatibility
-      if (params?.market_id) {
-          query = query.or(`market_id.eq.${params.market_id},marketId.eq.${params.market_id}`);
-      }
+      // [FIX] Use exact DB column name 'market_id'
+      if (params?.market_id) query = query.eq('market_id', params.market_id);
       
       const { data, error } = await query;
       if (error) throw error;
 
       return (data || []).map((s: any) => ({
         ...s,
-        market_id: s.market_id || s.marketId, // Normalize to market_id for frontend
+        // UI uses snake_case now too, but handle potential camelCase from bad joins
+        market_id: s.market_id, 
         marketName: s.markets?.name || '-'
       })) as Store[];
     } catch (e) { return []; }
@@ -202,11 +200,10 @@ export const StoreAPI = {
   save: async (store: Store) => {
     const payload = { ...store } as any;
     
-    // [FIX] Map market_id (frontend) to marketId (database legacy column)
-    // Supabase stores 테이블이 "marketId"로 생성되어 있으므로 이를 맞춰줍니다.
-    if (payload.market_id) {
-        payload.marketId = payload.market_id;
-        delete payload.market_id; // Remove snake_case to avoid error if column doesn't exist
+    // [FIX] Ensure we send 'market_id'. If 'marketId' exists from UI, map it to 'market_id'.
+    if (payload.marketId) {
+        payload.market_id = payload.marketId;
+        delete payload.marketId;
     }
     
     return supabaseSaver('stores', payload);
@@ -222,9 +219,9 @@ export const StoreAPI = {
     const dataToInsert = stores.map(store => {
        const payload = cleanPayload(store) as any;
        // [FIX] Bulk insert mapping
-       if (payload.market_id) {
-           payload.marketId = payload.market_id;
-           delete payload.market_id;
+       if (payload.marketId) {
+           payload.market_id = payload.marketId;
+           delete payload.marketId;
        }
        return payload;
     });
@@ -254,10 +251,8 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
         Object.keys(params).forEach(key => {
             if (params[key] && key !== 'marketName') {
                 if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
-                else if (key === 'market_id') {
-                    // Try both cases just in case
-                    query = query.or(`market_id.eq.${params[key]},marketId.eq.${params[key]}`);
-                }
+                // Use exact column match
+                else if (key === 'market_id') query = query.eq('market_id', params[key]);
                 else query = query.eq(key, params[key]);
             }
         });
@@ -267,7 +262,7 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
     
     let result = (data || []).map((item: any) => ({
         ...item,
-        market_id: item.market_id || item.marketId, // Normalize
+        market_id: item.market_id,
         marketName: item.markets?.name || '-'
     }));
     if (params?.marketName) {
@@ -281,8 +276,7 @@ export const ReceiverAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Receiver>('receivers', params),
   save: async (r: Receiver) => {
       const payload = { ...r } as any;
-      // Legacy mapping
-      if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
       return supabaseSaver('receivers', payload);
   },
   saveCoordinates: async (id: number, x: number, y: number) => { 
@@ -297,7 +291,7 @@ export const ReceiverAPI = {
   saveBulk: async (data: Receiver[]) => {
       const insertData = data.map(d => {
           const payload = cleanPayload(d) as any;
-          if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
           return payload;
       });
       const { error } = await supabase.from('receivers').insert(insertData);
@@ -309,7 +303,7 @@ export const RepeaterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
   save: async (r: Repeater) => {
       const payload = { ...r } as any;
-      if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
       return supabaseSaver('repeaters', payload);
   },
   saveCoordinates: async (id: number, x: number, y: number) => { 
@@ -324,7 +318,7 @@ export const RepeaterAPI = {
   saveBulk: async (data: Repeater[]) => {
       const insertData = data.map(d => {
           const payload = cleanPayload(d) as any;
-          if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
           return payload;
       });
       const { error } = await supabase.from('repeaters').insert(insertData);
@@ -340,7 +334,7 @@ export const DetectorAPI = {
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
     const payload = { ...rest } as any;
-    if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+    if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
     
     // Save main detector
     const savedDetector = await supabaseSaver('detectors', payload);
@@ -362,7 +356,7 @@ export const DetectorAPI = {
   saveBulk: async (data: Detector[]) => {
       const insertData = data.map(d => {
           const payload = cleanPayload(d) as any;
-          if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
           return payload;
       });
       const { error } = await supabase.from('detectors').insert(insertData);
@@ -374,7 +368,7 @@ export const TransmitterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Transmitter>('transmitters', params),
   save: async (t: Transmitter) => {
       const payload = { ...t } as any;
-      if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
       return supabaseSaver('transmitters', payload);
   },
   delete: async (id: number) => supabaseDeleter('transmitters', id)
@@ -384,7 +378,7 @@ export const AlarmAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Alarm>('alarms', params),
   save: async (a: Alarm) => {
       const payload = { ...a } as any;
-      if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
       return supabaseSaver('alarms', payload);
   },
   delete: async (id: number) => supabaseDeleter('alarms', id)
@@ -394,7 +388,7 @@ export const WorkLogAPI = {
   getList: async (params?: { marketName?: string }) => getDeviceListWithMarket<WorkLog>('work_logs', params),
   save: async (log: WorkLog) => {
       const payload = { ...log } as any;
-      if (payload.market_id) { payload.marketId = payload.market_id; delete payload.market_id; }
+      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
       return supabaseSaver('work_logs', payload);
   },
   delete: async (id: number) => supabaseDeleter('work_logs', id),
@@ -421,14 +415,14 @@ export const DashboardAPI = {
         id: e.id,
         msg: `${e.markets?.name || '알수없음'} ${e.detectorInfoChamber || '화재감지'}`,
         time: e.registeredAt,
-        marketId: e.market_id || e.marketId // Handle both
+        marketId: e.market_id // Handle both
       }));
 
       const mappedFault = (faultEvents || []).map((e: any) => ({
         id: e.id,
         msg: `${e.markets?.name || '알수없음'} ${e.deviceType} ${e.deviceId} 에러`,
         time: e.registeredAt,
-        marketId: e.market_id || e.marketId
+        marketId: e.market_id
       }));
 
       const mapData = (markets || []).map((m: any) => ({
