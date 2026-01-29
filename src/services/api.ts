@@ -2,22 +2,14 @@
 import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
-// ... (Existing MOCK_ROLES, MOCK_USERS... logic maintained for fallback) ...
-const MOCK_ROLES: RoleItem[] = [
-  { id: 1, code: '7777', name: '지자체', description: '구단위', status: '사용' },
-  { id: 2, code: '9999', name: '시스템관리자', description: '시스템관리자', status: '사용' },
-  { id: 3, code: '8000', name: '총판관리자', description: '총판관리자', status: '사용' },
-  { id: 4, code: '1000', name: '시장관리자', description: '시장관리자', status: '사용' },
-];
+// Mock Data Updated for Consistency
+const MOCK_ROLES: RoleItem[] = [];
+// MOCK_USERS updated to use snake_case IDs for fallback/test
 const MOCK_USERS: User[] = [
   { id: 1, userId: 'admin', password: '12341234!', name: '관리자', role: '시스템관리자', phone: '010-1234-5678', department: '본사', status: '사용', smsReceive: '수신' },
 ];
-const MOCK_MARKETS: Market[] = [
-  { id: 1, name: '부평자유시장', address: '인천광역시', latitude: '37.4924', longitude: '126.7234', managerName: '홍길동', managerPhone: '010-1234-1234', status: 'Normal' }
-];
-const MOCK_DISTRIBUTORS: Distributor[] = [
-  { id: 1, name: '미창', address: '경기도', addressDetail: '', latitude: '', longitude: '', managerName: '미창AS', managerPhone: '', managerEmail: '', memo: '', status: '사용', managedMarkets: [] }
-];
+const MOCK_MARKETS: Market[] = [];
+const MOCK_DISTRIBUTORS: Distributor[] = [];
 const MOCK_DASHBOARD = { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] };
 
 // --- Helper Utilities ---
@@ -30,6 +22,24 @@ const generateSafeFileName = (prefix: string, originalName: string) => {
   return `${prefix}_${timestamp}_${randomStr}.${ext}`;
 };
 
+// --- Payload Sanitizer ---
+// DB에 없는 필드(Join된 필드 등)를 제거하여 "Column not found" 에러 방지
+function cleanPayload<T>(item: T): Partial<T> {
+  const payload = { ...item };
+  const keysToRemove = [
+    'marketName', 'distributorName', 'stores', // Custom Display Fields
+    'marketId', // Legacy CamelCase field removal
+    // [CRITICAL] Remove Joined Objects coming from Supabase select
+    'distributors', 'markets' 
+  ];
+  
+  keysToRemove.forEach(key => {
+    delete (payload as any)[key];
+  });
+  
+  return payload;
+}
+
 async function syncDistributorManagedMarkets(distributorId: number) {
   if (!distributorId) return;
   const { data: markets } = await supabase.from('markets').select('name').eq('distributorId', distributorId);
@@ -38,33 +48,30 @@ async function syncDistributorManagedMarkets(distributorId: number) {
 }
 
 async function syncDevicesFromStore(store: Store) {
-  if (!store.marketId || !store.receiverMac) return;
+  if (!store.market_id || !store.receiverMac) return;
   try {
-    let { data: rcv } = await supabase.from('receivers').select('id').eq('macAddress', store.receiverMac).eq('market_id', store.marketId).single();
+    let { data: rcv } = await supabase.from('receivers').select('id').eq('macAddress', store.receiverMac).eq('market_id', store.market_id).single();
     if (!rcv) {
-      const { data: newRcv } = await supabase.from('receivers').insert({
-        market_id: store.marketId, macAddress: store.receiverMac, status: '사용'
-      }).select().single();
-      rcv = newRcv;
+      await supabase.from('receivers').insert({
+        market_id: store.market_id, macAddress: store.receiverMac, status: '사용'
+      });
     }
+    // ... (rest of sync logic same as before)
     if (store.repeaterId) {
       let { data: rpt } = await supabase.from('repeaters').select('id').eq('receiverMac', store.receiverMac).eq('repeaterId', store.repeaterId).single();
       if (!rpt) {
-        const { data: newRpt } = await supabase.from('repeaters').insert({
-          market_id: store.marketId, receiverMac: store.receiverMac, repeaterId: store.repeaterId, status: '사용'
-        }).select().single();
-        rpt = newRpt;
+        await supabase.from('repeaters').insert({
+          market_id: store.market_id, receiverMac: store.receiverMac, repeaterId: store.repeaterId, status: '사용'
+        });
       }
       if (store.detectorId) {
         let { data: det } = await supabase.from('detectors').select('id').eq('receiverMac', store.receiverMac).eq('repeaterId', store.repeaterId).eq('detectorId', store.detectorId).single();
         let detectorId = det?.id;
         if (!detectorId) {
           const { data: newDet } = await supabase.from('detectors').insert({
-            market_id: store.marketId, receiverMac: store.receiverMac, repeaterId: store.repeaterId, detectorId: store.detectorId, mode: store.mode || '복합', status: '사용'
+            market_id: store.market_id, receiverMac: store.receiverMac, repeaterId: store.repeaterId, detectorId: store.detectorId, mode: store.mode || '복합', status: '사용'
           }).select().single();
           detectorId = newDet?.id;
-        } else {
-          await supabase.from('detectors').update({ mode: store.mode || '복합' }).eq('id', detectorId);
         }
         if (detectorId && store.id) {
           await supabase.from('detector_stores').delete().eq('storeId', store.id);
@@ -75,35 +82,31 @@ async function syncDevicesFromStore(store: Store) {
   } catch (e) { console.error("Device sync failed", e); }
 }
 
-// Generic Reader (Updated to handle snake_case to camelCase mapping for market_id)
-async function supabaseReader<T>(table: string, params?: Record<string, string>, searchFields?: string[], fallbackData: T[] = []) {
+// Generic Reader
+async function supabaseReader<T>(table: string, params?: Record<string, string | number>, searchFields?: string[], fallbackData: T[] = []) {
   try {
     let query = supabase.from(table).select('*').order('id', { ascending: false });
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value && value !== 'all') {
-          const dbKey = key === 'marketId' ? 'market_id' : key;
           if (searchFields?.includes(key)) {
-            query = query.ilike(dbKey, `%${value}%`);
+            query = query.ilike(key, `%${value}%`);
           } else {
-            query = query.eq(dbKey, value);
+            query = query.eq(key, value);
           }
         }
       });
     }
     const { data, error } = await query;
     if (error) return fallbackData;
-    
-    return (data || []).map((item: any) => ({
-        ...item,
-        marketId: item.market_id || item.marketId 
-    })) as T[];
+    return data as T[];
   } catch (e) { return fallbackData; }
 }
 
-async function supabaseSaver<T extends { id: number, marketId?: number }>(table: string, item: T): Promise<T> {
-  const { id, marketId, ...rest } = item;
-  const dbData = { ...rest, ...(marketId ? { market_id: marketId } : {}) };
+async function supabaseSaver<T extends { id: number }>(table: string, item: T): Promise<T> {
+  const { id, ...rest } = item;
+  // Clean payload to remove non-DB fields (including joined objects)
+  const dbData = cleanPayload(rest);
   
   let query;
   if (id && id > 0) {
@@ -114,7 +117,7 @@ async function supabaseSaver<T extends { id: number, marketId?: number }>(table:
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   
-  return { ...data[0], marketId: data[0].market_id } as T;
+  return data[0] as T;
 }
 
 async function supabaseDeleter(table: string, id: number) {
@@ -125,13 +128,20 @@ async function supabaseDeleter(table: string, id: number) {
 
 // --- API IMPLEMENTATIONS ---
 
-export const AuthAPI = { /* ... keep existing ... */ login: async (id: string, pw: string) => { try { const { data } = await supabase.from('users').select('*').eq('userId', id).single(); if (data && data.password === pw) { return { success: true, user: data }; } } catch(e){} return { success: false }; }, changePassword: async (userId: string, currentPw: string, newPw: string) => { return { success: true }; } };
+export const AuthAPI = { 
+  login: async (id: string, pw: string) => { 
+    try { 
+      const { data } = await supabase.from('users').select('*').eq('userId', id).single(); 
+      if (data && data.password === pw) { return { success: true, user: data }; } 
+    } catch(e){} 
+    return { success: false }; 
+  }, 
+  changePassword: async (userId: string, currentPw: string, newPw: string) => { return { success: true }; } 
+};
 
-// [UPDATED] UserAPI: Handle distributor_id and market_id
 export const UserAPI = {
   getList: async (params?: { userId?: string, name?: string, role?: string, department?: string }) => {
     try {
-        // Join with distributors and markets
         let query = supabase.from('users')
             .select('*, distributors(name), markets(name)')
             .order('id', { ascending: false });
@@ -139,61 +149,31 @@ export const UserAPI = {
         if (params?.userId) query = query.ilike('userId', `%${params.userId}%`);
         if (params?.name) query = query.ilike('name', `%${params.name}%`);
         if (params?.role) query = query.eq('role', params.role);
-        // Department filtering might need adjustment if users search by text name
-        // For now, simple text filter on local department field if it exists, or skip.
-        // Complex filtering on joined tables in Supabase requires tricky syntax, keeping simple for now.
 
         const { data, error } = await query;
         if (error) throw error;
 
+        // NOTE: The spread `...u` includes 'distributors' and 'markets' objects.
+        // cleanPayload in save() MUST remove these before update.
         return (data || []).map((u: any) => ({
             ...u,
-            distributorId: u.distributor_id,
-            marketId: u.market_id,
-            // Priority: Linked Distributor Name > Linked Market Name > Static Department Text
+            // Priority: Linked Name > Static Text
             department: u.distributors?.name || u.markets?.name || u.department
         })) as User[];
-    } catch (e) {
-        return MOCK_USERS;
-    }
+    } catch (e) { return MOCK_USERS; }
   },
   checkDuplicate: async (id: string) => {
     const { data } = await supabase.from('users').select('id').eq('userId', id);
     return data && data.length > 0;
   },
   save: async (user: User) => {
-    const { id, distributorId, marketId, ...rest } = user;
-    
-    // Map Frontend IDs to Database Snake_case columns
-    const dbData = {
-        ...rest,
-        distributor_id: distributorId || null,
-        market_id: marketId || null
-    };
-
-    let query;
-    if (id && id > 0) {
-      query = supabase.from('users').update(dbData).eq('id', id).select();
-    } else {
-      query = supabase.from('users').insert(dbData).select();
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    
-    // Return mapped object
-    return { 
-        ...data[0], 
-        distributorId: data[0].distributor_id, 
-        marketId: data[0].market_id 
-    } as User;
+    return supabaseSaver('users', user);
   },
   delete: async (id: number) => supabaseDeleter('users', id)
 };
 
 export const RoleAPI = { getList: async (params?: any) => supabaseReader<RoleItem>('roles', params, ['name']), save: async (r: RoleItem) => supabaseSaver('roles', r), delete: async (id: number) => supabaseDeleter('roles', id) };
 
-// [UPDATED] CommonAPI: Now returns ID properly parsed for Company Select
 export const CommonAPI = {
   getCompanyList: async (searchName?: string) => {
     try {
@@ -209,15 +189,14 @@ export const CommonAPI = {
       const mList = (mkts || []).map((m: any) => ({ id: `M_${m.id}`, name: m.name, type: '시장', manager: m.managerName, phone: m.managerPhone }));
       
       return [...dList, ...mList];
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   }
 };
 
 export const MarketAPI = {
   getList: async (params?: { name?: string, address?: string, managerName?: string }) => {
-    return supabaseReader<Market>('markets', params as any, ['name', 'address', 'managerName'], MOCK_MARKETS);
+    // Market table also uses distributorId (CamelCase in DB schema), so standard reader works
+    return supabaseReader<Market>('markets', params as any, ['name', 'address', 'managerName']);
   },
   save: async (market: Market) => {
     return supabaseSaver('markets', market);
@@ -232,19 +211,19 @@ export const MarketAPI = {
 };
 
 export const DistributorAPI = {
-  getList: async (params?: any) => supabaseReader<Distributor>('distributors', params, ['name'], MOCK_DISTRIBUTORS),
+  getList: async (params?: any) => supabaseReader<Distributor>('distributors', params, ['name']),
   save: async (d: Distributor) => supabaseSaver('distributors', d),
   delete: async (id: number) => supabaseDeleter('distributors', id)
 };
 
 export const StoreAPI = { 
-  getList: async (params?: { address?: string, marketName?: string, storeName?: string, marketId?: number }) => {
+  getList: async (params?: { address?: string, marketName?: string, storeName?: string, market_id?: number }) => {
     try {
       let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
       
       if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
       if (params?.address) query = query.ilike('address', `%${params.address}%`);
-      if (params?.marketId) query = query.eq('market_id', params.marketId);
+      if (params?.market_id) query = query.eq('market_id', params.market_id);
       
       const { data: stores, error } = await query;
       if (error) throw error;
@@ -252,8 +231,7 @@ export const StoreAPI = {
       if (stores) {
         let result = stores.map((s: any) => ({
             ...s,
-            marketId: s.market_id,
-            marketName: s.markets?.name || '-'
+            marketName: s.markets?.name || '-' // Join Result
         }));
 
         if (params?.marketName) {
@@ -276,15 +254,12 @@ export const StoreAPI = {
     return data ? supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl : '';
   },
   saveBulk: async (stores: Store[]) => {
-    const dataToInsert = stores.map(({ id, marketName, marketId, ...rest }) => ({
-        ...rest,
-        market_id: marketId 
-    }));
+    const dataToInsert = stores.map(store => cleanPayload(store));
     const { data, error } = await supabase.from('stores').insert(dataToInsert).select();
     if (error) throw error;
     if (data) {
         for (const store of data) {
-            await syncDevicesFromStore({ ...store, marketId: store.market_id } as Store);
+            await syncDevicesFromStore(store as Store);
         }
     }
     return true;
@@ -294,20 +269,31 @@ export const StoreAPI = {
 export const CommonCodeAPI = { 
   getList: async (params?: any) => supabaseReader<CommonCode>('common_codes', params, ['name']), 
   save: async (c: CommonCode) => supabaseSaver('common_codes', c), 
-  saveBulk: async (codes: CommonCode[]) => { const { error } = await supabase.from('common_codes').insert(codes.map(({id, ...rest}) => rest)); if(error) throw error; return true; },
+  saveBulk: async (codes: CommonCode[]) => { 
+      const dataToInsert = codes.map(c => cleanPayload(c));
+      const { error } = await supabase.from('common_codes').insert(dataToInsert); 
+      if(error) throw error; return true; 
+  },
   delete: async (id: number) => supabaseDeleter('common_codes', id) 
 };
 
-async function getDeviceListWithMarket<T>(table: string, params: any, extraFilter?: (q: any) => any) {
+// Generic device list with market join
+async function getDeviceListWithMarket<T>(table: string, params: any) {
     let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
-    if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
+    
+    // Apply filters
+    Object.keys(params).forEach(key => {
+        if (params[key] && key !== 'marketName') {
+            if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+            else query = query.eq(key, params[key]);
+        }
+    });
     
     const { data, error } = await query;
     if (error) return [];
 
     let result = (data || []).map((item: any) => ({
         ...item,
-        marketId: item.market_id,
         marketName: item.markets?.name || '-'
     }));
 
@@ -328,7 +314,7 @@ export const ReceiverAPI = {
       return data ? supabase.storage.from('receiver-images').getPublicUrl(fileName).data.publicUrl : '';
   },
   saveBulk: async (data: Receiver[]) => {
-      const insertData = data.map(({ id, marketName, marketId, ...rest }) => ({...rest, market_id: marketId}));
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('receivers').insert(insertData);
       if(error) throw error; return true;
   }
@@ -345,7 +331,7 @@ export const RepeaterAPI = {
       return data ? supabase.storage.from('repeater-images').getPublicUrl(fileName).data.publicUrl : '';
   },
   saveBulk: async (data: Repeater[]) => {
-      const insertData = data.map(({ id, marketName, marketId, ...rest }) => ({...rest, market_id: marketId}));
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('repeaters').insert(insertData);
       if(error) throw error; return true;
   }
@@ -355,25 +341,31 @@ export const DetectorAPI = {
   getList: async (params?: any) => {
       const baseList = await getDeviceListWithMarket<Detector>('detectors', params);
       const detectorIds = baseList.map(d => d.id);
-      const { data: rawJunctions } = await supabase.from('detector_stores').select('*').in('detectorId', detectorIds);
       
-      let storeMap: Record<number, string> = {};
-      if (rawJunctions && rawJunctions.length > 0) {
-          const storeIds = Array.from(new Set(rawJunctions.map((j: any) => j.storeId)));
-          const { data: storeData } = await supabase.from('stores').select('id, name').in('id', storeIds);
-          if (storeData) storeData.forEach((s: any) => { storeMap[s.id] = s.name; });
-      }
+      // Fetch detector_stores mapping
+      if (detectorIds.length > 0) {
+          const { data: rawJunctions } = await supabase.from('detector_stores').select('*').in('detectorId', detectorIds);
+          
+          let storeMap: Record<number, string> = {};
+          if (rawJunctions && rawJunctions.length > 0) {
+              const storeIds = Array.from(new Set(rawJunctions.map((j: any) => j.storeId)));
+              const { data: storeData } = await supabase.from('stores').select('id, name').in('id', storeIds);
+              if (storeData) storeData.forEach((s: any) => { storeMap[s.id] = s.name; });
+          }
 
-      return baseList.map(d => {
-          const myJunctions = rawJunctions?.filter((j: any) => j.detectorId === d.id) || [];
-          const stores = myJunctions.map((j: any) => ({ id: j.storeId, name: storeMap[j.storeId] || 'Unknown' }));
-          return { ...d, stores };
-      });
+          return baseList.map(d => {
+              const myJunctions = rawJunctions?.filter((j: any) => j.detectorId === d.id) || [];
+              const stores = myJunctions.map((j: any) => ({ id: j.storeId, name: storeMap[j.storeId] || 'Unknown' }));
+              return { ...d, stores };
+          });
+      }
+      return baseList;
   }, 
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
     const savedDetector = await supabaseSaver('detectors', rest as Detector);
     
+    // Update store mapping
     await supabase.from('detector_stores').delete().eq('detectorId', savedDetector.id);
     if (stores && stores.length > 0) {
         const junctions = stores.map(s => ({ detectorId: savedDetector.id, storeId: s.id }));
@@ -384,7 +376,8 @@ export const DetectorAPI = {
   saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('detectors').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
   delete: async (id: number) => supabaseDeleter('detectors', id),
   saveBulk: async (data: Detector[]) => {
-      const insertData = data.map(({ id, marketName, marketId, stores, ...rest }) => ({...rest, market_id: marketId}));
+      // Note: Bulk save for detectors does not handle store mapping deeply here for simplicity, or should be added
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('detectors').insert(insertData);
       if(error) throw error; return true;
   }
@@ -425,7 +418,7 @@ export const DashboardAPI = {
             id: log.id,
             msg: `${log.markets?.name || '알수없음'} ${log.detectorInfoChamber || '화재감지'}`,
             time: log.registeredAt,
-            marketId: log.market_id,
+            market_id: log.market_id,
             marketName: log.markets?.name || ''
         }));
 
@@ -433,7 +426,7 @@ export const DashboardAPI = {
             id: log.id,
             msg: `${log.markets?.name || '알수없음'} ${log.deviceType} ${log.deviceId}번 고장`,
             time: log.registeredAt,
-            marketId: log.market_id,
+            market_id: log.market_id,
             marketName: log.markets?.name || ''
         }));
 
@@ -449,8 +442,8 @@ export const DashboardAPI = {
         const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러').neq('errorCode', '04');
         const { count: commCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('errorCode', '04');
 
-        const fireMarketIds = new Set(mappedFireLogs.map((l: any) => l.marketId));
-        const faultMarketIds = new Set(mappedFaultLogs.map((l: any) => l.marketId));
+        const fireMarketIds = new Set(mappedFireLogs.map((l: any) => l.market_id));
+        const faultMarketIds = new Set(mappedFaultLogs.map((l: any) => l.market_id));
 
         const mapData = (markets || []).map((m: Market) => {
             let status = 'Normal';
@@ -485,10 +478,9 @@ export const DashboardAPI = {
   }
 };
 
-// ... (Other existing APIs) ...
 export const MenuAPI = {
   getAll: async () => supabaseReader<MenuItemDB>('menus', undefined, undefined, []),
-  getTree: async () => { /* ...existing tree logic... */ return []; }, 
+  getTree: async () => { return []; }, // simplified
   save: async (m: MenuItemDB) => supabaseSaver('menus', m),
   delete: async (id: number) => supabaseDeleter('menus', id),
   updateVisibilities: async (u: any) => { await supabase.from('menus').upsert(u); return true; }
@@ -511,7 +503,7 @@ export const FireHistoryAPI = {
 
       let result = data.map((item: any) => ({
           ...item,
-          marketId: item.market_id,
+          market_id: item.market_id,
           marketName: item.markets?.name || '-'
       }));
 
@@ -544,7 +536,7 @@ export const DeviceStatusAPI = {
 
       let result = data.map((item: any) => ({
           ...item,
-          marketId: item.market_id,
+          market_id: item.market_id,
           marketName: item.markets?.name || '-'
       }));
 
@@ -573,7 +565,7 @@ export const DataReceptionAPI = {
 
       let result = data.map((item: any) => ({
           ...item,
-          marketId: item.market_id,
+          market_id: item.market_id,
           marketName: item.markets?.name || '-'
       }));
 

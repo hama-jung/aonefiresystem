@@ -28,8 +28,10 @@ export interface User {
   
   // 소속 정보 (정규화)
   department?: string; // 화면 표시용 (Join된 이름 또는 직접 입력값)
-  distributorId?: number; // [NEW] 총판 ID
-  marketId?: number;      // [NEW] 시장 ID
+  
+  // [CHANGED] DB 컬럼명과 일치하는 snake_case 필드만 유지
+  distributor_id?: number;
+  market_id?: number;      
   
   status: '사용' | '미사용';
   smsReceive?: '수신' | '미수신'; // SMS 수신 여부 추가
@@ -37,7 +39,9 @@ export interface User {
 
 export interface Market {
   id: number;
-  distributorId?: number; // 연결된 총판 ID
+  // Market 테이블은 DB 스키마가 "distributorId" (camelCase)로 정의되어 있음
+  distributorId?: number; 
+  
   distributorName?: string; // [NEW] 총판명 (Join용)
   name: string;
   address: string;
@@ -71,8 +75,8 @@ export interface Market {
 
 export interface Store {
   id: number;
-  marketId: number;       // 소속 시장 ID (DB: market_id)
-  marketName?: string;    // 소속 시장명 (Join용)
+  market_id: number;       // [CHANGED] 소속 시장 ID (DB: market_id)
+  marketName?: string;    // 소속 시장명 (Join용 - DB저장 X)
   name: string;           // 상가명
   
   managerName?: string;   // 대표자명
@@ -96,7 +100,7 @@ export interface Store {
 
 export interface Receiver {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   macAddress: string;
   ip?: string;
@@ -111,7 +115,7 @@ export interface Receiver {
 
 export interface Repeater {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   receiverMac: string;
   repeaterId: string;
@@ -125,7 +129,7 @@ export interface Repeater {
 
 export interface Detector {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   
   stores?: { id: number; name: string }[]; 
@@ -144,7 +148,7 @@ export interface Detector {
 
 export interface Transmitter {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   receiverMac: string;
   repeaterId: string;
@@ -157,7 +161,7 @@ export interface Transmitter {
 
 export interface Alarm {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   receiverMac: string;
   repeaterId: string;
@@ -185,7 +189,7 @@ export interface Distributor {
 
 export interface WorkLog {
   id: number;
-  marketId: number;    // DB: market_id
+  market_id: number;    // [CHANGED] DB: market_id
   marketName?: string; // Join
   workDate: string;
   content: string;
@@ -236,12 +240,10 @@ export interface CommonCode {
   status: '사용' | '미사용';
 }
 
-// --- Data Management Logs (Updated Types) ---
-
 export interface FireHistoryItem {
   id: number;
-  marketId?: number; // [NEW] DB: market_id
-  marketName?: string; // Join via market_id
+  market_id?: number; // [CHANGED] DB: market_id
+  marketName?: string; // Join
   receiverMac: string;
   receiverStatus: string; 
   repeaterId: string;
@@ -256,8 +258,8 @@ export interface FireHistoryItem {
 
 export interface DeviceStatusItem {
   id: number;
-  marketId?: number; // [NEW] DB: market_id
-  marketName?: string; // Join via market_id
+  market_id?: number; // [CHANGED] DB: market_id
+  marketName?: string; // Join
   receiverMac: string;
   repeaterId: string;
   deviceType: string; 
@@ -271,8 +273,8 @@ export interface DeviceStatusItem {
 
 export interface DataReceptionItem {
   id: number;
-  marketId?: number; // [NEW] DB: market_id
-  marketName?: string; // Join via market_id
+  market_id?: number; // [CHANGED] DB: market_id
+  marketName?: string; // Join
   logType: string; 
   receiverId: string; 
   repeaterId: string; 
