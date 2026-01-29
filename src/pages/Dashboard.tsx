@@ -213,9 +213,9 @@ export const Dashboard: React.FC = () => {
       try {
         window.kakao.maps.load(() => {
             const options = {
-                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (12 -> 13)
+                // [수정] 대한민국 전체가 보이도록 초기 줌 레벨 조정 (14 -> 13)
                 center: new window.kakao.maps.LatLng(36.3504119, 127.3845475), // 대전 시청 부근
-                level: 14
+                level: 13
             };
             const map = new window.kakao.maps.Map(mapContainer.current, options);
             const zoomControl = new window.kakao.maps.ZoomControl();
@@ -261,82 +261,88 @@ export const Dashboard: React.FC = () => {
     return () => resizeObserver.disconnect();
   }, [mapInstance]);
 
-  // 4. Map Markers Update (Material Icon Style)
+  // 4. Map Markers Update (마커 실종 방지 및 최적화 버전)
   useEffect(() => {
-    if (mapInstance) {
-        // [수정] 기존 마커 제거
-        markersRef.current.forEach(m => m.setMap(null));
-        markersRef.current = [];
+    if (!mapInstance || !markets.length) return;
 
-        const filteredMarkets = markets.filter(market => {
-            if (selectedSido && !market.address.includes(selectedSido)) return false;
-            if (selectedSigungu && !market.address.includes(selectedSigungu)) return false;
-            return true;
-        });
+    // 1. 기존 마커 및 오버레이 제거 (청소)
+    markersRef.current.forEach(m => m.setMap(null));
+    markersRef.current = [];
 
-        const bounds = new window.kakao.maps.LatLngBounds();
+    // 2. 현재 선택된 지역에 맞는 시장 데이터 필터링
+    const filteredMarkets = markets.filter(market => {
+        const addr = market.address || "";
+        if (selectedSido && !addr.includes(selectedSido)) return false;
+        if (selectedSigungu && !addr.includes(selectedSigungu)) return false;
+        return true;
+    });
 
-        filteredMarkets.forEach((market) => {
-            if (market.latitude && market.longitude) {
-                const lat = parseFloat(market.latitude);
-                const lng = parseFloat(market.longitude);
-                const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+    const bounds = new window.kakao.maps.LatLngBounds();
+    let hasValidMarkers = false;
 
-                bounds.extend(markerPosition);
+    // 3. 필터링된 데이터로 마커 생성
+    filteredMarkets.forEach((market) => {
+        if (market.latitude && market.longitude) {
+            const lat = parseFloat(market.latitude);
+            const lng = parseFloat(market.longitude);
+            const markerPosition = new window.kakao.maps.LatLng(lat, lng);
+            bounds.extend(markerPosition);
+            hasValidMarkers = true;
 
-                const isFire = market.status === 'Fire';
-                const isError = market.status === 'Error';
-                
-                const iconName = isFire ? 'local_fire_department' : (isError ? 'warning_amber' : 'storefront');
-                const bgColor = isFire ? 'bg-red-600' : (isError ? 'bg-orange-500' : 'bg-slate-600');
-                const ringColor = isFire ? 'bg-red-500' : (isError ? 'bg-orange-400' : 'bg-slate-400');
-                
-                const content = document.createElement('div');
-                content.innerHTML = `
-                  <div class="relative flex flex-col items-center justify-center w-12 h-12 group cursor-pointer" title="${market.name} (클릭하여 관제화면 진입)">
-                    ${(isFire || isError) ? `<div class="absolute inset-0 rounded-full ${ringColor} opacity-75 animate-ping"></div>` : ''}
-                    <div class="relative z-10 w-10 h-10 rounded-full ${bgColor} border-2 border-white shadow-lg flex items-center justify-center text-white transition-transform transform group-hover:scale-110">
-                        <span class="material-icons-round text-[22px] leading-none">${iconName}</span>
-                    </div>
-                    <div class="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 
-                                bg-slate-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg 
-                                border border-slate-600/50 shadow-2xl opacity-0 group-hover:opacity-100 
-                                transition-all duration-300 translate-y-2 group-hover:translate-y-0
-                                whitespace-nowrap pointer-events-none z-50 flex flex-col items-center min-w-[120px]">
-                      <span class="font-bold text-[13px] tracking-wide">${market.name}</span>
-                      <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/90"></div>
-                    </div>
+            const isFire = market.status === 'Fire';
+            const isError = market.status === 'Error';
+            
+            const iconName = isFire ? 'local_fire_department' : (isError ? 'warning_amber' : 'storefront');
+            const bgColor = isFire ? 'bg-red-600' : (isError ? 'bg-orange-500' : 'bg-slate-600');
+            const ringColor = isFire ? 'bg-red-500' : (isError ? 'bg-orange-400' : 'bg-slate-400');
+            
+            const content = document.createElement('div');
+            content.innerHTML = `
+                <div class="relative flex flex-col items-center justify-center w-12 h-12 group cursor-pointer" title="${market.name} (클릭하여 관제화면 진입)">
+                  ${(isFire || isError) ? `<div class="absolute inset-0 rounded-full ${ringColor} opacity-75 animate-ping"></div>` : ''}
+                  <div class="relative z-10 w-10 h-10 rounded-full ${bgColor} border-2 border-white shadow-lg flex items-center justify-center text-white transition-transform transform group-hover:scale-110">
+                      <span class="material-icons-round text-[22px] leading-none">${iconName}</span>
                   </div>
-                `;
+                  <div class="absolute bottom-full mb-3 left-1/2 transform -translate-x-1/2 
+                              bg-slate-900/90 backdrop-blur-md text-white text-xs px-3 py-2 rounded-lg 
+                              border border-slate-600/50 shadow-2xl opacity-0 group-hover:opacity-100 
+                              transition-all duration-300 translate-y-2 group-hover:translate-y-0
+                              whitespace-nowrap pointer-events-none z-50 flex flex-col items-center min-w-[120px]">
+                    <span class="font-bold text-[13px] tracking-wide">${market.name}</span>
+                    <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/90"></div>
+                  </div>
+                </div>
+            `;
 
-                const customOverlay = new window.kakao.maps.CustomOverlay({
-                    position: markerPosition,
-                    content: content,
-                    yAnchor: 0.5,
-                    zIndex: isFire ? 100 : (isError ? 50 : 1)
-                });
+            const customOverlay = new window.kakao.maps.CustomOverlay({
+                position: markerPosition,
+                content: content,
+                yAnchor: 0.5,
+                zIndex: isFire ? 100 : (isError ? 50 : 1)
+            });
 
-                content.onclick = () => {
-                    setSelectedMapMarket(market);
-                };
+            content.onclick = () => {
+                setSelectedMapMarket(market);
+            };
 
-                customOverlay.setMap(mapInstance);
-                markersRef.current.push(customOverlay);
-            }
-        });
+            customOverlay.setMap(mapInstance);
+            markersRef.current.push(customOverlay);
+        }
+    });
 
-        // [수정] 지도 이동 로직 개선
-        if (markersRef.current.length > 0) {
-            // 마커가 있으면 마커 기준으로 범위 재설정
+    // 4. 지도 시점 조정 (핵심 로직)
+    if (hasValidMarkers) {
+        // [중요] 마커가 있다면 마커들이 다 보이도록 영역 조정 (자동 확대/축소)
+        setTimeout(() => {
             mapInstance.setBounds(bounds);
-        } else if (selectedSido && !selectedSigungu) {
-            // 마커는 없지만 시/도가 선택된 경우 해당 지역 중심으로 이동
-            const regionInfo = SIDO_COORDINATES[selectedSido];
-            if (regionInfo) {
-                const moveLatLon = new window.kakao.maps.LatLng(regionInfo.lat, regionInfo.lng);
-                mapInstance.setLevel(regionInfo.level);
-                mapInstance.panTo(moveLatLon);
-            }
+        }, 100);
+    } else if (selectedSido) {
+        // 마커가 없더라도 선택한 지역의 중심 좌표로 이동
+        const regionInfo = SIDO_COORDINATES[selectedSido];
+        if (regionInfo) {
+            const moveLatLon = new window.kakao.maps.LatLng(regionInfo.lat, regionInfo.lng);
+            mapInstance.setLevel(regionInfo.level);
+            mapInstance.panTo(moveLatLon);
         }
     }
   }, [mapInstance, markets, selectedSido, selectedSigungu]); 
