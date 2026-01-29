@@ -114,7 +114,8 @@ export const Dashboard: React.FC = () => {
   // --- Map State (Kakao) ---
   const mapContainer = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  const [markers, setMarkers] = useState<any[]>([]);
+  // [수정] 마커 관리를 위해 useRef 사용 (Stale Closure 방지)
+  const markersRef = useRef<any[]>([]);
   const [mapError, setMapError] = useState(false);
 
   const [selectedSido, setSelectedSido] = useState('');
@@ -241,8 +242,9 @@ export const Dashboard: React.FC = () => {
   // 4. Map Markers Update (Material Icon Style)
   useEffect(() => {
     if (mapInstance) {
-        markers.forEach(m => m.setMap(null));
-        setMarkers([]);
+        // [수정] 기존 마커 제거 시 markersRef 사용
+        markersRef.current.forEach(m => m.setMap(null));
+        markersRef.current = [];
 
         const filteredMarkets = markets.filter(market => {
             if (selectedSido && !market.address.includes(selectedSido)) return false;
@@ -250,7 +252,6 @@ export const Dashboard: React.FC = () => {
             return true;
         });
 
-        const newMarkers: any[] = [];
         const bounds = new window.kakao.maps.LatLngBounds();
 
         filteredMarkets.forEach((market) => {
@@ -298,14 +299,16 @@ export const Dashboard: React.FC = () => {
                 };
 
                 customOverlay.setMap(mapInstance);
-                newMarkers.push(customOverlay);
+                markersRef.current.push(customOverlay);
             }
         });
 
-        setMarkers(newMarkers);
-
-        if (newMarkers.length > 0 && (selectedSido || selectedSigungu)) {
+        // [수정] 마커가 1개 이상이면 해당 영역으로 지도 이동
+        if (markersRef.current.length > 0) {
             mapInstance.setBounds(bounds);
+        } else if (selectedSido && !selectedSigungu) {
+            // 마커는 없지만 시/도만 선택된 경우 해당 지역 센터로 이동 (예시 좌표 사용)
+            // 실제 구현에서는 행정구역별 중심좌표 데이터가 필요함. 여기선 일단 유지.
         }
     }
   }, [mapInstance, markets, selectedSido, selectedSigungu]); 
