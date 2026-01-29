@@ -82,7 +82,6 @@ async function syncDistributorManagedMarkets(distributorId: number) {
 }
 
 // [핵심] 상가 저장 시 관련 기기(수신기, 중계기, 감지기) 자동 생성 및 동기화 함수
-// 이 함수가 "시스템관리 > 기기관리"와 "현장기기관리"의 데이터를 일치시켜줍니다.
 async function syncDevicesFromStore(store: Store) {
   if (!store.marketId || !store.receiverMac) return;
 
@@ -154,7 +153,6 @@ async function syncDevicesFromStore(store: Store) {
         }
 
         // 4. 감지기-상가 연결 (detector_stores) 갱신
-        // 상가가 다른 감지기로 변경되었을 수 있으므로, 기존 이 상가의 연결을 모두 끊고 새로 연결합니다.
         if (detectorId && store.id) {
           // 기존 연결 삭제 (이 상가에 연결된 모든 감지기 링크 제거)
           await supabase.from('detector_stores').delete().eq('storeId', store.id);
@@ -169,7 +167,6 @@ async function syncDevicesFromStore(store: Store) {
     }
   } catch (e) {
     console.error("Device sync failed during store save:", e);
-    // 메인 로직(상가 저장)은 성공했으므로 여기서는 에러를 throw하지 않고 로그만 남김
   }
 }
 
@@ -197,12 +194,6 @@ async function supabaseReader<T>(
     
     const { data, error } = await query;
     
-    // [DEBUG LOG]
-    console.log(`[API] Reading ${table}:`, { 
-        dataLength: data?.length || 0, 
-        error: error?.message
-    });
-
     if (error) {
         console.warn(`Supabase read error on ${table}:`, error.message);
         return fallbackData;
@@ -345,8 +336,6 @@ export const MarketAPI = {
 
       const { data: markets, error } = await query;
       
-      console.log("[API] Reading markets:", { length: markets?.length, error: error?.message });
-
       if (error) {
          console.warn(`Supabase read error on markets:`, error.message);
          return MOCK_MARKETS.map(m => ({...m, distributorName: '미창'}));
@@ -471,7 +460,6 @@ export const StoreAPI = {
       if (params?.marketId) query = query.eq('marketId', params.marketId);
       
       const { data: stores, error } = await query;
-      console.log("[API] Reading stores:", { length: stores?.length, error: error?.message });
 
       if (error) throw error;
 
@@ -505,7 +493,6 @@ export const StoreAPI = {
     const { marketName, ...dbData } = store;
     const savedStore = await supabaseSaver('stores', dbData as Store);
     
-    // [중요] 상가 저장 후 관련 기기(수신기, 중계기, 감지기) 데이터 동기화
     await syncDevicesFromStore(savedStore);
     
     return savedStore;
@@ -529,7 +516,6 @@ export const StoreAPI = {
     if (error) throw error;
 
     if (data) {
-        // 일괄 등록 시에도 각 상가별 기기 데이터 동기화 수행
         for (const store of data) {
             await syncDevicesFromStore(store as Store);
         }
@@ -559,16 +545,13 @@ export const CommonCodeAPI = {
 export const WorkLogAPI = { 
   getList: async (params?: { marketName?: string }) => {
     try {
-      // Manual Join: 1. Get Logs
       let query = supabase.from('work_logs').select('*').order('workDate', { ascending: false });
       
       const { data: logs, error } = await query;
-      console.log("[API] Reading work_logs:", { length: logs?.length, error: error?.message });
 
       if (error) throw error;
 
       if (logs && logs.length > 0) {
-        // Manual Join: 2. Get Markets
         const marketIds = Array.from(new Set(logs.map((l: any) => l.marketId).filter((id: any) => id)));
         let marketMap: Record<number, string> = {};
         
@@ -617,19 +600,16 @@ export const WorkLogAPI = {
 export const ReceiverAPI = { 
   getList: async (params?: { marketName?: string, macAddress?: string, ip?: string, emergencyPhone?: string }) => {
     try {
-      // Manual Join: 1. Get Receivers
       let query = supabase.from('receivers').select('*').order('id', { ascending: false });
       if (params?.macAddress) query = query.ilike('macAddress', `%${params.macAddress}%`);
       if (params?.ip) query = query.ilike('ip', `%${params.ip}%`);
       if (params?.emergencyPhone) query = query.ilike('emergencyPhone', `%${params.emergencyPhone}%`);
       
       const { data: receivers, error } = await query;
-      console.log("[API] Reading receivers:", { length: receivers?.length, error: error?.message });
 
       if (error) throw error;
 
       if (receivers && receivers.length > 0) {
-        // Manual Join: 2. Get Markets
         const marketIds = Array.from(new Set(receivers.map((r: any) => r.marketId).filter((id: any) => id)));
         let marketMap: Record<number, string> = {};
         
@@ -710,13 +690,11 @@ export const ReceiverAPI = {
 export const RepeaterAPI = { 
   getList: async (params?: any) => {
     try {
-      // Manual Join
       let query = supabase.from('repeaters').select('*').order('id', { ascending: false });
       if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
       if (params?.repeaterId) query = query.eq('repeaterId', params.repeaterId);
       
       const { data: repeaters, error } = await query;
-      console.log("[API] Reading repeaters:", { length: repeaters?.length, error: error?.message });
 
       if (error) throw error;
 
@@ -801,16 +779,13 @@ export const RepeaterAPI = {
 export const DetectorAPI = { 
   getList: async (params?: any) => {
     try {
-      // Manual Join
       let query = supabase.from('detectors').select('*').order('id', { ascending: false });
       if (params?.receiverMac) query = query.ilike('receiverMac', `%${params.receiverMac}%`);
       
       const { data: detectors, error } = await query;
-      console.log("[API] Reading detectors:", { length: detectors?.length, error: error?.message });
 
       if (error || !detectors) return [];
 
-      // 1. Get Markets
       const marketIds = Array.from(new Set(detectors.map((d: any) => d.marketId).filter((id: any) => id)));
       let marketMap: Record<number, string> = {};
       if (marketIds.length > 0) {
@@ -820,14 +795,10 @@ export const DetectorAPI = {
           }
       }
 
-      // 2. Get Stores (Junction)
       const detectorIds = detectors.map(d => d.id);
       
-      /* Manual Junction Join Logic */
-      // 2.1 Get Junctions
       const { data: rawJunctions } = await supabase.from('detector_stores').select('*').in('detectorId', detectorIds);
       
-      // 2.2 Get Store Names
       let storeMap: Record<number, string> = {};
       if (rawJunctions && rawJunctions.length > 0) {
           const storeIds = Array.from(new Set(rawJunctions.map((j: any) => j.storeId)));
@@ -929,10 +900,8 @@ export const DetectorAPI = {
 export const TransmitterAPI = { 
   getList: async (params?: any) => {
     try {
-        // Manual Join
         let query = supabase.from('transmitters').select('*').order('id', { ascending: false });
         const { data, error } = await query;
-        console.log("[API] Reading transmitters:", { length: data?.length, error: error?.message });
         
         if (!error && data) {
             const marketIds = Array.from(new Set(data.map((t: any) => t.marketId).filter((id: any) => id)));
@@ -963,10 +932,8 @@ export const TransmitterAPI = {
 export const AlarmAPI = { 
   getList: async (params?: any) => {
     try {
-        // Manual Join
         let query = supabase.from('alarms').select('*').order('id', { ascending: false });
         const { data, error } = await query;
-        console.log("[API] Reading alarms:", { length: data?.length, error: error?.message });
         
         if (!error && data) {
             const marketIds = Array.from(new Set(data.map((a: any) => a.marketId).filter((id: any) => id)));
@@ -1000,7 +967,6 @@ export const DashboardAPI = {
   getData: async () => {
     try {
         // 1. Fire Logs (from fire_history)
-        // 조건: falseAlarmStatus가 '화재' 또는 '등록'인 건 (오탐 제외)
         const { data: fireData } = await supabase
             .from('fire_history')
             .select('*')
@@ -1016,7 +982,6 @@ export const DashboardAPI = {
         }));
 
         // 2. Fault Logs (from device_status)
-        // 조건: deviceStatus가 '에러'이고 errorCode가 '04'(통신이상)가 아닌 건
         const { data: faultData } = await supabase
             .from('device_status')
             .select('*')
@@ -1033,7 +998,6 @@ export const DashboardAPI = {
         }));
 
         // 3. Communication Errors (from device_status)
-        // 조건: errorCode가 '04'인 건
         const { data: commData } = await supabase
             .from('device_status')
             .select('*')
@@ -1044,16 +1008,12 @@ export const DashboardAPI = {
         const mappedCommLogs = (commData || []).map((log: any) => ({
             id: log.id,
             market: log.marketName,
-            address: log.marketName, // 주소 정보가 없으므로 시장명으로 대체
-            receiver: log.receiverMac
+            address: log.marketName,
+            receiver: log.receiverMac,
+            time: log.registeredAt // [수정] 대시보드 표시를 위해 시간 필드 추가
         }));
 
-        // 4. Stats Calculation (Simple counts from fetched arrays, or separate count queries)
-        // 실제로는 count 쿼리를 별도로 날리는 것이 정확하지만, 여기서는 가져온 최신 데이터 기준으로 간단히 표시하거나
-        // 또는 전체 카운트를 위해 별도 쿼리를 수행할 수 있습니다. 여기선 예시로 length를 사용하되, 
-        // 전체 카운트를 원하면 count 쿼리를 추가해야 합니다.
-        
-        // 전체 카운트 조회 (Optional improvement)
+        // 4. Stats Calculation
         const { count: fireCount } = await supabase
             .from('fire_history')
             .select('*', { count: 'exact', head: true })
@@ -1083,7 +1043,7 @@ export const DashboardAPI = {
 
     } catch (e) {
         console.error("Dashboard Data Fetch Error:", e);
-        return MOCK_DASHBOARD; // Fallback in case of critical failure
+        return MOCK_DASHBOARD;
     }
   }
 };
@@ -1106,14 +1066,13 @@ export const MenuAPI = {
     return buildTree(list);
   },
   save: async (menu: MenuItemDB) => {
-    const { children, ...data } = menu; // Exclude children from save
+    const { children, ...data } = menu; 
     return supabaseSaver('menus', data as any);
   },
   delete: async (id: number) => {
     return supabaseDeleter('menus', id);
   },
   updateVisibilities: async (updates: Partial<MenuItemDB>[]) => {
-    // Supabase upsert for bulk update
     const { error } = await supabase.from('menus').upsert(updates);
     if (error) throw new Error(error.message);
     return true;
@@ -1126,7 +1085,6 @@ export const FireHistoryAPI = {
       let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
       
       if (params?.startDate) query = query.gte('registeredAt', params.startDate);
-      // Add 1 day to endDate to include the full end date or use logic to cover the day
       if (params?.endDate) query = query.lte('registeredAt', params.endDate + ' 23:59:59');
       
       if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
@@ -1137,8 +1095,7 @@ export const FireHistoryAPI = {
       }
 
       const { data, error } = await query;
-      console.log("[API] Reading fire_history:", { length: data?.length, error: error?.message });
-      if (error) return []; // or mock
+      if (error) return [];
       return data as FireHistoryItem[];
     } catch (e) { return []; }
   },
@@ -1171,7 +1128,6 @@ export const DeviceStatusAPI = {
       }
 
       const { data, error } = await query;
-      console.log("[API] Reading device_status:", { length: data?.length, error: error?.message });
       if (error) return [];
       return data as DeviceStatusItem[];
     } catch (e) { return []; }
@@ -1200,7 +1156,6 @@ export const DataReceptionAPI = {
       if (params?.marketName) query = query.ilike('marketName', `%${params.marketName}%`);
 
       const { data, error } = await query;
-      console.log("[API] Reading data_reception:", { length: data?.length, error: error?.message });
       if (error) {
         console.warn('DataReceptionAPI error:', error);
         return [];

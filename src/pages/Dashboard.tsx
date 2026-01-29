@@ -14,6 +14,18 @@ declare global {
 
 const ITEMS_PER_LIST_PAGE = 4;
 
+// --- Helper: Date Formatter ---
+const formatDateTime = (isoString: string) => {
+  if (!isoString) return { date: '-', time: '-' };
+  const dateObj = new Date(isoString);
+  const yyyy = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const date = `${yyyy}-${mm}-${dd}`;
+  const time = dateObj.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return { date, time };
+};
+
 // --- Sub Component: Dashboard List Section ---
 const DashboardListSection: React.FC<{
   title: string;
@@ -91,9 +103,10 @@ export const Dashboard: React.FC = () => {
   const [fireData, setFireData] = useState<any[]>([]);
   const [faultData, setFaultData] = useState<any[]>([]);
   const [commErrorData, setCommErrorData] = useState<any[]>([]);
+  // [수정] 통계 라벨 변경 (최근 화재 발생 -> 화재발생, 최근 고장 발생 -> 고장발생)
   const [stats, setStats] = useState<any[]>([
-    { label: '최근 화재 발생', value: 0, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
-    { label: '최근 고장 발생', value: 0, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
+    { label: '화재발생', value: 0, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
+    { label: '고장발생', value: 0, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
     { label: '통신 이상', value: 0, color: 'bg-slate-600', icon: <WifiOff size={20} /> },
   ]);
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -139,9 +152,10 @@ export const Dashboard: React.FC = () => {
             setCommErrorData(dashboardData.commEvents || []);
             
             if (dashboardData.stats && dashboardData.stats.length === 3) {
+                // [수정] 통계 라벨 변경 적용 (API 데이터 로드 후에도 유지)
                 setStats([
-                    { label: '최근 화재 발생', value: dashboardData.stats[0].value, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
-                    { label: '최근 고장 발생', value: dashboardData.stats[1].value, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
+                    { label: '화재발생', value: dashboardData.stats[0].value, color: 'bg-red-600', icon: <AlertTriangle size={20} /> },
+                    { label: '고장발생', value: dashboardData.stats[1].value, color: 'bg-orange-500', icon: <BatteryWarning size={20} /> },
                     { label: '통신 이상', value: dashboardData.stats[2].value, color: 'bg-slate-600', icon: <WifiOff size={20} /> },
                 ]);
             }
@@ -263,7 +277,6 @@ export const Dashboard: React.FC = () => {
                 const isError = market.status === 'Error';
                 
                 // --- Material Icon Marker Styling ---
-                // 아이콘 이름 및 색상 매핑
                 const iconName = isFire ? 'local_fire_department' : (isError ? 'warning_amber' : 'storefront');
                 const bgColor = isFire ? 'bg-red-600' : (isError ? 'bg-orange-500' : 'bg-slate-600');
                 const ringColor = isFire ? 'bg-red-500' : (isError ? 'bg-orange-400' : 'bg-slate-400');
@@ -301,18 +314,19 @@ export const Dashboard: React.FC = () => {
                     position: markerPosition,
                     content: content,
                     yAnchor: 0.5,
-                    zIndex: isFire ? 100 : (isError ? 50 : 1) // 화재 마커를 가장 위로
+                    zIndex: isFire ? 100 : (isError ? 50 : 1)
                 });
 
-                // InfoWindow Content (Standard fallback click detail)
+                // InfoWindow Content
                 const statusText = isFire ? '화재발생' : (isError ? '장애발생' : '정상운영');
                 const statusTextColor = isFire ? 'text-red-500' : (isError ? 'text-orange-500' : 'text-emerald-500');
                 
                 const iwContent = `
                     <div style="padding:12px; min-width:180px; color:#1e293b; font-size:12px; border-radius:4px;">
                         <strong style="font-size:14px; color:#0f172a;">${market.name}</strong>
-                        <div style="margin-top:4px; color:#475569;">${market.address}</div>
-                        <div style="margin-top:4px; color:#475569;">담당자: ${market.managerName || '-'}</div>
+                        <div style="margin-top:4px; color:#475569;">
+                            담당자: ${market.managerName || '-'}${market.managerPhone ? `(${market.managerPhone})` : ''}
+                        </div>
                         <div style="margin-top:6px; font-weight:bold;" class="${statusTextColor.replace('text-', 'text-color-')}">
                             상태: <span style="color: ${isFire ? '#ef4444' : isError ? '#f97316' : '#10b981'}">${statusText}</span>
                         </div>
@@ -350,7 +364,7 @@ export const Dashboard: React.FC = () => {
             mapInstance.setBounds(bounds);
         }
     }
-  }, [mapInstance, markets, selectedSido, selectedSigungu]); // 의존성 배열에 필터 조건 추가
+  }, [mapInstance, markets, selectedSido, selectedSigungu]); 
 
   // 검색 및 리셋 관련 함수
   const isSearchActive = selectedSido !== '' || selectedSigungu !== '' || searchMarketMap !== '';
@@ -360,7 +374,7 @@ export const Dashboard: React.FC = () => {
       setSelectedSigungu('');
       setSearchMarketMap('');
       if (mapInstance) {
-          const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475); // 대전 시청 부근
+          const moveLatLon = new window.kakao.maps.LatLng(36.3504119, 127.3845475);
           mapInstance.setLevel(12);
           mapInstance.panTo(moveLatLon);
       }
@@ -369,7 +383,6 @@ export const Dashboard: React.FC = () => {
   const handlePanToMarket = (keyword: string) => {
       if (!mapInstance || !markets.length || !keyword.trim()) return;
 
-      // 1. 현재 선택된 지역 범위 내에서만 검색 (AND 조건)
       const filteredMarkets = markets.filter(market => {
           let match = true;
           if (selectedSido && !market.address.includes(selectedSido)) match = false;
@@ -377,7 +390,6 @@ export const Dashboard: React.FC = () => {
           return match;
       });
 
-      // 2. 필터된 목록 내에서 이름 검색
       const target = filteredMarkets.find(m => m.name.includes(keyword));
 
       if (target && target.latitude && target.longitude) {
@@ -385,12 +397,10 @@ export const Dashboard: React.FC = () => {
           mapInstance.setLevel(3);
           mapInstance.panTo(moveLatLon);
           
-          // 모바일인 경우 지도 열기
           if (window.innerWidth < 1024) {
               setShowMobileMap(true);
           }
       } else {
-          // 3. 검색 실패 시 알림 및 초기화
           alert('찾는 현장이 없습니다. 다시 입력하세요.');
           setSearchMarketMap('');
       }
@@ -411,10 +421,10 @@ export const Dashboard: React.FC = () => {
     <div className="flex flex-col h-full text-slate-200">
       <PageHeader title="대시보드" rightContent={timerContent} />
 
-      {/* Main Grid Layout - PC Fixed Height (calc(100vh - header - padding - gap)) */}
+      {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-160px)] min-h-[500px]">
         
-        {/* Left Column: Lists (Always Visible, Independent Scroll) */}
+        {/* Left Column: Lists */}
         <div className="flex flex-col gap-4 overflow-y-auto pr-1 custom-scrollbar pb-20 lg:pb-0">
           <div className="grid grid-cols-3 gap-3 flex-shrink-0">
             {stats.map((stat, idx) => (
@@ -435,17 +445,21 @@ export const Dashboard: React.FC = () => {
             data={fireData}
             linkTo="/fire-history"
             onItemClick={(item) => handlePanToMarket(item.marketName || '')}
-            renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
-                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">화재</span>
-                    <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
-                 </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">
-                    {item.time ? new Date(item.time).toLocaleTimeString() : '-'}
-                 </div>
-              </div>
-            )}
+            renderItem={(item) => {
+              const dt = formatDateTime(item.time);
+              return (
+                <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
+                   <div className="flex items-center gap-2 min-w-0">
+                      <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0 animate-pulse">화재</span>
+                      <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
+                   </div>
+                   <div className="text-[10px] text-slate-500 shrink-0 ml-2 font-mono flex flex-col items-end leading-tight">
+                      <span className="text-slate-400">{dt.date}</span>
+                      <span>{dt.time}</span>
+                   </div>
+                </div>
+              );
+            }}
           />
 
           <DashboardListSection 
@@ -454,17 +468,21 @@ export const Dashboard: React.FC = () => {
             headerColorClass="bg-gradient-to-r from-orange-900 to-slate-800"
             data={faultData}
             linkTo="/device-status"
-            renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
-                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">고장</span>
-                    <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
-                 </div>
-                 <div className="text-xs text-slate-500 shrink-0 ml-2 font-mono">
-                    {item.time ? new Date(item.time).toLocaleTimeString() : '-'}
-                 </div>
-              </div>
-            )}
+            renderItem={(item) => {
+              const dt = formatDateTime(item.time);
+              return (
+                <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
+                   <div className="flex items-center gap-2 min-w-0">
+                      <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold shrink-0">고장</span>
+                      <span className="font-medium text-slate-200 truncate group-hover:text-white" title={item.msg}>{item.msg}</span>
+                   </div>
+                   <div className="text-[10px] text-slate-500 shrink-0 ml-2 font-mono flex flex-col items-end leading-tight">
+                      <span className="text-slate-400">{dt.date}</span>
+                      <span>{dt.time}</span>
+                   </div>
+                </div>
+              );
+            }}
           />
 
           <DashboardListSection 
@@ -473,21 +491,28 @@ export const Dashboard: React.FC = () => {
             headerColorClass="bg-gradient-to-r from-slate-700 to-slate-800"
             data={commErrorData}
             linkTo="/device-status"
-            renderItem={(item) => (
-              <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
-                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-bold text-slate-200 truncate group-hover:text-white">{item.market}</span>
-                    <span className="text-xs text-slate-400 truncate hidden sm:inline">({item.address})</span>
-                 </div>
-                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                    <span className="text-orange-300 font-mono text-xs bg-orange-900/30 px-1.5 py-0.5 rounded">R:{item.receiver}</span>
-                 </div>
-              </div>
-            )}
+            renderItem={(item) => {
+              const dt = formatDateTime(item.time);
+              return (
+                <div className="flex items-center justify-between px-2 py-2 transition-colors text-sm">
+                   <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-slate-200 truncate group-hover:text-white">{item.market}</span>
+                      <span className="text-xs text-slate-400 truncate hidden sm:inline">({item.address})</span>
+                   </div>
+                   <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-orange-300 font-mono text-[10px] bg-orange-900/30 px-1.5 py-0.5 rounded mr-1">R:{item.receiver}</span>
+                      <div className="text-[10px] text-slate-500 font-mono flex flex-col items-end leading-tight">
+                        <span className="text-slate-400">{dt.date}</span>
+                        <span>{dt.time}</span>
+                      </div>
+                   </div>
+                </div>
+              );
+            }}
           />
         </div>
 
-        {/* Right Column: Map (Hidden on Mobile unless toggled) */}
+        {/* Right Column: Map */}
         <div className={`
             bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-700 flex flex-col h-full
             ${showMobileMap ? 'fixed inset-0 z-50 m-0 rounded-none' : 'hidden lg:flex'}
@@ -604,7 +629,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Floating Map Button (Only show when map is closed) */}
+      {/* Mobile Floating Map Button */}
       {!showMobileMap && (
         <button
             onClick={() => setShowMobileMap(true)}
