@@ -20,7 +20,6 @@ function cleanPayload<T>(item: T): Partial<T> {
   // 1. 제거할 필드 목록 (UI용 가상 필드 및 Join 객체)
   const keysToRemove = [
     'marketName', 'distributorName', 'stores',
-    'marketId', // DB는 market_id를 사용하므로, camelCase인 marketId는 제거 대상
     'markets', 'distributors', 'users', 'roles'
   ];
   
@@ -191,22 +190,15 @@ export const StoreAPI = {
 
       return (data || []).map((s: any) => ({
         ...s,
-        // UI uses snake_case now too, but handle potential camelCase from bad joins
         market_id: s.market_id, 
         marketName: s.markets?.name || '-'
       })) as Store[];
     } catch (e) { return []; }
   },
   save: async (store: Store) => {
-    const payload = { ...store } as any;
-    
-    // [FIX] Ensure we send 'market_id'. If 'marketId' exists from UI, map it to 'market_id'.
-    if (payload.marketId) {
-        payload.market_id = payload.marketId;
-        delete payload.marketId;
-    }
-    
-    return supabaseSaver('stores', payload);
+    // 이제 types.ts의 Store가 market_id를 가지므로 그대로 저장하면 됩니다.
+    // 매핑 로직 불필요.
+    return supabaseSaver('stores', store);
   },
   delete: async (id: number) => supabaseDeleter('stores', id),
   uploadStoreImage: async (file: File) => {
@@ -216,15 +208,8 @@ export const StoreAPI = {
     return supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl;
   },
   saveBulk: async (stores: Store[]) => {
-    const dataToInsert = stores.map(store => {
-       const payload = cleanPayload(store) as any;
-       // [FIX] Bulk insert mapping
-       if (payload.marketId) {
-           payload.market_id = payload.marketId;
-           delete payload.marketId;
-       }
-       return payload;
-    });
+    // Bulk insert도 이제 그대로 넣습니다.
+    const dataToInsert = stores.map(store => cleanPayload(store));
     const { error } = await supabase.from('stores').insert(dataToInsert);
     if (error) throw error;
     return true;
@@ -274,11 +259,7 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
 
 export const ReceiverAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Receiver>('receivers', params),
-  save: async (r: Receiver) => {
-      const payload = { ...r } as any;
-      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-      return supabaseSaver('receivers', payload);
-  },
+  save: async (r: Receiver) => supabaseSaver('receivers', r),
   saveCoordinates: async (id: number, x: number, y: number) => { 
     await supabase.from('receivers').update({ x_pos: x, y_pos: y }).eq('id', id); return true; 
   },
@@ -289,11 +270,7 @@ export const ReceiverAPI = {
     return data ? supabase.storage.from('receiver-images').getPublicUrl(fileName).data.publicUrl : '';
   },
   saveBulk: async (data: Receiver[]) => {
-      const insertData = data.map(d => {
-          const payload = cleanPayload(d) as any;
-          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-          return payload;
-      });
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('receivers').insert(insertData);
       if(error) throw error; return true;
   }
@@ -301,11 +278,7 @@ export const ReceiverAPI = {
 
 export const RepeaterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
-  save: async (r: Repeater) => {
-      const payload = { ...r } as any;
-      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-      return supabaseSaver('repeaters', payload);
-  },
+  save: async (r: Repeater) => supabaseSaver('repeaters', r),
   saveCoordinates: async (id: number, x: number, y: number) => { 
     await supabase.from('repeaters').update({ x_pos: x, y_pos: y }).eq('id', id); return true; 
   },
@@ -316,11 +289,7 @@ export const RepeaterAPI = {
     return data ? supabase.storage.from('repeater-images').getPublicUrl(fileName).data.publicUrl : '';
   },
   saveBulk: async (data: Repeater[]) => {
-      const insertData = data.map(d => {
-          const payload = cleanPayload(d) as any;
-          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-          return payload;
-      });
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('repeaters').insert(insertData);
       if(error) throw error; return true;
   }
@@ -333,11 +302,8 @@ export const DetectorAPI = {
   },
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
-    const payload = { ...rest } as any;
-    if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-    
     // Save main detector
-    const savedDetector = await supabaseSaver('detectors', payload);
+    const savedDetector = await supabaseSaver('detectors', rest as Detector);
     
     // Save relations
     if (savedDetector.id) {
@@ -354,11 +320,7 @@ export const DetectorAPI = {
   },
   delete: async (id: number) => supabaseDeleter('detectors', id),
   saveBulk: async (data: Detector[]) => {
-      const insertData = data.map(d => {
-          const payload = cleanPayload(d) as any;
-          if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-          return payload;
-      });
+      const insertData = data.map(d => cleanPayload(d));
       const { error } = await supabase.from('detectors').insert(insertData);
       if(error) throw error; return true;
   }
@@ -366,31 +328,19 @@ export const DetectorAPI = {
 
 export const TransmitterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Transmitter>('transmitters', params),
-  save: async (t: Transmitter) => {
-      const payload = { ...t } as any;
-      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-      return supabaseSaver('transmitters', payload);
-  },
+  save: async (t: Transmitter) => supabaseSaver('transmitters', t),
   delete: async (id: number) => supabaseDeleter('transmitters', id)
 };
 
 export const AlarmAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Alarm>('alarms', params),
-  save: async (a: Alarm) => {
-      const payload = { ...a } as any;
-      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-      return supabaseSaver('alarms', payload);
-  },
+  save: async (a: Alarm) => supabaseSaver('alarms', a),
   delete: async (id: number) => supabaseDeleter('alarms', id)
 };
 
 export const WorkLogAPI = {
   getList: async (params?: { marketName?: string }) => getDeviceListWithMarket<WorkLog>('work_logs', params),
-  save: async (log: WorkLog) => {
-      const payload = { ...log } as any;
-      if (payload.marketId) { payload.market_id = payload.marketId; delete payload.marketId; }
-      return supabaseSaver('work_logs', payload);
-  },
+  save: async (log: WorkLog) => supabaseSaver('work_logs', log),
   delete: async (id: number) => supabaseDeleter('work_logs', id),
   uploadAttachment: async (file: File) => {
     const fileName = generateSafeFileName('log', file.name);

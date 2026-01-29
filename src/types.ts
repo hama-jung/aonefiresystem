@@ -71,7 +71,7 @@ export interface Market {
 
 export interface Store {
   id: number;
-  market_id: number;       // [FIXED] DB 컬럼명: market_id
+  market_id: number;       // [CRITICAL FIX] DB 컬럼명과 일치시킴 (marketId -> market_id)
   marketName?: string;     // Join 표시용
   name: string;
   

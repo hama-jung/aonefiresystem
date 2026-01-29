@@ -194,7 +194,7 @@ export const StoreManagement: React.FC = () => {
   const handleMarketSelect = (market: Market) => {
     if (view === 'form') {
       setSelectedMarketForForm(market);
-      setFormData({ ...formData, market_id: market.id }); // [FIXED] Use market_id
+      setFormData({ ...formData, market_id: market.id }); // [CRITICAL FIX] Ensure market_id is used
     } else if (view === 'excel') {
       setExcelMarket(market);
     }
@@ -205,7 +205,7 @@ export const StoreManagement: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // [FIXED] Check market_id instead of marketId
+    // [CRITICAL FIX] Validation check for market_id
     if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; } 
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
     if (!formData.status) { alert('상가 사용여부를 선택해주세요.'); return; }
@@ -366,7 +366,7 @@ export const StoreManagement: React.FC = () => {
   const modalIndexOfLast = marketModalPage * MODAL_ITEMS_PER_PAGE;
   const modalIndexOfFirst = modalIndexOfLast - MODAL_ITEMS_PER_PAGE;
   const modalCurrentMarkets = marketList.slice(modalIndexOfFirst, modalIndexOfLast);
-  const modalTotalPages = Math.ceil(marketList.length / MODAL_ITEMS_PER_PAGE);
+  // const modalTotalPages = Math.ceil(marketList.length / MODAL_ITEMS_PER_PAGE);
 
 
   // --- VIEW: FORM ---
