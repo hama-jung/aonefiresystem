@@ -1,15 +1,16 @@
 import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
-// --- DB Column Whitelists ---
-
-const STORE_COLS = ['market_id', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'latitude', 'longitude', 'handlingItems'];
-const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'distributor_id', 'market_id', 'status', 'smsReceive'];
-const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'status'];
-const DEVICE_BASE_COLS = ['market_id', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
+// --- DB Column Whitelists (DB 컬럼명인 CamelCase로 정의) ---
+// [CORRECTION] 기획자님 확인: DB 컬럼이 marketId, distributorId로 변경됨.
+const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
+const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
+const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
+const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
 
 // --- Helper Utilities ---
 
+// CamelCase 컬럼 그대로 사용
 function mapToWhitelist(item: any, columns: string[]): any {
   const payload: any = {};
   columns.forEach(col => {
@@ -31,8 +32,10 @@ const generateSafeFileName = (prefix: string, originalName: string) => {
 
 // --- Generic Functions ---
 
-async function supabaseSaver<T extends { id: number }>(table: string, item: T, columns: string[]): Promise<T> {
+async function supabaseSaver<T extends { id: number }>(table: string, item: any, columns: string[]): Promise<T> {
   const { id } = item;
+  
+  // DB 컬럼이 CamelCase이므로 변환 없이 그대로 저장
   const dbData = mapToWhitelist(item, columns);
   
   let query;
@@ -44,6 +47,7 @@ async function supabaseSaver<T extends { id: number }>(table: string, item: T, c
   
   const { data, error } = await query;
   if (error) throw new Error(error.message);
+  
   return data[0] as T;
 }
 
@@ -53,6 +57,7 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value && value !== 'all') {
+          // CamelCase 그대로 쿼리
           if (searchFields?.includes(key)) query = query.ilike(key, `%${value}%`);
           else query = query.eq(key, value);
         }
@@ -60,6 +65,8 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
     }
     const { data, error } = await query;
     if (error) return [];
+    
+    // DB에서 CamelCase로 오므로 그대로 반환
     return data as T[];
   } catch (e) { return []; }
 }
@@ -67,13 +74,29 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
 async function getDeviceListWithMarket<T>(table: string, params: any) {
     try {
       let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
+      
       if (params) {
           Object.keys(params).forEach(key => {
-              if (params[key] && key !== 'marketName') {
-                  if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
-                  else if (key === 'market_id') query = query.eq('market_id', params[key]);
-                  else query = query.eq(key, params[key]);
+              if (!params[key] || params[key] === 'all') return;
+              if (['marketName', 'startDate', 'endDate'].includes(key)) return;
+
+              // 상태 필터 처리
+              if (key === 'status') {
+                  if (table === 'fire_history') {
+                      if (params[key] === 'fire') query = query.eq('falseAlarmStatus', '화재');
+                      if (params[key] === 'false') query = query.eq('falseAlarmStatus', '오탐');
+                      return; 
+                  }
+                  if (table === 'device_status') {
+                      if (params[key] === 'processed') query = query.eq('processStatus', '처리');
+                      if (params[key] === 'unprocessed') query = query.eq('processStatus', '미처리');
+                      return;
+                  }
               }
+
+              // marketId 및 기타 컬럼 그대로 사용
+              if (key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+              else query = query.eq(key, params[key]);
           });
       }
       const { data, error } = await query;
@@ -83,6 +106,8 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
           ...item,
           marketName: item.markets?.name || '-'
       }));
+      
+      // marketName 필터링
       if (params?.marketName) {
           result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
@@ -97,7 +122,10 @@ export const AuthAPI = {
     const { data } = await supabase.from('users').select('*').eq('userId', id).single();
     if (data && data.password === pw && data.status === '사용') {
       const { password, ...userInfo } = data;
-      return { success: true, user: userInfo };
+      return { 
+          success: true, 
+          user: userInfo // marketId, distributorId 그대로 사용
+      };
     }
     throw new Error('아이디나 비밀번호가 틀립니다.');
   },
@@ -115,6 +143,7 @@ export const UserAPI = {
     const { data } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
     return (data || []).map((u: any) => ({
       ...u,
+      // DB가 CamelCase이므로 바로 접근 가능
       department: u.distributors?.name || u.markets?.name || u.department
     })) as User[];
   },
@@ -127,7 +156,6 @@ export const UserAPI = {
 };
 
 export const MarketAPI = {
-  // [FIXED] Custom getList implementation to join with distributors and populate distributorName
   getList: async (params?: any) => {
     let query = supabase.from('markets').select('*, distributors(name)').order('id', { ascending: false });
     if (params) {
@@ -155,10 +183,16 @@ export const MarketAPI = {
 export const StoreAPI = {
   getList: async (params?: any) => {
     let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
-    if (params?.market_id) query = query.eq('market_id', params.market_id);
+    
+    // DB 컬럼 marketId 사용
+    if (params?.marketId) query = query.eq('marketId', params.marketId);
     if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
+    
     const { data } = await query;
-    return (data || []).map((s: any) => ({ ...s, marketName: s.markets?.name || '-' })) as Store[];
+    return (data || []).map((s: any) => ({ 
+        ...s,
+        marketName: s.markets?.name || '-' 
+    })) as Store[];
   },
   save: async (store: Store) => supabaseSaver('stores', store, STORE_COLS),
   delete: async (id: number) => { await supabase.from('stores').delete().eq('id', id); return true; },
@@ -193,7 +227,6 @@ export const RepeaterAPI = {
   save: async (r: Repeater) => supabaseSaver('repeaters', r, [...DEVICE_BASE_COLS, 'repeaterId', 'alarmStatus', 'location', 'image']),
   saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('repeaters').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
   delete: async (id: number) => { await supabase.from('repeaters').delete().eq('id', id); return true; },
-  // [FIXED] Added uploadImage to RepeaterAPI to resolve error in RepeaterManagement
   uploadImage: async (file: File) => {
     const fileName = generateSafeFileName('rpt', file.name);
     await supabase.storage.from('repeater-images').upload(fileName, file);
@@ -205,7 +238,9 @@ export const DetectorAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Detector>('detectors', params),
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
+    // Detector 저장 (marketId 그대로 전달)
     const saved = await supabaseSaver('detectors', rest as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);
+    
     if (saved.id && stores) {
         await supabase.from('detector_stores').delete().eq('detectorId', saved.id);
         const junctions = stores.map(s => ({ detectorId: saved.id, storeId: s.id }));
@@ -217,14 +252,12 @@ export const DetectorAPI = {
   delete: async (id: number) => { await supabase.from('detectors').delete().eq('id', id); return true; }
 };
 
-// [FIXED] Added TransmitterAPI to resolve export error
 export const TransmitterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Transmitter>('transmitters', params),
   save: async (t: Transmitter) => supabaseSaver('transmitters', t, [...DEVICE_BASE_COLS, 'transmitterId']),
   delete: async (id: number) => { await supabase.from('transmitters').delete().eq('id', id); return true; }
 };
 
-// [FIXED] Added AlarmAPI to resolve export error
 export const AlarmAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Alarm>('alarms', params),
   save: async (a: Alarm) => supabaseSaver('alarms', a, [...DEVICE_BASE_COLS, 'alarmId']),
@@ -254,7 +287,6 @@ export const CommonCodeAPI = {
   delete: async (id: number) => { await supabase.from('common_codes').delete().eq('id', id); return true; }
 };
 
-// [FIXED] Added CommonAPI to resolve export error in UserManagement
 export const CommonAPI = {
   getCompanyList: async (searchName?: string) => {
     const { data: dists } = await supabase.from('distributors').select('id, name, managerName, managerPhone');
@@ -331,10 +363,20 @@ export const DashboardAPI = {
           { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
           { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
         ],
-        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.market_id })),
-        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.market_id })),
+        // DB의 marketId 사용
+        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
+        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
         commEvents: [],
-        mapData: (mkts || []).map((m: any) => ({ id: m.id, name: m.name, x: m.latitude, y: m.longitude, address: m.address, status: m.status || 'Normal' }))
+        mapData: (mkts || []).map((m: any) => ({ 
+            id: m.id, 
+            name: m.name, 
+            x: m.latitude, 
+            y: m.longitude, 
+            address: m.address, 
+            status: m.status || 'Normal',
+            mapImage: m.mapImage,
+            mapImages: m.mapImages
+        }))
       };
     } catch (e) { return { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] }; }
   }
@@ -342,7 +384,7 @@ export const DashboardAPI = {
 
 export const WorkLogAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<WorkLog>('work_logs', params),
-  save: async (log: WorkLog) => supabaseSaver('work_logs', log, ['market_id', 'workDate', 'content', 'attachment']),
+  save: async (log: WorkLog) => supabaseSaver('work_logs', log, ['marketId', 'workDate', 'content', 'attachment']),
   delete: async (id: number) => { await supabase.from('work_logs').delete().eq('id', id); return true; },
   uploadAttachment: async (file: File) => {
     const fileName = generateSafeFileName('log', file.name);

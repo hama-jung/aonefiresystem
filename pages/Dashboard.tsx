@@ -1,248 +1,252 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PageHeader, Pagination, Button } from '../components/CommonUI';
-import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search, RefreshCw, X, RotateCcw, Map as MapIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { SIDO_LIST, getSigungu } from '../utils/addressData';
-import { MarketAPI, DashboardAPI } from '../services/api'; 
+import { PageHeader } from '../components/CommonUI';
+import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
+import { SIDO_LIST } from '../utils/addressData';
 
-// ... existing code (MapContainer etc.) ...
-// (기존 코드 생략 - MapContainer는 props로 받은 markets 데이터를 그대로 렌더링하므로 변경 없음)
 declare global {
   interface Window {
     kakao: any;
   }
 }
 
-const ITEMS_PER_LIST_PAGE = 4;
+// --- Helper: Pagination Control ---
+const ListPagination: React.FC<{ 
+    total: number, 
+    limit: number, 
+    page: number, 
+    setPage: (p: number) => void 
+}> = ({ total, limit, page, setPage }) => {
+    const totalPages = Math.ceil(total / limit);
+    if (totalPages <= 1) return null;
 
-const SIDO_COORDINATES: { [key: string]: { lat: number, lng: number, level: number } } = {
-  "서울특별시": { lat: 37.5665, lng: 126.9780, level: 9 },
-  // ... (SIDO_COORDINATES content unchanged)
-  "제주특별자치도": { lat: 33.4996, lng: 126.5312, level: 10 },
+    return (
+        <div className="flex justify-center items-center gap-2 py-2 border-t border-slate-700/50 mt-auto">
+            <button 
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
+                className="p-1 hover:bg-slate-700 rounded disabled:opacity-30 text-slate-400"
+            >
+                <ChevronLeft size={14} />
+            </button>
+            <div className="flex gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={`w-5 h-5 flex items-center justify-center text-[10px] rounded ${
+                            page === p ? 'bg-blue-600 text-white font-bold' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                        }`}
+                    >
+                        {p}
+                    </button>
+                ))}
+            </div>
+            <button 
+                onClick={() => setPage(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages}
+                className="p-1 hover:bg-slate-700 rounded disabled:opacity-30 text-slate-400"
+            >
+                <ChevronRight size={14} />
+            </button>
+        </div>
+    );
 };
 
-const formatDateTime = (isoString: string) => {
-  if (!isoString) return { date: '-', time: '-' };
-  const dateObj = new Date(isoString);
-  const yyyy = dateObj.getFullYear();
-  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-  const dd = String(dateObj.getDate()).padStart(2, '0');
-  const date = `${yyyy}-${mm}-${dd}`;
-  const time = dateObj.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  return { date, time };
-};
-
-const DashboardListSection: React.FC<{
-  title: string;
-  icon: React.ReactNode;
-  headerColorClass: string;
-  data: any[];
-  renderItem: (item: any) => React.ReactNode;
-  linkTo: string;
-  onItemClick?: (item: any) => void;
-}> = ({ title, icon, headerColorClass, data, renderItem, linkTo, onItemClick }) => {
-  const navigate = useNavigate();
-  const [page, setPage] = useState(1);
+// --- Component: Map Container ---
+const MapSection: React.FC<{ 
+  markets: any[];
+  focusLocation: { lat: number, lng: number } | null;
+  onMarketSelect: (market: Market) => void;
+}> = ({ markets, focusLocation, onMarketSelect }) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null);
+  const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
+  const [overlays, setOverlays] = useState<any[]>([]);
   
-  const currentItems = data.slice((page - 1) * ITEMS_PER_LIST_PAGE, page * ITEMS_PER_LIST_PAGE);
+  // Filters
+  const [selectedSido, setSelectedSido] = useState('');
+  const [selectedGugun, setSelectedGugun] = useState('');
+  const [keyword, setKeyword] = useState('');
+
+  // 1. Wait for Kakao Script Load
+  useEffect(() => {
+    const checkKakao = setInterval(() => {
+      if (window.kakao && window.kakao.maps) {
+        setIsKakaoLoaded(true);
+        clearInterval(checkKakao);
+      }
+    }, 500); // Check every 500ms
+    return () => clearInterval(checkKakao);
+  }, []);
+
+  // 2. Initialize Map
+  useEffect(() => {
+    if (!isKakaoLoaded || !mapRef.current) return;
+
+    if (!mapInstance) {
+      const container = mapRef.current;
+      const options = {
+        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // Seoul Center
+        level: 11 // Zoom level matches the screenshot (Province view)
+      };
+      const map = new window.kakao.maps.Map(container, options);
+      
+      const zoomControl = new window.kakao.maps.ZoomControl();
+      map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
+      
+      setMapInstance(map);
+    }
+  }, [isKakaoLoaded]);
+
+  // 3. Update Markers
+  useEffect(() => {
+    if (!mapInstance || !markets) return;
+
+    // Clear existing
+    overlays.forEach(o => o.setMap(null));
+    const newOverlays: any[] = [];
+
+    // Filter Logic
+    const filteredMarkets = markets.filter(m => {
+        const matchSido = selectedSido ? m.address.includes(selectedSido) : true;
+        const matchGugun = selectedGugun ? m.address.includes(selectedGugun) : true;
+        const matchName = keyword ? m.name.includes(keyword) : true;
+        return matchSido && matchGugun && matchName;
+    });
+
+    filteredMarkets.forEach((market) => {
+        if (!market.x || !market.y) return;
+
+        const position = new window.kakao.maps.LatLng(market.x, market.y);
+        
+        // --- Icon Logic (Requested Shapes) ---
+        let iconName = 'store'; // Normal: Store
+        let bgColor = 'bg-blue-500';
+        let borderColor = 'border-blue-300';
+        let isFire = false;
+
+        // Check status (Handling both English and Korean)
+        const status = market.status || 'Normal';
+        if (status === 'Fire' || status === '화재') {
+             iconName = 'local_fire_department'; // Fire: Flame
+             bgColor = 'bg-red-600';
+             borderColor = 'border-red-400';
+             isFire = true;
+        } else if (status === 'Error' || status === '고장') {
+             iconName = 'build'; // Error: Pliers/Tool
+             bgColor = 'bg-orange-500';
+             borderColor = 'border-orange-300';
+        } else {
+             // Normal
+             bgColor = 'bg-white';
+             borderColor = 'border-slate-300';
+        }
+
+        const content = document.createElement('div');
+        content.className = 'relative flex items-center justify-center group cursor-pointer';
+        content.onclick = () => onMarketSelect(market);
+        
+        content.innerHTML = `
+            ${isFire ? '<div class="absolute w-20 h-20 bg-red-500 rounded-full animate-ping opacity-60"></div>' : ''}
+            <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
+               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-xl">${iconName}</span>
+            </div>
+            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
+               <div class="font-bold text-center">${market.name}</div>
+               <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800/95"></div>
+            </div>
+        `;
+
+        const customOverlay = new window.kakao.maps.CustomOverlay({
+            position: position,
+            content: content,
+            yAnchor: 0.5
+        });
+
+        customOverlay.setMap(mapInstance);
+        newOverlays.push(customOverlay);
+    });
+
+    setOverlays(newOverlays);
+  }, [mapInstance, markets, selectedSido, selectedGugun, keyword]);
+
+  // 4. Focus Location
+  useEffect(() => {
+    if (mapInstance && focusLocation) {
+        const moveLatLon = new window.kakao.maps.LatLng(focusLocation.lat, focusLocation.lng);
+        mapInstance.setLevel(4);
+        mapInstance.panTo(moveLatLon);
+    }
+  }, [focusLocation, mapInstance]);
 
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm overflow-hidden flex flex-col transition-all duration-300 flex-shrink-0">
-      <div className={`px-4 py-3 border-b border-slate-700/50 flex items-center justify-between ${headerColorClass}`}>
-        <div className="flex items-center gap-2">
-          {icon}
-          <h3 className="text-sm font-bold text-white">{title}</h3>
-        </div>
-        <button 
-          onClick={() => navigate(linkTo)}
-          className="text-white/70 hover:text-white hover:bg-white/10 p-1 rounded transition-colors group"
-          title="자세히 보기"
-        >
-          <ArrowRight size={18} className="transform group-hover:translate-x-1 transition-transform" />
-        </button>
-      </div>
-      
-      <div className="p-2 space-y-1">
-        {currentItems.map((item) => (
-           <div 
-             key={item.id} 
-             onClick={() => onItemClick && onItemClick(item)}
-             className={`border-b border-slate-700/50 last:border-0 pb-1 mb-1 last:mb-0 last:pb-0 ${onItemClick ? 'cursor-pointer hover:bg-white/5' : ''}`}
-           >
-             {renderItem(item)}
-           </div>
-        ))}
-        {currentItems.length === 0 && (
-            <div className="py-8 flex items-center justify-center text-slate-500 text-xs">
-                데이터가 없습니다.
-            </div>
-        )}
-      </div>
+      <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900 group">
+          {/* Filters Overlay */}
+          <div className="absolute top-4 left-4 z-20 flex flex-col md:flex-row gap-2 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm border border-slate-700 shadow-lg">
+              <select 
+                value={selectedSido}
+                onChange={(e) => setSelectedSido(e.target.value)}
+                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
+              >
+                  <option value="">시/도 선택</option>
+                  {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              
+              <select 
+                value={selectedGugun}
+                onChange={(e) => setSelectedGugun(e.target.value)}
+                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
+              >
+                  <option value="">시/군/구 선택</option>
+                  <option value="강남구">강남구</option>
+                  <option value="안양시">안양시</option>
+              </select>
 
-      {data.length > ITEMS_PER_LIST_PAGE && (
-        <div className="py-2 border-t border-slate-700 bg-slate-800/50 min-h-[40px] flex items-center justify-center">
-             <Pagination 
-                totalItems={data.length} 
-                itemsPerPage={ITEMS_PER_LIST_PAGE} 
-                currentPage={page} 
-                onPageChange={setPage} 
-             />
-        </div>
-      )}
-    </div>
+              <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="현장명 검색" 
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    className="bg-slate-800 text-white text-sm border border-slate-600 rounded pl-2 pr-8 py-1 focus:outline-none focus:border-blue-500 w-40"
+                  />
+                  <Search size={14} className="absolute right-2 top-2 text-slate-400" />
+              </div>
+          </div>
+
+          {!isKakaoLoaded && (
+             <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 z-10">
+                <MapIcon className="animate-pulse mr-2" /> 지도 로딩 중...
+             </div>
+          )}
+          <div ref={mapRef} className="w-full h-full" />
+      </div>
   );
 };
 
-const MapContainer: React.FC<{ 
-  level: number; 
-  setLevel: (l: 1 | 2 | 3) => void;
-  markets: any[];
-  sido: string;
-  setSido: (s: string) => void;
-  sigun: string;
-  setSigun: (s: string) => void;
-  onMarketSelect: (market: Market) => void;
-}> = ({ level, setLevel, markets, sido, setSido, sigun, setSigun, onMarketSelect }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [mapInstance, setMapInstance] = useState<any>(null);
-  const [clusterer, setClusterer] = useState<any>(null);
-  const markersRef = useRef<any[]>([]);
-
-  useEffect(() => {
-    if (!mapRef.current || !window.kakao) return;
-
-    const container = mapRef.current;
-    const options = {
-      center: new window.kakao.maps.LatLng(36.5, 127.5),
-      level: 13
-    };
-    const map = new window.kakao.maps.Map(container, options);
-    setMapInstance(map);
-
-    const zoomControl = new window.kakao.maps.ZoomControl();
-    map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
-
-    const cluster = new window.kakao.maps.MarkerClusterer({
-        map: map,
-        averageCenter: true,
-        minLevel: 10,
-        calculator: [10, 30, 50],
-        styles: [{ 
-            width : '50px', height : '50px',
-            background: 'rgba(59, 130, 246, 0.8)',
-            borderRadius: '25px',
-            color: '#fff',
-            textAlign: 'center',
-            fontWeight: 'bold',
-            lineHeight: '50px'
-        }]
-    });
-    setClusterer(cluster);
-
-  }, []);
-
-  useEffect(() => {
-    if (!mapInstance || !clusterer) return;
-
-    clusterer.clear();
-    markersRef.current = [];
-
-    const filteredMarkets = markets.filter(m => {
-        if (!m.x || !m.y) return false;
-        if (sido && !m.address.startsWith(sido)) return false;
-        if (sigun && !m.address.includes(sigun)) return false;
-        return true;
-    });
-
-    const newMarkers = filteredMarkets.map((market) => {
-        const position = new window.kakao.maps.LatLng(market.x, market.y);
-        
-        let imageSrc = 'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png';
-        
-        if (market.status === 'Fire' || market.status === '화재') {
-             imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png';
-        } else if (market.status === 'Error' || market.status === '고장') {
-             imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png';
-        } else {
-             imageSrc = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png'; 
-        }
-
-        const imageSize = new window.kakao.maps.Size(24, 35); 
-        const markerImage = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
-
-        const marker = new window.kakao.maps.Marker({
-            position: position,
-            image: markerImage,
-            title: market.name
-        });
-
-        const iwContent = `
-            <div style="padding:5px; color:black; font-size:12px; border-radius:4px; background:white; border:1px solid #ccc;">
-               <strong>${market.name}</strong><br/>
-               <span style="color:${market.status === 'Fire' ? 'red' : (market.status === 'Error' ? 'orange' : 'green')}">
-                 ${market.status === 'Normal' ? '정상' : (market.status === 'Fire' ? '🔥 화재' : '⚠️ 고장')}
-               </span>
-            </div>
-        `;
-        const infowindow = new window.kakao.maps.InfoWindow({
-            content: iwContent,
-            zIndex: 1
-        });
-
-        window.kakao.maps.event.addListener(marker, 'mouseover', () => infowindow.open(mapInstance, marker));
-        window.kakao.maps.event.addListener(marker, 'mouseout', () => infowindow.close());
-        window.kakao.maps.event.addListener(marker, 'click', () => {
-            onMarketSelect(market);
-        });
-
-        if (market.status !== 'Normal') {
-            infowindow.open(mapInstance, marker);
-        }
-
-        return marker;
-    });
-
-    clusterer.addMarkers(newMarkers);
-    markersRef.current = newMarkers;
-
-    if (sido && SIDO_COORDINATES[sido]) {
-        const { lat, lng, level } = SIDO_COORDINATES[sido];
-        const moveLatLon = new window.kakao.maps.LatLng(lat, lng);
-        setTimeout(() => {
-            mapInstance.setLevel(level);
-            mapInstance.panTo(moveLatLon);
-            if (newMarkers.length > 0) {
-                const bounds = new window.kakao.maps.LatLngBounds();
-                newMarkers.forEach((m: any) => bounds.extend(m.getPosition()));
-                mapInstance.setBounds(bounds);
-            }
-        }, 100);
-    } else {
-        mapInstance.setCenter(new window.kakao.maps.LatLng(36.5, 127.5));
-        mapInstance.setLevel(13);
-    }
-
-  }, [mapInstance, markets, sido, sigun, clusterer]);
-
-  return <div ref={mapRef} className="w-full h-full rounded-lg" />;
-};
-
 export const Dashboard: React.FC = () => {
-  const [level, setLevel] = useState<1 | 2 | 3>(1); 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
-
-  const [selectedSido, setSelectedSido] = useState('');
-  const [selectedSigun, setSelectedSigun] = useState('');
-  const [sigunList, setSigunList] = useState<string[]>([]);
-
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
+  const [focusLocation, setFocusLocation] = useState<{lat: number, lng: number} | null>(null);
+  
+  // Timer State
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [timeLeft, setTimeLeft] = useState(60);
+
+  // Pagination States
+  const [firePage, setFirePage] = useState(1);
+  const [faultPage, setFaultPage] = useState(1);
+  const [commPage, setCommPage] = useState(1);
+  const ITEMS_LIMIT = 4;
+
+  const navigate = useNavigate();
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const result = await DashboardAPI.getData();
       setData(result);
@@ -256,201 +260,195 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    const timerInterval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          fetchData();
+          return 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerInterval);
   }, []);
 
-  const handleSidoChange = (val: string) => {
-    setSelectedSido(val);
-    if (val) {
-        setSigunList(getSigungu(val));
-    } else {
-        setSigunList([]);
-    }
-    setSelectedSigun('');
-  };
-
-  const handleMarketClick = (item: any) => {
-      // API에서 marketId를 반환하므로, 이를 우선 사용. 없으면 이름으로 매칭 시도(Fallback)
-      const targetMarket = data?.mapData?.find((m: any) => 
-          (item.marketId && m.id === item.marketId) || m.name === (item.marketName || item.market)
-      );
-      
-      if (targetMarket) {
-          setSelectedMarket(targetMarket as Market);
-          const addrParts = targetMarket.address.split(' ');
-          if (addrParts.length > 0 && SIDO_LIST.includes(addrParts[0])) {
-              handleSidoChange(addrParts[0]);
-          }
-      } else {
-          alert('해당 현장의 위치 정보가 등록되지 않아 지도에 표시할 수 없습니다.\n현장 관리에서 주소/좌표를 확인해주세요.');
+  const handleLogClick = (marketId: number) => {
+      if (!data || !data.mapData) return;
+      const target = data.mapData.find((m: any) => m.id === marketId);
+      if (target && target.x && target.y) {
+          setFocusLocation({ lat: target.x, lng: target.y });
       }
   };
 
-  if (!data) {
+  if (loading && !data) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="text-slate-500 font-bold animate-pulse">시스템 데이터를 불러오는 중입니다...</div>
+        <div className="text-slate-500 font-bold animate-pulse">시스템 데이터 로딩 중...</div>
       </div>
     );
   }
 
-  const { stats, fireEvents, faultEvents, commEvents, mapData } = data;
+  const { stats, fireEvents, faultEvents, commEvents, mapData } = data || { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] };
+
+  const currentFireEvents = fireEvents.slice((firePage - 1) * ITEMS_LIMIT, firePage * ITEMS_LIMIT);
+  const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
+  const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
+
+  // Header Right Content (Timer)
+  const refreshControlUI = (
+    <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
+      <span className="text-slate-400">
+        기준 시각 : <span className="text-slate-200 font-bold ml-1 tracking-wide">{lastUpdated.toLocaleTimeString()}</span>
+      </span>
+      <div className="w-px h-3 bg-slate-600"></div>
+      <span className="text-slate-400 flex items-center">
+        <span className="text-blue-400 font-bold w-5 text-right mr-1">{timeLeft}</span>초 후 새로고침
+      </span>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col h-full text-slate-200 gap-4">
-      {/* 1. Header Stats (No changes) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-         {stats.map((stat: any, idx: number) => (
-            <div key={idx} className={`relative overflow-hidden rounded-lg p-4 shadow-lg border border-slate-700/50 bg-gradient-to-br from-slate-800 to-slate-900`}>
-                <div className={`absolute top-0 right-0 p-2 opacity-10`}>
-                    <AlertTriangle size={64} /> 
+    <div className="flex flex-col h-full text-slate-200">
+      <PageHeader title="대시보드" rightContent={refreshControlUI} />
+
+      {/* Main Layout: Fixed Height Calculation */}
+      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] min-h-[600px]">
+        
+        {/* [Left Panel] 40% Width Fixed */}
+        <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-hidden">
+          
+          {/* 1. Status Cards */}
+          <div className="grid grid-cols-3 gap-3 flex-shrink-0">
+             {/* Fire */}
+             <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-lg p-4 shadow-lg border border-red-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
+                <div className="absolute -right-4 -top-4 text-red-500/30 group-hover:text-red-500/40 transition-colors">
+                   <AlertTriangle size={64} />
                 </div>
-                <div className="relative z-10 flex flex-col">
-                    <span className="text-slate-400 text-sm font-medium">{stat.label}</span>
-                    <div className="flex items-end gap-2 mt-1">
-                        <span className={`text-3xl font-bold ${stat.color.replace('bg-', 'text-')}`}>{stat.value}</span>
-                        <span className="text-slate-500 text-sm mb-1">건</span>
-                    </div>
+                <div className="text-red-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
+                   <AlertTriangle size={12}/> 화재발생
                 </div>
-                <div className={`absolute bottom-0 left-0 h-1 w-full ${stat.color}`}></div>
-            </div>
-         ))}
-         
-         <div className="flex flex-col justify-between bg-slate-800 p-3 rounded-lg border border-slate-700 shadow-lg">
-             <div className="flex gap-2">
-                 <select 
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                    value={selectedSido}
-                    onChange={(e) => handleSidoChange(e.target.value)}
-                 >
-                    <option value="">전국</option>
-                    {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-                 </select>
-                 <select 
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
-                    value={selectedSigun}
-                    onChange={(e) => setSelectedSigun(e.target.value)}
-                    disabled={!selectedSido}
-                 >
-                    <option value="">전체</option>
-                    {sigunList.map(s => <option key={s} value={s}>{s}</option>)}
-                 </select>
+                <div className="text-4xl font-black text-white z-10">{stats[0]?.value || 0}</div>
              </div>
-             <div className="flex justify-between items-end mt-2">
-                 <span className="text-[11px] text-slate-500">
-                    Update: {lastUpdated.toLocaleTimeString()}
-                 </span>
-                 <button 
-                    onClick={fetchData} 
-                    className={`p-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors ${loading ? 'animate-spin' : ''}`}
-                    title="새로고침"
-                 >
-                    <RefreshCw size={14} />
-                 </button>
+
+             {/* Fault */}
+             <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg p-4 shadow-lg border border-orange-400/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
+                <div className="absolute -right-4 -top-4 text-orange-400/30 group-hover:text-orange-400/40 transition-colors">
+                   <BatteryWarning size={64} />
+                </div>
+                <div className="text-orange-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
+                   <BatteryWarning size={12}/> 고장발생
+                </div>
+                <div className="text-4xl font-black text-white z-10">{stats[1]?.value || 0}</div>
              </div>
-         </div>
-      </div>
 
-      {/* 2. Main Content Grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0">
-        <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-1 pb-2">
-            <DashboardListSection 
-                title="최근 화재 발생현황" 
-                icon={<AlertTriangle size={16} className="text-red-200"/>}
-                headerColorClass="bg-red-900/40 border-red-900/50"
-                data={fireEvents}
-                linkTo="/fire-history"
-                onItemClick={handleMarketClick}
-                renderItem={(log) => {
-                    const { date, time } = formatDateTime(log.time);
-                    return (
-                        <div className="flex justify-between items-start py-1">
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                    <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold animate-pulse">화재</span>
-                                    <span className="text-xs text-slate-300 font-medium truncate block">{log.msg}</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500">{date} {time}</div>
-                            </div>
-                        </div>
-                    );
-                }}
-            />
+             {/* Comm */}
+             <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg p-4 shadow-lg border border-slate-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
+                <div className="absolute -right-4 -top-4 text-slate-400/30 group-hover:text-slate-400/40 transition-colors">
+                   <WifiOff size={64} />
+                </div>
+                <div className="text-slate-200 text-xs font-bold mb-1 z-10 flex items-center gap-1">
+                   <WifiOff size={12}/> 통신이상
+                </div>
+                <div className="text-4xl font-black text-white z-10">{stats[2]?.value || 0}</div>
+             </div>
+          </div>
 
-            <DashboardListSection 
-                title="최근 고장 발생현황" 
-                icon={<BatteryWarning size={16} className="text-orange-200"/>}
-                headerColorClass="bg-orange-900/40 border-orange-900/50"
-                data={faultEvents}
-                linkTo="/device-status"
-                onItemClick={handleMarketClick}
-                renderItem={(log) => {
-                    const { date, time } = formatDateTime(log.time);
-                    return (
-                        <div className="flex justify-between items-start py-1">
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                    <span className="bg-orange-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">고장</span>
-                                    <span className="text-xs text-slate-300 font-medium truncate block">{log.msg}</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500">{date} {time}</div>
+          {/* 2. Log Lists (Scrollable Area) */}
+          <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
+             
+             {/* Fire History List */}
+             <div className="bg-slate-800 border border-red-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-red-950/50 px-4 py-2.5 border-b border-red-900/50 flex justify-between items-center flex-shrink-0">
+                   <div className="flex items-center gap-2 text-red-200 font-bold text-sm">
+                      <AlertTriangle size={16} className="text-red-500 animate-pulse" /> 최근 화재 발생현황
+                   </div>
+                   <button onClick={() => navigate('/fire-history')} className="text-xs text-red-400 hover:text-white flex items-center gap-1">
+                      더보기 <ArrowRight size={12} />
+                   </button>
+                </div>
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                   {currentFireEvents.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                   ) : (
+                      currentFireEvents.map((log: any) => (
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-red-500/50 cursor-pointer transition-colors flex justify-between items-center group">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0"></span>
+                               <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
                             </div>
-                        </div>
-                    );
-                }}
-            />
+                            <span className="text-[10px] text-slate-500 flex-shrink-0">{new Date(log.time).toLocaleTimeString()}</span>
+                         </div>
+                      ))
+                   )}
+                </div>
+                <ListPagination total={fireEvents.length} limit={ITEMS_LIMIT} page={firePage} setPage={setFirePage} />
+             </div>
 
-            <DashboardListSection 
-                title="수신기 통신 이상 내역" 
-                icon={<WifiOff size={16} className="text-gray-200"/>}
-                headerColorClass="bg-slate-700/50 border-slate-600"
-                data={commEvents}
-                linkTo="/device-status"
-                onItemClick={handleMarketClick}
-                renderItem={(log) => {
-                    const { date, time } = formatDateTime(log.time);
-                    return (
-                        <div className="flex justify-between items-center py-1">
-                            <div className="flex-1">
-                                <div className="text-xs text-slate-300 font-bold mb-0.5">{log.address}</div>
-                                <div className="text-[11px] text-slate-400">수신기: {log.receiver}</div>
+             {/* Fault History List */}
+             <div className="bg-slate-800 border border-orange-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-orange-950/50 px-4 py-2.5 border-b border-orange-900/50 flex justify-between items-center flex-shrink-0">
+                   <div className="flex items-center gap-2 text-orange-200 font-bold text-sm">
+                      <BatteryWarning size={16} className="text-orange-500" /> 최근 고장 발생현황
+                   </div>
+                   <button onClick={() => navigate('/device-status')} className="text-xs text-orange-400 hover:text-white flex items-center gap-1">
+                      더보기 <ArrowRight size={12} />
+                   </button>
+                </div>
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                   {currentFaultEvents.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                   ) : (
+                      currentFaultEvents.map((log: any) => (
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-orange-500/50 cursor-pointer transition-colors flex justify-between items-center group">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></span>
+                               <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
                             </div>
-                            <div className="text-[10px] text-slate-500 text-right">
-                                <div>{date}</div>
-                                <div>{time}</div>
-                            </div>
-                        </div>
-                    );
-                }}
-            />
+                            <span className="text-[10px] text-slate-500 flex-shrink-0">{new Date(log.time).toLocaleTimeString()}</span>
+                         </div>
+                      ))
+                   )}
+                </div>
+                <ListPagination total={faultEvents.length} limit={ITEMS_LIMIT} page={faultPage} setPage={setFaultPage} />
+             </div>
+
+             {/* Comm Error List */}
+             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-slate-700/50 px-4 py-2.5 border-b border-slate-600 flex justify-between items-center flex-shrink-0">
+                   <div className="flex items-center gap-2 text-slate-300 font-bold text-sm">
+                      <WifiOff size={16} className="text-slate-400" /> 수신기 통신 이상 내역
+                   </div>
+                </div>
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                   {currentCommEvents.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                   ) : (
+                      currentCommEvents.map((log: any) => (
+                         <div key={log.id} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 flex justify-between items-center">
+                            <span className="text-xs text-slate-400">{log.msg}</span>
+                            <span className="text-[10px] text-slate-600">{new Date(log.time).toLocaleTimeString()}</span>
+                         </div>
+                      ))
+                   )}
+                </div>
+                <ListPagination total={commEvents.length} limit={ITEMS_LIMIT} page={commPage} setPage={setCommPage} />
+             </div>
+
+          </div>
         </div>
 
-        <div className="lg:col-span-3 bg-slate-900 rounded-xl overflow-hidden relative shadow-inner border border-slate-700 flex flex-col">
-            <div className="flex-1 relative">
-                <MapContainer 
-                    level={level} 
-                    setLevel={setLevel} 
-                    markets={mapData}
-                    sido={selectedSido}
-                    setSido={setSelectedSido}
-                    sigun={selectedSigun}
-                    setSigun={setSelectedSigun}
-                    onMarketSelect={(m) => setSelectedMarket(m)}
-                />
-                
-                <div className="absolute top-4 left-4 bg-slate-900/80 backdrop-blur-sm p-3 rounded border border-slate-700 shadow-lg z-10 pointer-events-none">
-                    <div className="text-xs font-bold text-slate-300 mb-1">지도 표시 현황</div>
-                    <div className="flex gap-3 text-xs">
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span> 화재 {mapData.filter((m:any) => m.status === 'Fire').length}</div>
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> 고장 {mapData.filter((m:any) => m.status === 'Error').length}</div>
-                        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> 정상 {mapData.filter((m:any) => m.status === 'Normal').length}</div>
-                    </div>
-                </div>
-            </div>
+        {/* [Right Panel] 60% Width Fixed Map Area */}
+        <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a]">
+           <MapSection 
+              markets={mapData}
+              focusLocation={focusLocation}
+              onMarketSelect={(m) => setSelectedMarket(m)}
+           />
         </div>
+
       </div>
 
+      {/* Visual Map Console Modal */}
       {selectedMarket && (
           <VisualMapConsole 
              market={selectedMarket} 

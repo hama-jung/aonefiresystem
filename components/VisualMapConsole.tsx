@@ -13,6 +13,12 @@ interface VisualMapConsoleProps {
 export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, initialMode = 'monitoring', onClose }) => {
   const [mode, setMode] = useState<'monitoring' | 'edit'>(initialMode);
   
+  // Map Images State
+  const mapImages = market.mapImages && market.mapImages.length > 0 
+    ? market.mapImages 
+    : (market.mapImage ? [market.mapImage] : []);
+  const [currentMapIndex, setCurrentMapIndex] = useState(0);
+
   // Device Lists
   const [detectors, setDetectors] = useState<Detector[]>([]);
   const [receivers, setReceivers] = useState<Receiver[]>([]);
@@ -30,6 +36,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const [actionModalOpen, setActionModalOpen] = useState(false);
   const [selectedAlertDevice, setSelectedAlertDevice] = useState<any>(null);
 
+  // Fire Alert Modal State (In-Console)
+  const [showFireModal, setShowFireModal] = useState(false);
+
   // Load Data
   const loadDevices = async () => {
     setLoading(true);
@@ -43,7 +52,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       setReceivers(rcvData);
       setRepeaters(rptData);
 
-      // Extract CCTV URLs from detectors (assuming cctvUrl is stored in detector)
+      // Check for Fire Status
+      const hasFire = [...detData, ...rcvData, ...rptData].some(d => ((d.status as string) === '화재' || (d.status as string) === 'Fire'));
+      setShowFireModal(hasFire);
+
+      // Extract CCTV URLs from detectors
       const cctvs = detData
         .filter(d => d.cctvUrl && d.cctvUrl.trim() !== '')
         .map(d => ({
@@ -61,6 +74,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
 
   useEffect(() => {
     loadDevices();
+    // Poll for status updates to auto-dismiss fire modal
+    const interval = setInterval(loadDevices, 5000);
+    return () => clearInterval(interval);
   }, [market.name]);
 
   // --- Statistics Calculation ---
@@ -87,10 +103,12 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       
       if (confirm(`현재 화재 상태인 기기 ${fireDevices.length}건을 모두 '정상'으로 복구하시겠습니까?\n(현장의 기기에 복구 신호를 전송합니다.)`)) {
           // Mock Update: Actual implementation would call an API
+          // For demo, we just update local state instantly
           const updatedDetectors = detectors.map(d => (d.status as string) === '화재' ? { ...d, status: '사용' } : d);
           setDetectors(updatedDetectors as Detector[]);
           
           alert('복구 신호 전송 및 처리가 완료되었습니다.');
+          setShowFireModal(false); // Dismiss modal immediately
           // In real app: await API calls then loadDevices();
       }
   };
@@ -101,6 +119,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   };
   const handleNextCctv = () => {
       setCurrentCctvIndex(prev => (prev === cctvList.length - 1 ? 0 : prev + 1));
+  };
+
+  // Map Navigation
+  const handleMapChange = (idx: number) => {
+      setCurrentMapIndex(idx);
   };
 
   // --- Drag & Drop Logic ---
@@ -205,6 +228,24 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-slate-200">
+        
+        {/* Fire Alert Modal (Overlay inside Console) */}
+        {showFireModal && (
+            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-red-950/80 backdrop-blur-sm animate-pulse">
+                <div className="bg-red-900 border-4 border-red-500 rounded-2xl p-10 flex flex-col items-center shadow-2xl animate-bounce-slight">
+                    <AlertTriangle size={100} className="text-white mb-6 animate-pulse" />
+                    <h1 className="text-5xl font-black text-white mb-4 tracking-tighter">화재 발생</h1>
+                    <p className="text-xl text-red-200 font-bold mb-8">
+                       현장에서 화재 신호가 감지되었습니다.<br/>
+                       즉시 확인 및 조치 바랍니다.
+                    </p>
+                    <Button variant="secondary" onClick={() => setShowFireModal(false)} className="bg-white/20 hover:bg-white/30 text-white border-white/50">
+                        알림 닫기 (상황판 보기)
+                    </Button>
+                </div>
+            </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700 shadow-md z-20">
             <div className="flex items-center gap-4">
@@ -244,28 +285,50 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         <div className="flex-1 flex overflow-hidden relative">
             
             {/* Map Area */}
-            <div 
-                className="flex-1 relative bg-[#1a1a1a] overflow-hidden flex items-center justify-center select-none"
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-            >
-                {market.mapImage ? (
-                    <div className="relative w-full h-full">
-                        <img 
-                            src={market.mapImage} 
-                            alt="Map" 
-                            className="w-full h-full object-contain pointer-events-none"
-                        />
-                        {/* Render Placed Devices */}
-                        {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
-                        {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
-                        {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
-                    </div>
-                ) : (
-                    <div className="text-center text-slate-500">
-                        <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
-                        <p>등록된 도면 이미지가 없습니다.</p>
-                        {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
+            <div className="flex-1 flex flex-col relative bg-[#1a1a1a]">
+                <div 
+                    className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
+                    onDrop={handleDrop}
+                    onDragOver={handleDragOver}
+                >
+                    {mapImages.length > 0 ? (
+                        <div className="relative w-full h-full">
+                            <img 
+                                src={mapImages[currentMapIndex]} 
+                                alt={`Map ${currentMapIndex + 1}`} 
+                                className="w-full h-full object-contain pointer-events-none"
+                            />
+                            {/* Render Placed Devices */}
+                            {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
+                            {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
+                            {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
+                        </div>
+                    ) : (
+                        <div className="text-center text-slate-500">
+                            <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
+                            <p>등록된 도면 이미지가 없습니다.</p>
+                            {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
+                        </div>
+                    )}
+                </div>
+
+                {/* Map Pagination Footer */}
+                {mapImages.length > 1 && (
+                    <div className="h-14 bg-slate-800 border-t border-slate-700 flex items-center justify-center gap-2 z-20">
+                        {mapImages.map((_, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => handleMapChange(idx)}
+                                className={`
+                                    w-10 h-10 rounded-lg text-sm font-bold transition-all border
+                                    ${currentMapIndex === idx 
+                                        ? 'bg-blue-600 text-white border-blue-500 shadow-lg scale-110' 
+                                        : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600 hover:text-white'}
+                                `}
+                            >
+                                {idx + 1}
+                            </button>
+                        ))}
                     </div>
                 )}
             </div>
@@ -362,7 +425,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                                         감지기 No.{(d as any).detectorId} (중계기 {(d as any).repeaterId})
                                                     </span>
                                                 </div>
-                                                <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">화재</span>
+                                                <span className="bg-red-600 text-white text-[10px] px-1 rounded font-bold">화재</span>
                                             </li>
                                         ))}
                                     </ul>
@@ -389,7 +452,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 </div>
             )}
 
-            {/* Sidebar (Only in Edit Mode - Existing) */}
+            {/* Sidebar (Only in Edit Mode) */}
             {mode === 'edit' && (
                 <div className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20">
                     <div className="p-4 border-b border-slate-700 font-bold text-white flex justify-between items-center">

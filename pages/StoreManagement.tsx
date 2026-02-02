@@ -42,7 +42,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleRegister = () => {
     setSelectedStore(null);
-    setFormData({ status: '사용', mode: '복합', market_id: 0 });
+    setFormData({ status: '사용', mode: '복합', marketId: 0 }); 
     setSelectedMarketName('');
     setStoreImageFile(null);
     setView('form');
@@ -50,20 +50,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleEdit = (store: Store) => {
     setSelectedStore(store);
-    
-    // [FIX] marketId 필드가 남아있지 않도록 필요한 데이터만 골라서 상태에 담음
-    const { 
-      id, name, managerName, managerPhone, status, storeImage, memo, 
-      receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, market_id 
-    } = store;
-
-    setFormData({ 
-      id, name, managerName, managerPhone, status, storeImage, memo, 
-      receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, market_id 
-    });
-    
+    setFormData({ ...store });
     setSelectedMarketName(store.marketName || '-');
     setView('form');
   };
@@ -75,14 +62,14 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleMarketSelect = (market: Market) => {
-    setFormData(prev => ({ ...prev, market_id: market.id }));
+    setFormData(prev => ({ ...prev, marketId: market.id }));
     setSelectedMarketName(market.name);
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; }
+    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; }
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
 
     try {
@@ -111,7 +98,7 @@ export const StoreManagement: React.FC = () => {
   ];
 
   const storeColumns: Column<Store>[] = [
-    { header: 'No', accessor: 'id', width: '60px' },
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '소속시장', accessor: 'marketName' },
     { header: '상가명', accessor: 'name' },
     { header: '대표자', accessor: 'managerName' },
@@ -125,6 +112,7 @@ export const StoreManagement: React.FC = () => {
         <PageHeader title="기기 관리 (상가)" />
         <form onSubmit={handleSave}>
           <FormSection title={selectedStore ? "기기 수정" : "기기 등록"}>
+            {/* 소속 시장 */}
             <FormRow label="소속 시장" required>
                <div className="flex gap-2 w-full">
                  <div onClick={openMarketModal} className="flex-1 relative cursor-pointer">
@@ -141,10 +129,12 @@ export const StoreManagement: React.FC = () => {
                </div>
             </FormRow>
 
+            {/* 상가명 */}
             <FormRow label="상가명" required>
                <InputGroup value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="상가명 입력" />
             </FormRow>
 
+            {/* 주소 (Full Width) */}
             <div className="col-span-1 md:col-span-2">
               <AddressInput 
                  label="주소"
@@ -156,6 +146,7 @@ export const StoreManagement: React.FC = () => {
               />
             </div>
 
+            {/* 대표자 정보 */}
             <FormRow label="대표자">
                <InputGroup value={formData.managerName || ''} onChange={(e) => setFormData({...formData, managerName: e.target.value})} />
             </FormRow>
@@ -168,6 +159,7 @@ export const StoreManagement: React.FC = () => {
                />
             </FormRow>
 
+            {/* 기기 정보 */}
             <FormRow label="수신기 MAC">
                <InputGroup value={formData.receiverMac || ''} onChange={(e) => setFormData({...formData, receiverMac: e.target.value})} maxLength={4} />
             </FormRow>
@@ -175,6 +167,7 @@ export const StoreManagement: React.FC = () => {
                <InputGroup value={formData.repeaterId || ''} onChange={(e) => setFormData({...formData, repeaterId: e.target.value})} maxLength={2} />
             </FormRow>
 
+            {/* 사용여부 (Full Width) */}
             <FormRow label="사용여부" className="col-span-1 md:col-span-2">
                <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
             </FormRow>
@@ -205,6 +198,10 @@ export const StoreManagement: React.FC = () => {
       <SearchFilterBar onSearch={() => { setIsFiltered(true); fetchStores(); }} onReset={() => { setSearchStore(''); setIsFiltered(false); fetchStores(); }}>
         <InputGroup label="상가명" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
       </SearchFilterBar>
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{stores.length}</span> 건</span>
+        <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+      </div>
       <DataTable<Store> 
         columns={storeColumns}
         data={stores.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)} 

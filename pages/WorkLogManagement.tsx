@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { WorkLogAPI, MarketAPI } from '../services/api';
 import { WorkLog, Market } from '../types';
@@ -30,20 +29,20 @@ export const WorkLogManagement: React.FC = () => {
   const handleEdit = (log: WorkLog) => { 
       setSelectedLog(log); 
       setFormData({ ...log }); 
-      setSelectedMarketForForm({ id: log.market_id, name: log.marketName || '' } as Market); 
+      setSelectedMarketForForm({ id: log.marketId, name: log.marketName || '' } as Market); // market_id -> marketId
       setAttachmentFile(null); 
       setView('form'); 
   };
 
   const handleMarketSelect = (market: Market) => {
     setSelectedMarketForForm(market);
-    setFormData({ ...formData, market_id: market.id }); 
+    setFormData({ ...formData, marketId: market.id }); // market_id -> marketId
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; } 
+    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; } // market_id -> marketId
     
     try {
       let uploadedUrl = formData.attachment;
@@ -87,11 +86,11 @@ export const WorkLogManagement: React.FC = () => {
                 {/* ... Other inputs (Date, Image, Content) ... */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div className="flex flex-col gap-1.5">
-                        <label className={UI_STYLES.label}>작업 일시</label>
+                        <label className="text-sm font-bold text-slate-300">작업 일시</label>
                         <input type="date" value={formData.workDate || ''} onChange={(e) => setFormData({...formData, workDate: e.target.value})} className={`${UI_STYLES.input} w-full`} required />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                        <label className={UI_STYLES.label}>첨부이미지</label>
+                        <label className="text-sm font-bold text-slate-300">첨부이미지</label>
                         <div className="flex flex-col gap-2">
                             <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
                             <div className="flex items-center gap-2">
