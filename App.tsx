@@ -11,7 +11,7 @@ import { RoleManagement } from './pages/RoleManagement';
 import { DistributorManagement } from './pages/DistributorManagement';
 import { SmsTransmission } from './pages/SmsTransmission';
 import { WorkLogManagement } from './pages/WorkLogManagement';
-import { ReceiverManagement } from './pages/ReceiverManagement';
+import { ReceiverStatus } from './pages/ReceiverStatus'; // CHANGED: New file import
 import { RepeaterManagement } from './pages/RepeaterManagement';
 import { MenuManagement } from './pages/MenuManagement';
 import { DetectorManagement } from './pages/DetectorManagement';
@@ -52,7 +52,7 @@ const App: React.FC = () => {
               <Route path="/distributors" element={<DistributorManagement />} />
               <Route path="/sms" element={<SmsTransmission />} />
               <Route path="/work-logs" element={<WorkLogManagement />} />
-              <Route path="/receivers" element={<ReceiverManagement />} />
+              <Route path="/receivers" element={<ReceiverStatus />} /> {/* CHANGED: New component */}
               <Route path="/repeaters" element={<RepeaterManagement />} />
               <Route path="/menus" element={<MenuManagement />} />
               <Route path="/detectors" element={<DetectorManagement />} />
