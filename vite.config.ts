@@ -7,10 +7,10 @@ export default defineConfig({
   plugins: [react()],
   // 루트를 현재 디렉토리로 명시적 설정
   root: '.',
-  // 캐시 충돌 방지를 위해 캐시 디렉토리 이름 변경 (강제 초기화 효과 - 버전 업)
-  cacheDir: './.vite-cache-v3.5', 
+  // 캐시 충돌 방지를 위해 캐시 디렉토리 이름 변경 (v4.0)
+  cacheDir: './.vite-cache-v4.0', 
   publicDir: 'public',
-  base: '/',
+  base: './', // 상대 경로로 변경하여 경로 문제 방지
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'), 
@@ -18,8 +18,8 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true, // 빌드 전 dist 폴더 비우기
-    sourcemap: false, // 메모리 부족 방지
+    emptyOutDir: true, 
+    sourcemap: false, 
     chunkSizeWarningLimit: 2000, 
     rollupOptions: {
       input: {
