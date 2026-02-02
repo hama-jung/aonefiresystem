@@ -90,8 +90,8 @@ const MapSection: React.FC<{
     if (!mapInstance) {
       const container = mapRef.current;
       const options = {
-        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // Seoul Center
-        level: 11 // Zoom level matches the screenshot (Province view)
+        center: new window.kakao.maps.LatLng(36.5, 127.5), // Center of Korea
+        level: 13 
       };
       const map = new window.kakao.maps.Map(container, options);
       
@@ -112,13 +112,14 @@ const MapSection: React.FC<{
 
     // Filter Logic
     const filteredMarkets = markets.filter(m => {
-        const matchSido = selectedSido ? m.address.includes(selectedSido) : true;
-        const matchGugun = selectedGugun ? m.address.includes(selectedGugun) : true;
+        const matchSido = selectedSido ? (m.address || '').includes(selectedSido) : true;
+        const matchGugun = selectedGugun ? (m.address || '').includes(selectedGugun) : true;
         const matchName = keyword ? m.name.includes(keyword) : true;
         return matchSido && matchGugun && matchName;
     });
 
     filteredMarkets.forEach((market) => {
+        // DashboardAPI maps latitude -> x, longitude -> y
         if (!market.x || !market.y) return;
 
         const position = new window.kakao.maps.LatLng(market.x, market.y);
@@ -126,7 +127,6 @@ const MapSection: React.FC<{
         // --- Icon Logic (Requested Shapes) ---
         let iconName = 'store'; // Normal: Store
         let bgColor = 'bg-blue-500';
-        let borderColor = 'border-blue-300';
         let isFire = false;
 
         // Check status (Handling both English and Korean)
@@ -134,16 +134,13 @@ const MapSection: React.FC<{
         if (status === 'Fire' || status === '화재') {
              iconName = 'local_fire_department'; // Fire: Flame
              bgColor = 'bg-red-600';
-             borderColor = 'border-red-400';
              isFire = true;
         } else if (status === 'Error' || status === '고장') {
              iconName = 'build'; // Error: Pliers/Tool
              bgColor = 'bg-orange-500';
-             borderColor = 'border-orange-300';
         } else {
              // Normal
              bgColor = 'bg-white';
-             borderColor = 'border-slate-300';
         }
 
         const content = document.createElement('div');
@@ -196,16 +193,6 @@ const MapSection: React.FC<{
                   {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               
-              <select 
-                value={selectedGugun}
-                onChange={(e) => setSelectedGugun(e.target.value)}
-                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
-              >
-                  <option value="">시/군/구 선택</option>
-                  <option value="강남구">강남구</option>
-                  <option value="안양시">안양시</option>
-              </select>
-
               <div className="relative">
                   <input 
                     type="text" 

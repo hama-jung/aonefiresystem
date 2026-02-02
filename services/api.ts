@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
-// --- DB Column Whitelists (DB 컬럼명인 CamelCase로 정의) ---
-// [CORRECTION] 기획자님 확인: DB 컬럼이 marketId, distributorId로 변경됨.
+// --- DB Column Whitelists (스크린샷 기반 CamelCase 완벽 일치) ---
+// stores 테이블 스크린샷 기준: id, name, managerName, managerPhone, status, storeImage, memo, receiverMac, repeaterId, detectorId, mode, address, addressDetail, handlingItems, marketId
 const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
 const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
 const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
@@ -10,7 +10,6 @@ const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'me
 
 // --- Helper Utilities ---
 
-// CamelCase 컬럼 그대로 사용
 function mapToWhitelist(item: any, columns: string[]): any {
   const payload: any = {};
   columns.forEach(col => {
@@ -34,8 +33,7 @@ const generateSafeFileName = (prefix: string, originalName: string) => {
 
 async function supabaseSaver<T extends { id: number }>(table: string, item: any, columns: string[]): Promise<T> {
   const { id } = item;
-  
-  // DB 컬럼이 CamelCase이므로 변환 없이 그대로 저장
+  // DB 컬럼명 그대로 매핑 (변환 없음)
   const dbData = mapToWhitelist(item, columns);
   
   let query;
@@ -46,7 +44,10 @@ async function supabaseSaver<T extends { id: number }>(table: string, item: any,
   }
   
   const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error(`Error saving to ${table}:`, error);
+    throw new Error(error.message);
+  }
   
   return data[0] as T;
 }
@@ -57,22 +58,24 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value && value !== 'all') {
-          // CamelCase 그대로 쿼리
           if (searchFields?.includes(key)) query = query.ilike(key, `%${value}%`);
           else query = query.eq(key, value);
         }
       });
     }
     const { data, error } = await query;
-    if (error) return [];
-    
-    // DB에서 CamelCase로 오므로 그대로 반환
+    if (error) {
+        console.error(`Error reading from ${table}:`, error);
+        return [];
+    }
     return data as T[];
   } catch (e) { return []; }
 }
 
+// 기기 목록 조회 (시장 조인 포함)
 async function getDeviceListWithMarket<T>(table: string, params: any) {
     try {
+      // marketId 관계를 통해 시장명 가져오기
       let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
       
       if (params) {
@@ -80,34 +83,25 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
               if (!params[key] || params[key] === 'all') return;
               if (['marketName', 'startDate', 'endDate'].includes(key)) return;
 
-              // 상태 필터 처리
-              if (key === 'status') {
-                  if (table === 'fire_history') {
-                      if (params[key] === 'fire') query = query.eq('falseAlarmStatus', '화재');
-                      if (params[key] === 'false') query = query.eq('falseAlarmStatus', '오탐');
-                      return; 
-                  }
-                  if (table === 'device_status') {
-                      if (params[key] === 'processed') query = query.eq('processStatus', '처리');
-                      if (params[key] === 'unprocessed') query = query.eq('processStatus', '미처리');
-                      return;
-                  }
-              }
-
-              // marketId 및 기타 컬럼 그대로 사용
+              // DB 컬럼 그대로 검색
               if (key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
               else query = query.eq(key, params[key]);
           });
       }
-      const { data, error } = await query;
-      if (error) return [];
       
+      const { data, error } = await query;
+      if (error) {
+          console.error(`Error in getDeviceListWithMarket for ${table}:`, error);
+          return [];
+      }
+      
+      // Join된 markets(name)을 평탄화하여 marketName으로 반환
       let result = (data || []).map((item: any) => ({
           ...item,
           marketName: item.markets?.name || '-'
       }));
       
-      // marketName 필터링
+      // 검색된 시장명 필터링 (메모리상 처리)
       if (params?.marketName) {
           result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
@@ -122,10 +116,7 @@ export const AuthAPI = {
     const { data } = await supabase.from('users').select('*').eq('userId', id).single();
     if (data && data.password === pw && data.status === '사용') {
       const { password, ...userInfo } = data;
-      return { 
-          success: true, 
-          user: userInfo // marketId, distributorId 그대로 사용
-      };
+      return { success: true, user: userInfo };
     }
     throw new Error('아이디나 비밀번호가 틀립니다.');
   },
@@ -140,10 +131,12 @@ export const AuthAPI = {
 
 export const UserAPI = {
   getList: async (params?: any) => {
-    const { data } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
+    // users 테이블은 distributors, markets 와 FK 연결
+    const { data, error } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
+    if(error) return [];
+
     return (data || []).map((u: any) => ({
       ...u,
-      // DB가 CamelCase이므로 바로 접근 가능
       department: u.distributors?.name || u.markets?.name || u.department
     })) as User[];
   },
@@ -182,13 +175,19 @@ export const MarketAPI = {
 
 export const StoreAPI = {
   getList: async (params?: any) => {
+    // Join markets to get name
     let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
     
-    // DB 컬럼 marketId 사용
+    // DB column is definitely 'marketId' as per screenshot
     if (params?.marketId) query = query.eq('marketId', params.marketId);
     if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
     
-    const { data } = await query;
+    const { data, error } = await query;
+    if (error) {
+        console.error("StoreAPI Error:", error);
+        return [];
+    }
+    
     return (data || []).map((s: any) => ({ 
         ...s,
         marketName: s.markets?.name || '-' 
@@ -238,7 +237,6 @@ export const DetectorAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Detector>('detectors', params),
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
-    // Detector 저장 (marketId 그대로 전달)
     const saved = await supabaseSaver('detectors', rest as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);
     
     if (saved.id && stores) {
@@ -326,7 +324,20 @@ export const MenuAPI = {
 };
 
 export const FireHistoryAPI = {
-  getList: async (params?: any) => getDeviceListWithMarket<FireHistoryItem>('fire_history', params),
+  getList: async (params?: any) => {
+      // Fire history usually links to market via marketId or Name. We will try join if possible.
+      // Assuming fire_history has marketId based on migration scripts.
+      let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
+      if(params?.startDate && params?.endDate) {
+          query = query.gte('registeredAt', `${params.startDate}T00:00:00`).lte('registeredAt', `${params.endDate}T23:59:59`);
+      }
+      if(params?.status === 'fire') query = query.eq('falseAlarmStatus', '화재');
+      if(params?.status === 'false') query = query.eq('falseAlarmStatus', '오탐');
+      
+      const { data, error } = await query;
+      if(error) return [];
+      return data as FireHistoryItem[];
+  },
   save: async (id: number, status: string, note: string) => {
     await supabase.from('fire_history').update({ falseAlarmStatus: status, note: note }).eq('id', id);
     return true;
@@ -335,7 +346,18 @@ export const FireHistoryAPI = {
 };
 
 export const DeviceStatusAPI = {
-  getList: async (params?: any) => getDeviceListWithMarket<DeviceStatusItem>('device_status', params),
+  getList: async (params?: any) => {
+      let query = supabase.from('device_status').select('*').order('registeredAt', { ascending: false });
+      if(params?.startDate && params?.endDate) {
+          query = query.gte('registeredAt', `${params.startDate}T00:00:00`).lte('registeredAt', `${params.endDate}T23:59:59`);
+      }
+      if(params?.status === 'processed') query = query.eq('processStatus', '처리');
+      if(params?.status === 'unprocessed') query = query.eq('processStatus', '미처리');
+      
+      const { data, error } = await query;
+      if(error) return [];
+      return data as DeviceStatusItem[];
+  },
   save: async (id: number, status: string, note: string) => {
     await supabase.from('device_status').update({ processStatus: status, note: note }).eq('id', id);
     return true;
@@ -344,7 +366,15 @@ export const DeviceStatusAPI = {
 };
 
 export const DataReceptionAPI = {
-  getList: async (params?: any) => getDeviceListWithMarket<DataReceptionItem>('data_reception', params),
+  getList: async (params?: any) => {
+      let query = supabase.from('data_reception').select('*').order('registeredAt', { ascending: false });
+      if(params?.startDate && params?.endDate) {
+          query = query.gte('registeredAt', `${params.startDate}T00:00:00`).lte('registeredAt', `${params.endDate}T23:59:59`);
+      }
+      const { data, error } = await query;
+      if(error) return [];
+      return data as DataReceptionItem[];
+  },
   delete: async (id: number) => { await supabase.from('data_reception').delete().eq('id', id); return true; }
 };
 
@@ -354,6 +384,8 @@ export const DashboardAPI = {
       const { data: mkts } = await supabase.from('markets').select('*');
       const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
       const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러');
+      
+      // Fetch logs - join markets if possible, otherwise just get raw
       const { data: fH } = await supabase.from('fire_history').select('*, markets(name)').order('registeredAt', { ascending: false }).limit(5);
       const { data: dS } = await supabase.from('device_status').select('*, markets(name)').eq('deviceStatus', '에러').order('registeredAt', { ascending: false }).limit(5);
 
@@ -363,14 +395,13 @@ export const DashboardAPI = {
           { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
           { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
         ],
-        // DB의 marketId 사용
-        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
-        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
+        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
+        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
         commEvents: [],
         mapData: (mkts || []).map((m: any) => ({ 
             id: m.id, 
             name: m.name, 
-            x: m.latitude, 
+            x: m.latitude,  // Dashboard.tsx maps this to position
             y: m.longitude, 
             address: m.address, 
             status: m.status || 'Normal',
