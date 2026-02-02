@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PageHeader, Pagination, Button } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, ArrowRight, BatteryWarning, MapPin, Search, RefreshCw, X, RotateCcw, Map as MapIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,21 @@ const ITEMS_PER_LIST_PAGE = 4;
 
 const SIDO_COORDINATES: { [key: string]: { lat: number, lng: number, level: number } } = {
   "서울특별시": { lat: 37.5665, lng: 126.9780, level: 9 },
-  // ... (SIDO_COORDINATES content unchanged)
+  "부산광역시": { lat: 35.1796, lng: 129.0756, level: 9 },
+  "대구광역시": { lat: 35.8714, lng: 128.6014, level: 9 },
+  "인천광역시": { lat: 37.4563, lng: 126.7052, level: 9 },
+  "광주광역시": { lat: 35.1601, lng: 126.8517, level: 9 },
+  "대전광역시": { lat: 36.3504, lng: 127.3845, level: 9 },
+  "울산광역시": { lat: 35.5384, lng: 129.3114, level: 9 },
+  "세종특별자치시": { lat: 36.4800, lng: 127.2890, level: 10 },
+  "경기도": { lat: 37.4138, lng: 127.5183, level: 10 },
+  "강원특별자치도": { lat: 37.8228, lng: 128.1555, level: 11 },
+  "충청북도": { lat: 36.6350, lng: 127.4914, level: 10 },
+  "충청남도": { lat: 36.6588, lng: 126.6728, level: 10 },
+  "전북특별자치도": { lat: 35.7175, lng: 127.1530, level: 10 },
+  "전라남도": { lat: 34.8679, lng: 126.9910, level: 10 },
+  "경상북도": { lat: 36.5760, lng: 128.5056, level: 11 },
+  "경상남도": { lat: 35.4606, lng: 128.2132, level: 10 },
   "제주특별자치도": { lat: 33.4996, lng: 126.5312, level: 10 },
 };
 
@@ -287,6 +301,17 @@ export const Dashboard: React.FC = () => {
       }
   };
 
+  // Filter markets for the new dropdown
+  const filteredMarketsForDropdown = useMemo(() => {
+      if (!data?.mapData) return [];
+      return data.mapData.filter((m: any) => {
+          if (!m.address) return false;
+          if (selectedSido && !m.address.startsWith(selectedSido)) return false;
+          if (selectedSigun && !m.address.includes(selectedSigun)) return false;
+          return true;
+      });
+  }, [data, selectedSido, selectedSigun]);
+
   if (!data) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -335,6 +360,23 @@ export const Dashboard: React.FC = () => {
                  >
                     <option value="">전체</option>
                     {sigunList.map(s => <option key={s} value={s}>{s}</option>)}
+                 </select>
+                 
+                 {/* [New] Market List Dropdown */}
+                 <select 
+                    className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                    value="" // Always show placeholder
+                    onChange={(e) => {
+                        const marketId = Number(e.target.value);
+                        const m = filteredMarketsForDropdown.find((mk: any) => mk.id === marketId);
+                        if (m) setSelectedMarket(m);
+                        e.target.value = ""; // Reset value so it can be selected again
+                    }}
+                 >
+                    <option value="" disabled>현장 선택</option>
+                    {filteredMarketsForDropdown.map((m: any) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                    ))}
                  </select>
              </div>
              <div className="flex justify-between items-end mt-2">
