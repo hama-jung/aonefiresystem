@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, InputGroup, Button, DataTable, Pagination, Column, Modal, SearchFilterBar, UI_STYLES
@@ -7,6 +8,7 @@ import { UserAPI } from '../services/api';
 import { Send, UserPlus, Trash2, List, Smartphone, ArrowLeft } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
+const Modal_ITEMS_PER_PAGE_CONST = 5;
 
 // 수신자 인터페이스
 interface Receiver {
@@ -537,5 +539,3 @@ export const SmsTransmission: React.FC = () => {
     </>
   );
 };
-
-const Modal_ITEMS_PER_PAGE_CONST = 5;

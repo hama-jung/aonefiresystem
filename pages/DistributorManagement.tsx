@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, SelectGroup, AddressInput,
-  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES
+  Button, DataTable, Pagination, ActionBar, FormSection, FormRow, Column, UI_STYLES, StatusBadge
 } from '../components/CommonUI';
 import { Distributor } from '../types';
 import { DistributorAPI } from '../services/api';
@@ -27,9 +27,9 @@ export const DistributorManagement: React.FC = () => {
   // 폼 상태 (전체 객체로 관리)
   const [formData, setFormData] = useState<Partial<Distributor>>({});
   
-  // 관리 시장 추가 관련 상태 (수정 모드 전용)
+  // 관리 시장 추가 관련 상태 (수정 모드 전용 - Display Only now)
   const [managedMarkets, setManagedMarkets] = useState<string[]>([]);
-  const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null);
+  // const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null); // 사용 안함
 
   // -- Data Fetching --
   const fetchData = async (overrides?: { address?: string, name?: string, managerName?: string }) => {
@@ -133,7 +133,7 @@ export const DistributorManagement: React.FC = () => {
       managerEmail: formData.managerEmail || '',
       memo: formData.memo || '',
       status: formData.status as '사용' | '미사용',
-      managedMarkets: managedMarkets
+      managedMarkets: managedMarkets // 읽기 전용 상태 유지
     };
 
     try {
@@ -144,25 +144,6 @@ export const DistributorManagement: React.FC = () => {
     } catch (e) {
       alert('저장 실패');
     }
-  };
-
-  // 관리 시장 목록 핸들러
-  const handleRemoveMarket = () => {
-      if (selectedMarketIndex !== null) {
-          const newMarkets = [...managedMarkets];
-          newMarkets.splice(selectedMarketIndex, 1);
-          setManagedMarkets(newMarkets);
-          setSelectedMarketIndex(null);
-      } else {
-          alert('삭제할 시장을 선택해주세요.');
-      }
-  };
-
-  const handleAddMarketMock = () => {
-      const mockName = prompt("추가할 시장 이름을 입력하세요 (Mock):", "신규시장");
-      if (mockName) {
-          setManagedMarkets([...managedMarkets, mockName]);
-      }
   };
 
   const handleCancel = () => { setView('list'); };
@@ -181,6 +162,7 @@ export const DistributorManagement: React.FC = () => {
     { header: '담당자전화', accessor: 'managerPhone' },
     { header: 'E-mail', accessor: 'managerEmail' },
     { header: '주소', accessor: (d) => `${d.address} ${d.addressDetail}` },
+    { header: '상태', accessor: (d) => <StatusBadge status={d.status} />, width: '100px' },
   ];
 
   // -- Views --
@@ -207,6 +189,7 @@ export const DistributorManagement: React.FC = () => {
                      addressDetail={formData.addressDetail || ''}
                      onAddressChange={(val) => setFormData({...formData, address: val})}
                      onDetailChange={(val) => setFormData({...formData, addressDetail: val})}
+                     onCoordinateChange={(lat, lng) => setFormData({...formData, latitude: lat, longitude: lng})}
                   />
               </div>
 
@@ -260,48 +243,56 @@ export const DistributorManagement: React.FC = () => {
 
               {/* 총판 사용여부 (Full Width) - UI_STYLES.input 적용 */}
               <FormRow label="총판 사용여부" className="col-span-1 md:col-span-2">
-                <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                        type="radio" name="status" value="사용" 
-                        checked={formData.status === '사용'} 
-                        onChange={() => setFormData({...formData, status: '사용'})}
-                        className="accent-blue-500" 
-                    />
-                    <span>사용</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input 
-                        type="radio" name="status" value="미사용" 
-                        checked={formData.status === '미사용'} 
-                        onChange={() => setFormData({...formData, status: '미사용'})}
-                        className="accent-blue-500" 
-                    />
-                    <span>미사용</span>
-                  </label>
+                <div className="flex flex-col gap-2">
+                    <div className={`${UI_STYLES.input} flex gap-4 text-slate-300 items-center`}>
+                      <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                        <input 
+                            type="radio" name="status" value="사용" 
+                            checked={formData.status === '사용'} 
+                            onChange={() => setFormData({...formData, status: '사용'})}
+                            className="accent-blue-500" 
+                        />
+                        <span>사용</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer hover:text-white">
+                        <input 
+                            type="radio" name="status" value="미사용" 
+                            checked={formData.status === '미사용'} 
+                            onChange={() => setFormData({...formData, status: '미사용'})}
+                            className="accent-blue-500" 
+                        />
+                        <span>미사용</span>
+                      </label>
+                    </div>
+                    <p className="text-xs text-red-400 font-medium">
+                        - 미사용으로 바꿀 경우, 현장관리, 기기관리에서 총판을 바꿔주십시오. 데이터는 자동 연동되지 않습니다.
+                    </p>
                 </div>
               </FormRow>
 
-              {/* 관리 시장 추가 (Full Width, 수정 모드일 때만 표시) */}
+              {/* 관리 현장 추가 (Full Width, 수정 모드일 때만 표시) */}
               {selectedDistributor && (
-                  <FormRow label="관리 시장 추가" className="col-span-1 md:col-span-2">
-                      <div className="flex gap-2 w-full">
+                  <FormRow label="관리현장" className="col-span-1 md:col-span-2">
+                      <div className="flex flex-col gap-2 w-full">
+                          <p className="text-xs text-red-400 font-medium">
+                             * 관리현장은 '현장관리'에서 지정한 현장 목록이 제시됩니다. 추가, 삭제, 수정은 현장관리에서 해 주세요
+                          </p>
                           <div className="flex-1 border border-slate-600 bg-slate-800 rounded h-32 overflow-y-auto custom-scrollbar">
                               <ul className="p-0 m-0 list-none">
                                   {managedMarkets.map((market, idx) => (
                                       <li 
                                         key={idx}
-                                        onClick={() => setSelectedMarketIndex(idx)}
-                                        className={`px-3 py-1.5 cursor-pointer text-sm ${selectedMarketIndex === idx ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-700'}`}
+                                        className="px-3 py-1.5 text-sm text-slate-300 border-b border-slate-700/50 last:border-0"
                                       >
                                           {market}
                                       </li>
                                   ))}
+                                  {managedMarkets.length === 0 && (
+                                      <li className="px-3 py-10 text-center text-slate-500 text-sm">
+                                          연결된 현장이 없습니다.
+                                      </li>
+                                  )}
                               </ul>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                              <Button type="button" variant="secondary" className="h-8" onClick={handleAddMarketMock}>검색</Button>
-                              <Button type="button" variant="secondary" className="h-8" onClick={handleRemoveMarket}>삭제</Button>
                           </div>
                       </div>
                   </FormRow>

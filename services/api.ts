@@ -1,333 +1,352 @@
-import { User, Role, Market, RoleItem, Distributor } from '../types';
+import { supabase } from '../lib/supabaseClient';
+import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
-/**
- * [서버 연동 가이드]
- * 현재는 메모리 상의 변수(MOCK_*)를 조작하여 서버 동작을 흉내내고 있습니다.
- * 실제 서버 연동 시에는 아래 함수들의 내부 로직을 axios나 fetch를 사용한 API 호출로 변경하면 됩니다.
- */
+// --- DB Column Whitelists ---
 
-// --- 1. MOCK DATA ---
+const STORE_COLS = ['market_id', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'latitude', 'longitude', 'handlingItems'];
+const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'distributor_id', 'market_id', 'status', 'smsReceive'];
+const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'status'];
+const DEVICE_BASE_COLS = ['market_id', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
 
-// 요청된 기본 역할 4개
-let MOCK_ROLES: RoleItem[] = [
-  { id: 1, code: '7777', name: '지자체', description: '구단위', status: '사용' },
-  { id: 2, code: '9999', name: '시스템관리자', description: '시스템관리자', status: '사용' },
-  { id: 3, code: '8000', name: '총판관리자', description: '총판관리자', status: '사용' },
-  { id: 4, code: '1000', name: '시장관리자', description: '시장관리자', status: '사용' },
-];
+// --- Helper Utilities ---
 
-// 사용자 데이터 역할명 동기화 (smsReceive 추가, password 추가)
-// 비밀번호는 모두 '12341234!'로 설정
-let MOCK_USERS: User[] = [
-  { id: 1, userId: 'admin', password: '12341234!', name: '관리자', role: '시스템관리자', phone: '010-1234-5678', department: '본사', status: '사용', smsReceive: '수신' },
-  { id: 2, userId: 'dist01', password: '12341234!', name: '김총판', role: '총판관리자', phone: '010-9876-5432', department: '경기남부', status: '사용', smsReceive: '미수신' },
-  { id: 3, userId: 'market01', password: '12341234!', name: '박시장', role: '시장관리자', phone: '010-5555-4444', department: '부평시장', status: '사용', smsReceive: '수신' },
-  { id: 4, userId: 'store01', password: '12341234!', name: '이상인', role: '시장관리자', phone: '010-1111-2222', department: '진라도김치', status: '미사용', smsReceive: '수신' },
-];
-
-let MOCK_MARKETS: Market[] = [
-  { id: 1, name: '부평자유시장', address: '인천광역시 부평구 시장로 11', addressDetail: '', managerName: '홍길동', managerPhone: '010-1234-1234', status: 'Normal' },
-  { id: 2, name: '대전중앙시장', address: '대전광역시 동구 중교로 12', addressDetail: '', managerName: '김철수', managerPhone: '010-9876-5432', status: 'Fire' },
-];
-
-let MOCK_DISTRIBUTORS: Distributor[] = [
-  { 
-    id: 1, name: '미창', address: '경기도 부천시 원미구 도약로 294', addressDetail: '5,7F', 
-    latitude: '37.5102443', longitude: '126.7822721', 
-    managerName: '미창AS', managerPhone: '01074158119', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: ['원주자유시장', '원주시민시장', '원주남부시장', '사직시장', '상동시장']
-  },
-  { 
-    id: 2, name: '디지털허브', address: '서울특별시 성동구 아차산로 17', addressDetail: '101호', 
-    latitude: '37.541', longitude: '127.056', 
-    managerName: '정진욱팀장', managerPhone: '01071512644', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 3, name: '창조라이팅', address: '대전광역시 대덕구 한남로 107', addressDetail: '', 
-    latitude: '36.353', longitude: '127.422', 
-    managerName: '이건철', managerPhone: '01076113935', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 4, name: '신흥아이엔지', address: '대구광역시 남구 명덕로 104', addressDetail: '', 
-    latitude: '35.856', longitude: '128.591', 
-    managerName: '박영호', managerPhone: '01046287591', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 5, name: '에어텍코리아', address: '경상남도 김해시 내덕로148번길 38', addressDetail: '', 
-    latitude: '35.215', longitude: '128.855', 
-    managerName: '김영호', managerPhone: '01043320709', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 6, name: '대전서구청', address: '대전광역시 서구 둔산서로 100', addressDetail: '', 
-    latitude: '36.355', longitude: '127.383', 
-    managerName: '대전서구청', managerPhone: '', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 7, name: '송파구청', address: '서울특별시 송파구 올림픽로 326', addressDetail: '', 
-    latitude: '37.514', longitude: '127.106', 
-    managerName: '송파구', managerPhone: '', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 8, name: '부천소방서', address: '경기도 부천시 신흥로 115', addressDetail: '', 
-    latitude: '37.498', longitude: '126.776', 
-    managerName: '부천소방서', managerPhone: '', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 9, name: '솔루션디', address: '부산광역시 연제구 시청로 12', addressDetail: '', 
-    latitude: '35.176', longitude: '129.076', 
-    managerName: '김덕호 대표', managerPhone: '01028681190', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  },
-  { 
-    id: 10, name: '도봉구', address: '서울특별시 도봉구 도봉로 721', addressDetail: '', 
-    latitude: '37.668', longitude: '127.047', 
-    managerName: '도봉구관리자', managerPhone: '', managerEmail: '', memo: '', status: '사용',
-    managedMarkets: []
-  }
-];
-
-const MOCK_DASHBOARD = {
-  stats: [
-    { label: '최근 화재 발생', value: 2, type: 'fire', color: 'bg-red-500' },
-    { label: '최근 고장 발생', value: 5, type: 'fault', color: 'bg-orange-500' },
-    { label: '통신 이상', value: 1, type: 'error', color: 'bg-gray-500' },
-  ],
-  fireLogs: [
-    { id: 1, msg: '인천광역시 부평구 진라도김치 화재 감지', time: '2024-05-25 12:39:15', type: 'fire' },
-    { id: 2, msg: '대전광역시 서구 약초마을 화재 감지 알림', time: '2024-06-25 08:59:15', type: 'fire' },
-  ],
-  faultLogs: [
-    { id: 1, msg: '중계기 02 감지기 01 감지기 통신이상', time: '2024-06-25 10:06:53', type: 'fault' },
-    { id: 2, msg: '중계기 15 감지기 11 감지기 통신이상', time: '2024-06-25 08:01:51', type: 'fault' },
-  ],
-  mapPoints: [
-    { id: 1, x: 30, y: 40, name: '서울/경기', status: 'normal' },
-    { id: 2, x: 60, y: 50, name: '경상북도', status: 'fire' },
-    { id: 3, x: 40, y: 70, name: '전라북도', status: 'normal' },
-  ]
-};
-
-// --- 2. Helper Utilities ---
-const simulateDelay = <T>(data: T): Promise<T> => {
-  return new Promise(resolve => {
-    setTimeout(() => resolve(data), 300 + Math.random() * 300);
+function mapToWhitelist(item: any, columns: string[]): any {
+  const payload: any = {};
+  columns.forEach(col => {
+    if (item[col] !== undefined) {
+      payload[col] = item[col];
+    }
   });
+  return payload;
+}
+
+const generateSafeFileName = (prefix: string, originalName: string) => {
+  const parts = originalName.split('.');
+  let ext = parts.length > 1 ? parts.pop() : 'png';
+  if (!ext || !/^[a-zA-Z0-9]+$/.test(ext)) { ext = 'png'; }
+  const randomStr = Math.random().toString(36).substring(2, 10);
+  const timestamp = Date.now();
+  return `${prefix}_${timestamp}_${randomStr}.${ext}`;
 };
 
-// --- 3. API Services ---
+// --- Generic Functions ---
+
+async function supabaseSaver<T extends { id: number }>(table: string, item: T, columns: string[]): Promise<T> {
+  const { id } = item;
+  const dbData = mapToWhitelist(item, columns);
+  
+  let query;
+  if (id && id > 0) {
+    query = supabase.from(table).update(dbData).eq('id', id).select();
+  } else {
+    query = supabase.from(table).insert(dbData).select();
+  }
+  
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return data[0] as T;
+}
+
+async function supabaseReader<T>(table: string, params?: Record<string, any>, searchFields?: string[]) {
+  try {
+    let query = supabase.from(table).select('*').order('id', { ascending: false });
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value && value !== 'all') {
+          if (searchFields?.includes(key)) query = query.ilike(key, `%${value}%`);
+          else query = query.eq(key, value);
+        }
+      });
+    }
+    const { data, error } = await query;
+    if (error) return [];
+    return data as T[];
+  } catch (e) { return []; }
+}
+
+async function getDeviceListWithMarket<T>(table: string, params: any) {
+    try {
+      let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
+      if (params) {
+          Object.keys(params).forEach(key => {
+              if (params[key] && key !== 'marketName') {
+                  if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+                  else if (key === 'market_id') query = query.eq('market_id', params[key]);
+                  else query = query.eq(key, params[key]);
+              }
+          });
+      }
+      const { data, error } = await query;
+      if (error) return [];
+      
+      let result = (data || []).map((item: any) => ({
+          ...item,
+          marketName: item.markets?.name || '-'
+      }));
+      if (params?.marketName) {
+          result = result.filter((item: any) => item.marketName.includes(params.marketName));
+      }
+      return result as T[];
+    } catch(e) { return []; }
+}
+
+// --- API Services ---
 
 export const AuthAPI = {
   login: async (id: string, pw: string) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const user = MOCK_USERS.find(u => u.userId === id);
-        
-        // 1. 사용자 존재 여부 및 비밀번호 일치 확인
-        // 2. 상태가 '사용'인지 확인
-        if (user && user.password === pw && user.status === '사용') {
-          // 비밀번호는 제외하고 사용자 정보 반환
-          const { password, ...userInfo } = user;
-          resolve({
-            success: true,
-            token: 'mock-jwt-token-12345',
-            user: userInfo
-          });
-        } else {
-          // 실패 시 에러
-          reject(new Error('Invalid credentials'));
-        }
-      }, 500);
-    });
+    const { data } = await supabase.from('users').select('*').eq('userId', id).single();
+    if (data && data.password === pw && data.status === '사용') {
+      const { password, ...userInfo } = data;
+      return { success: true, user: userInfo };
+    }
+    throw new Error('아이디나 비밀번호가 틀립니다.');
   },
-  // 비밀번호 변경 기능 추가
   changePassword: async (userId: string, currentPw: string, newPw: string) => {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const userIndex = MOCK_USERS.findIndex(u => u.userId === userId);
-        
-        if (userIndex === -1) {
-          reject(new Error('사용자를 찾을 수 없습니다.'));
-          return;
-        }
-
-        if (MOCK_USERS[userIndex].password !== currentPw) {
-          reject(new Error('현재 비밀번호가 일치하지 않습니다.'));
-          return;
-        }
-
-        // 비밀번호 업데이트
-        MOCK_USERS[userIndex].password = newPw;
-        resolve({ success: true });
-      }, 500);
-    });
-  }
-};
-
-export const RoleAPI = {
-  getList: async (params?: { code?: string, name?: string }) => {
-    let data = [...MOCK_ROLES];
-    if (params) {
-      if (params.code) data = data.filter(r => r.code.includes(params.code!));
-      if (params.name) data = data.filter(r => r.name.includes(params.name!));
-    }
-    return simulateDelay(data);
-  },
-  save: async (role: RoleItem) => {
-    if (role.id) {
-      MOCK_ROLES = MOCK_ROLES.map(r => r.id === role.id ? role : r);
-      return simulateDelay(role);
-    } else {
-      const newRole = { ...role, id: Math.max(...MOCK_ROLES.map(r => r.id)) + 1 };
-      MOCK_ROLES.push(newRole);
-      return simulateDelay(newRole);
-    }
-  },
-  delete: async (id: number) => {
-    MOCK_ROLES = MOCK_ROLES.filter(r => r.id !== id);
-    return simulateDelay(true);
-  }
-};
-
-// 공통 API (업체 목록 등)
-export const CommonAPI = {
-  // 총판 + 시장 목록 통합 조회
-  getCompanyList: async (searchName?: string) => {
-    const distributors = MOCK_DISTRIBUTORS.map(d => ({
-      id: `D_${d.id}`,
-      name: d.name,
-      type: '총판',
-      manager: d.managerName,
-      phone: d.managerPhone
-    }));
-    
-    const markets = MOCK_MARKETS.map(m => ({
-      id: `M_${m.id}`,
-      name: m.name,
-      type: '시장',
-      manager: m.managerName,
-      phone: m.managerPhone
-    }));
-
-    let all = [...distributors, ...markets];
-    
-    if (searchName) {
-      all = all.filter(c => c.name.includes(searchName));
-    }
-    
-    return simulateDelay(all);
+    const { data } = await supabase.from('users').select('password').eq('userId', userId).single();
+    if (!data || data.password !== currentPw) throw new Error('현재 비밀번호가 일치하지 않습니다.');
+    const { error } = await supabase.from('users').update({ password: newPw }).eq('userId', userId);
+    if (error) throw error;
+    return { success: true };
   }
 };
 
 export const UserAPI = {
-  getList: async (params?: { userId?: string, name?: string, role?: string, department?: string }) => {
-    let data = [...MOCK_USERS];
-    if (params) {
-      if (params.userId) data = data.filter(u => u.userId.includes(params.userId!));
-      if (params.name) data = data.filter(u => u.name.includes(params.name!));
-      if (params.role) data = data.filter(u => u.role === params.role);
-      if (params.department) data = data.filter(u => u.department?.includes(params.department!));
-    }
-    return simulateDelay(data);
+  getList: async (params?: any) => {
+    const { data } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
+    return (data || []).map((u: any) => ({
+      ...u,
+      department: u.distributors?.name || u.markets?.name || u.department
+    })) as User[];
   },
-  // 중복 체크 API
-  checkDuplicate: async (userId: string) => {
-    const exists = MOCK_USERS.some(u => u.userId === userId);
-    return simulateDelay(exists);
+  checkDuplicate: async (id: string) => {
+    const { data } = await supabase.from('users').select('id').eq('userId', id);
+    return data && data.length > 0;
   },
-  save: async (user: User) => {
-    if (user.id) {
-      const existing = MOCK_USERS.find(u => u.id === user.id);
-      // 비밀번호 업데이트가 없는 경우 기존 비밀번호 유지
-      const updatedUser = { 
-        ...existing, 
-        ...user, 
-        password: user.password || existing?.password 
-      };
-      
-      MOCK_USERS = MOCK_USERS.map(u => u.id === user.id ? updatedUser : u);
-      return simulateDelay(updatedUser);
-    } else {
-      // 신규 생성 시
-      const newUser = { 
-        ...user, 
-        id: Math.max(...MOCK_USERS.map(u => u.id)) + 1,
-        // 비밀번호가 없으면 기본값 설정 (혹은 에러처리)
-        password: user.password || '12341234!' 
-      };
-      MOCK_USERS.push(newUser);
-      return simulateDelay(newUser);
-    }
-  },
-  delete: async (id: number) => {
-    MOCK_USERS = MOCK_USERS.filter(u => u.id !== id);
-    return simulateDelay(true);
-  }
+  save: async (user: User) => supabaseSaver('users', user, USER_COLS),
+  delete: async (id: number) => { await supabase.from('users').delete().eq('id', id); return true; }
 };
 
 export const MarketAPI = {
-  getList: async (params?: { name?: string, address?: string, managerName?: string }) => {
-    let data = [...MOCK_MARKETS];
+  // [FIXED] Custom getList implementation to join with distributors and populate distributorName
+  getList: async (params?: any) => {
+    let query = supabase.from('markets').select('*, distributors(name)').order('id', { ascending: false });
     if (params) {
-      if (params.name) data = data.filter(m => m.name.includes(params.name!));
-      if (params.address) data = data.filter(m => m.address.includes(params.address!));
-      if (params.managerName) data = data.filter(m => m.managerName.includes(params.managerName!));
+        if (params.name) query = query.ilike('name', `%${params.name}%`);
+        if (params.address) query = query.ilike('address', `%${params.address}%`);
+        if (params.managerName) query = query.ilike('managerName', `%${params.managerName}%`);
     }
-    return simulateDelay(data);
+    const { data, error } = await query;
+    if (error) return [];
+    return (data || []).map((m: any) => ({
+      ...m,
+      distributorName: m.distributors?.name || '-'
+    })) as Market[];
   },
-  save: async (market: Market) => {
-    if (market.id) {
-      MOCK_MARKETS = MOCK_MARKETS.map(m => m.id === market.id ? market : m);
-      return simulateDelay(market);
-    } else {
-      const newMarket = { ...market, id: Math.max(...MOCK_MARKETS.map(m => m.id)) + 1 };
-      MOCK_MARKETS.push(newMarket);
-      return simulateDelay(newMarket);
-    }
-  },
-  delete: async (id: number) => {
-    MOCK_MARKETS = MOCK_MARKETS.filter(m => m.id !== id);
-    return simulateDelay(true);
+  save: async (m: Market) => supabaseSaver('markets', m, MARKET_COLS),
+  delete: async (id: number) => { await supabase.from('markets').delete().eq('id', id); return true; },
+  uploadMapImage: async (file: File) => {
+    const fileName = generateSafeFileName('mkt', file.name);
+    const { error } = await supabase.storage.from('market-maps').upload(fileName, file);
+    if (error) throw error;
+    return supabase.storage.from('market-maps').getPublicUrl(fileName).data.publicUrl;
   }
 };
 
-export const DistributorAPI = {
-  getList: async (params?: { address?: string, name?: string, managerName?: string }) => {
-    let data = [...MOCK_DISTRIBUTORS];
-    if (params) {
-      // 주소 검색 (Select Box '전체'일 경우 필터링 안함, 그 외에는 포함 여부 확인)
-      if (params.address && params.address !== '전체') {
-        data = data.filter(d => d.address.includes(params.address!));
-      }
-      if (params.name) data = data.filter(d => d.name.includes(params.name!));
-      if (params.managerName) data = data.filter(d => d.managerName.includes(params.managerName!));
-    }
-    return simulateDelay(data);
+export const StoreAPI = {
+  getList: async (params?: any) => {
+    let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
+    if (params?.market_id) query = query.eq('market_id', params.market_id);
+    if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
+    const { data } = await query;
+    return (data || []).map((s: any) => ({ ...s, marketName: s.markets?.name || '-' })) as Store[];
   },
-  save: async (dist: Distributor) => {
-    if (dist.id) {
-      MOCK_DISTRIBUTORS = MOCK_DISTRIBUTORS.map(d => d.id === dist.id ? dist : d);
-      return simulateDelay(dist);
-    } else {
-      const newDist = { ...dist, id: Math.max(...MOCK_DISTRIBUTORS.map(d => d.id), 0) + 1 };
-      MOCK_DISTRIBUTORS.push(newDist);
-      return simulateDelay(newDist);
-    }
+  save: async (store: Store) => supabaseSaver('stores', store, STORE_COLS),
+  delete: async (id: number) => { await supabase.from('stores').delete().eq('id', id); return true; },
+  uploadStoreImage: async (file: File) => {
+    const fileName = generateSafeFileName('str', file.name);
+    const { error } = await supabase.storage.from('store-images').upload(fileName, file);
+    if (error) throw error;
+    return supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl;
   },
-  delete: async (id: number) => {
-    MOCK_DISTRIBUTORS = MOCK_DISTRIBUTORS.filter(d => d.id !== id);
-    return simulateDelay(true);
+  saveBulk: async (stores: Store[]) => {
+    const payloads = stores.map(s => mapToWhitelist(s, STORE_COLS));
+    const { error } = await supabase.from('stores').insert(payloads);
+    if (error) throw error;
+    return true;
   }
+};
+
+export const ReceiverAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<Receiver>('receivers', params),
+  save: async (r: Receiver) => supabaseSaver('receivers', r, [...DEVICE_BASE_COLS, 'macAddress', 'ip', 'dns', 'emergencyPhone', 'transmissionInterval', 'image']),
+  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('receivers').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  delete: async (id: number) => { await supabase.from('receivers').delete().eq('id', id); return true; },
+  uploadImage: async (file: File) => {
+    const fileName = generateSafeFileName('rcv', file.name);
+    await supabase.storage.from('receiver-images').upload(fileName, file);
+    return supabase.storage.from('receiver-images').getPublicUrl(fileName).data.publicUrl;
+  }
+};
+
+export const RepeaterAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
+  save: async (r: Repeater) => supabaseSaver('repeaters', r, [...DEVICE_BASE_COLS, 'repeaterId', 'alarmStatus', 'location', 'image']),
+  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('repeaters').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  delete: async (id: number) => { await supabase.from('repeaters').delete().eq('id', id); return true; },
+  // [FIXED] Added uploadImage to RepeaterAPI to resolve error in RepeaterManagement
+  uploadImage: async (file: File) => {
+    const fileName = generateSafeFileName('rpt', file.name);
+    await supabase.storage.from('repeater-images').upload(fileName, file);
+    return supabase.storage.from('repeater-images').getPublicUrl(fileName).data.publicUrl;
+  }
+};
+
+export const DetectorAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<Detector>('detectors', params),
+  save: async (detector: Detector) => {
+    const { stores, ...rest } = detector;
+    const saved = await supabaseSaver('detectors', rest as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);
+    if (saved.id && stores) {
+        await supabase.from('detector_stores').delete().eq('detectorId', saved.id);
+        const junctions = stores.map(s => ({ detectorId: saved.id, storeId: s.id }));
+        if (junctions.length > 0) await supabase.from('detector_stores').insert(junctions);
+    }
+    return saved;
+  },
+  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('detectors').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  delete: async (id: number) => { await supabase.from('detectors').delete().eq('id', id); return true; }
+};
+
+// [FIXED] Added TransmitterAPI to resolve export error
+export const TransmitterAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<Transmitter>('transmitters', params),
+  save: async (t: Transmitter) => supabaseSaver('transmitters', t, [...DEVICE_BASE_COLS, 'transmitterId']),
+  delete: async (id: number) => { await supabase.from('transmitters').delete().eq('id', id); return true; }
+};
+
+// [FIXED] Added AlarmAPI to resolve export error
+export const AlarmAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<Alarm>('alarms', params),
+  save: async (a: Alarm) => supabaseSaver('alarms', a, [...DEVICE_BASE_COLS, 'alarmId']),
+  delete: async (id: number) => { await supabase.from('alarms').delete().eq('id', id); return true; }
+};
+
+export const DistributorAPI = {
+  getList: async (params?: any) => supabaseReader<Distributor>('distributors', params, ['name']),
+  save: async (d: Distributor) => supabaseSaver('distributors', d, ['name', 'address', 'addressDetail', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'status', 'managedMarkets']),
+  delete: async (id: number) => { await supabase.from('distributors').delete().eq('id', id); return true; }
+};
+
+export const RoleAPI = {
+  getList: async (params?: any) => supabaseReader<RoleItem>('roles', params, ['name']),
+  save: async (r: RoleItem) => supabaseSaver('roles', r, ['code', 'name', 'description', 'status']),
+  delete: async (id: number) => { await supabase.from('roles').delete().eq('id', id); return true; }
+};
+
+export const CommonCodeAPI = {
+  getList: async (params?: any) => supabaseReader<CommonCode>('common_codes', params, ['name', 'groupName']),
+  save: async (c: CommonCode) => supabaseSaver('common_codes', c, ['code', 'name', 'description', 'groupCode', 'groupName', 'status']),
+  saveBulk: async (codes: CommonCode[]) => {
+    const payloads = codes.map(c => mapToWhitelist(c, ['code', 'name', 'description', 'groupCode', 'groupName', 'status']));
+    await supabase.from('common_codes').insert(payloads);
+    return true;
+  },
+  delete: async (id: number) => { await supabase.from('common_codes').delete().eq('id', id); return true; }
+};
+
+// [FIXED] Added CommonAPI to resolve export error in UserManagement
+export const CommonAPI = {
+  getCompanyList: async (searchName?: string) => {
+    const { data: dists } = await supabase.from('distributors').select('id, name, managerName, managerPhone');
+    const { data: mkts } = await supabase.from('markets').select('id, name, managerName, managerPhone');
+    
+    const dList = (dists || []).map(d => ({ id: `D_${d.id}`, name: d.name, type: '총판', manager: d.managerName, phone: d.managerPhone }));
+    const mList = (mkts || []).map(m => ({ id: `M_${m.id}`, name: m.name, type: '시장', manager: m.managerName, phone: m.managerPhone }));
+    
+    let all = [...dList, ...mList];
+    if (searchName) {
+      all = all.filter(c => c.name.includes(searchName));
+    }
+    return all;
+  }
+};
+
+export const MenuAPI = {
+  getAll: async () => {
+    const { data } = await supabase.from('menus').select('*').order('sortOrder', { ascending: true });
+    return data as MenuItemDB[];
+  },
+  getTree: async () => {
+    const list = await MenuAPI.getAll();
+    const buildTree = (items: MenuItemDB[], parentId: number | null = null): MenuItemDB[] => {
+      return items.filter(item => (item.parentId || null) === parentId).map(item => ({ ...item, children: buildTree(items, item.id) }));
+    };
+    return buildTree(list);
+  },
+  save: async (m: MenuItemDB) => supabaseSaver('menus', m, ['parentId', 'label', 'path', 'icon', 'sortOrder', 'isVisiblePc', 'isVisibleMobile', 'allowDistributor', 'allowMarket', 'allowLocal']),
+  delete: async (id: number) => { await supabase.from('menus').delete().eq('id', id); return true; },
+  updateVisibilities: async (menus: any[]) => {
+    const payloads = menus.map(m => mapToWhitelist(m, ['id', 'isVisiblePc', 'isVisibleMobile', 'allowDistributor', 'allowMarket', 'allowLocal']));
+    const { error } = await supabase.from('menus').upsert(payloads);
+    if (error) throw error;
+    return true;
+  }
+};
+
+export const FireHistoryAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<FireHistoryItem>('fire_history', params),
+  save: async (id: number, status: string, note: string) => {
+    await supabase.from('fire_history').update({ falseAlarmStatus: status, note: note }).eq('id', id);
+    return true;
+  },
+  delete: async (id: number) => { await supabase.from('fire_history').delete().eq('id', id); return true; }
+};
+
+export const DeviceStatusAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<DeviceStatusItem>('device_status', params),
+  save: async (id: number, status: string, note: string) => {
+    await supabase.from('device_status').update({ processStatus: status, note: note }).eq('id', id);
+    return true;
+  },
+  delete: async (id: number) => { await supabase.from('device_status').delete().eq('id', id); return true; }
+};
+
+export const DataReceptionAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<DataReceptionItem>('data_reception', params),
+  delete: async (id: number) => { await supabase.from('data_reception').delete().eq('id', id); return true; }
 };
 
 export const DashboardAPI = {
   getData: async () => {
-    return simulateDelay(MOCK_DASHBOARD);
+    try {
+      const { data: mkts } = await supabase.from('markets').select('*');
+      const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
+      const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러');
+      const { data: fH } = await supabase.from('fire_history').select('*, markets(name)').order('registeredAt', { ascending: false }).limit(5);
+      const { data: dS } = await supabase.from('device_status').select('*, markets(name)').eq('deviceStatus', '에러').order('registeredAt', { ascending: false }).limit(5);
+
+      return {
+        stats: [
+          { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-500' },
+          { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
+          { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
+        ],
+        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.market_id })),
+        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.market_id })),
+        commEvents: [],
+        mapData: (mkts || []).map((m: any) => ({ id: m.id, name: m.name, x: m.latitude, y: m.longitude, address: m.address, status: m.status || 'Normal' }))
+      };
+    } catch (e) { return { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] }; }
+  }
+};
+
+export const WorkLogAPI = {
+  getList: async (params?: any) => getDeviceListWithMarket<WorkLog>('work_logs', params),
+  save: async (log: WorkLog) => supabaseSaver('work_logs', log, ['market_id', 'workDate', 'content', 'attachment']),
+  delete: async (id: number) => { await supabase.from('work_logs').delete().eq('id', id); return true; },
+  uploadAttachment: async (file: File) => {
+    const fileName = generateSafeFileName('log', file.name);
+    await supabase.storage.from('work-log-images').upload(fileName, file);
+    return supabase.storage.from('work-log-images').getPublicUrl(fileName).data.publicUrl;
   }
 };

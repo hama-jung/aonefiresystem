@@ -26,7 +26,7 @@ export const AlarmManagement: React.FC = () => {
   const handleReceiverSelect = (r: Receiver) => {
     setFormData({ 
         ...formData, 
-        market_id: r.market_id, // [CHANGED] market_id
+        market_id: r.market_id, 
         marketName: r.marketName,
         receiverMac: r.macAddress 
     });
@@ -35,7 +35,7 @@ export const AlarmManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } // [CHANGED] market_id
+    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
     
     try {
       const newAlarm: Alarm = { ...formData as Alarm, id: selectedAlarm?.id || 0 };

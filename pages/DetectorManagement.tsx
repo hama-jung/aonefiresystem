@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';

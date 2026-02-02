@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Search, Plus, FileSpreadsheet, Trash2, Edit, Save, X, Home, RotateCcw } from 'lucide-react';
+import { MarketAPI, ReceiverAPI } from '../services/api';
+import { Market, Receiver } from '../types';
+
+// --- Constants ---
+export const ITEMS_PER_PAGE = 10;
 
 // --- Colors & Styles Constants (Dark Mode) ---
 export const UI_STYLES = {
@@ -11,6 +16,33 @@ export const UI_STYLES = {
   label: 'block text-sm font-semibold text-slate-300 mb-1.5',
   th: 'px-4 py-3 bg-slate-900 text-center text-sm font-semibold text-slate-400 border-b border-slate-700',
   td: 'px-4 py-3 text-sm text-center text-slate-300 border-b border-slate-700/50 group-hover:bg-slate-700/30',
+};
+
+// --- Utilities ---
+export const formatPhoneNumber = (value: string) => {
+  if (!value) return value;
+  const phoneNumber = value.replace(/[^\d]/g, "");
+  const phoneNumberLength = phoneNumber.length;
+  if (phoneNumberLength < 4) return phoneNumber;
+  if (phoneNumberLength < 7) return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3)}`;
+  return `${phoneNumber.slice(0, 3)}-${phoneNumber.slice(3, 7)}-${phoneNumber.slice(7, 11)}`;
+};
+
+export const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const allowedKeys = [
+    "Backspace", "Tab", "ArrowLeft", "ArrowRight", "Delete", "Enter"
+  ];
+  if (!/^[0-9]$/.test(e.key) && !allowedKeys.includes(e.key)) {
+    e.preventDefault();
+  }
+};
+
+export const validateDateRange = (startDate: string, endDate: string) => {
+  if (startDate > endDate) {
+    alert("시작일은 종료일보다 클 수 없습니다.");
+    return false;
+  }
+  return true;
 };
 
 // --- Buttons ---
@@ -32,11 +64,12 @@ export const Button: React.FC<ButtonProps> = ({ variant = 'primary', className =
 };
 
 // --- Page Header ---
-export const PageHeader: React.FC<{ title: string }> = ({ title }) => (
+export const PageHeader: React.FC<{ title: string; rightContent?: React.ReactNode }> = ({ title, rightContent }) => (
   <div className="mb-6 flex items-center justify-between border-b border-slate-700 pb-4">
     <h1 className="text-xl font-bold text-slate-100">
       {title}
     </h1>
+    {rightContent}
   </div>
 );
 
@@ -53,7 +86,7 @@ export const SearchFilterBar: React.FC<SearchFilterBarProps> = ({
 }) => (
   <div className="bg-slate-800 p-5 rounded-lg border border-slate-700 shadow-sm mb-5">
     <div className="flex flex-col xl:flex-row gap-4 xl:items-end">
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:items-end w-full lg:[&>*]:flex-1 lg:[&>*]:min-w-0">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:items-end w-full lg:[&>*]:flex-1 lg:[&>*]:min-w-0 flex-wrap">
         {children}
       </div>
       <div className="flex-shrink-0 flex gap-2 pt-2 xl:pt-0 justify-end xl:justify-start">
@@ -87,11 +120,89 @@ interface SelectGroupProps extends React.SelectHTMLAttributes<HTMLSelectElement>
 export const SelectGroup: React.FC<SelectGroupProps> = ({ label, options, className = '', ...props }) => (
   <div className={`flex flex-col w-full ${className}`}>
     {label && <label className={UI_STYLES.label}>{label}</label>}
-    <select className={UI_STYLES.input} {...props}>
+    <select 
+      className={`${UI_STYLES.input} appearance-none pr-8 bg-no-repeat`} 
+      style={{
+        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+        backgroundPosition: 'right 0.5rem center',
+        backgroundSize: '1.5em 1.5em'
+      }}
+      {...props}
+    >
       {options.map((opt) => (
         <option key={opt.value} value={opt.value}>{opt.label}</option>
       ))}
     </select>
+  </div>
+);
+
+// --- Additional Components ---
+
+export const StatusBadge: React.FC<{ status: string }> = ({ status }) => (
+  <span className={`inline-flex items-center justify-center px-2 py-1 rounded-sm text-xs font-bold border whitespace-nowrap shadow-sm min-w-[50px] ${
+    status === '사용' || status === 'Normal' || status === '정상' || status === '처리'
+      ? 'bg-green-900/30 text-green-400 border-green-800' 
+      : (status === 'Fire' || status === '화재' || status === '에러' || status === '오탐') 
+        ? 'bg-red-900/30 text-red-400 border-red-800'
+        : 'bg-slate-700 text-slate-400 border-slate-600'
+  }`}>
+    {status}
+  </span>
+);
+
+export const StatusRadioGroup: React.FC<{
+  label?: string;
+  name?: string;
+  value: string | undefined;
+  onChange: (val: string) => void;
+  options?: string[];
+}> = ({ label, name, value, onChange, options = ['사용', '미사용'] }) => (
+  <div className="flex flex-col gap-1.5 w-full">
+    {label && <label className={UI_STYLES.label}>{label}</label>}
+    <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
+      {options.map((opt) => (
+        <label key={opt} className="flex items-center gap-2 cursor-pointer hover:text-white">
+          <input 
+            type="radio" 
+            name={name} 
+            value={opt} 
+            checked={value === opt} 
+            onChange={() => onChange(opt)} 
+            className="accent-blue-500 w-4 h-4" 
+          />
+          <span>{opt}</span>
+        </label>
+      ))}
+    </div>
+  </div>
+);
+
+export const DateRangePicker: React.FC<{
+  startDate: string;
+  endDate: string;
+  onStartDateChange: (val: string) => void;
+  onEndDateChange: (val: string) => void;
+}> = ({ startDate, endDate, onStartDateChange, onEndDateChange }) => (
+  <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-slate-300 ml-1">시작일</label>
+        <input 
+            type="date" 
+            value={startDate} 
+            onChange={(e) => onStartDateChange(e.target.value)} 
+            className={`${UI_STYLES.input} w-[160px] [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer`} 
+        />
+    </div>
+    <span className="text-slate-400 mt-6 font-bold">~</span>
+    <div className="flex flex-col gap-1">
+        <label className="text-xs font-bold text-slate-300 ml-1">종료일</label>
+        <input 
+            type="date" 
+            value={endDate} 
+            onChange={(e) => onEndDateChange(e.target.value)} 
+            className={`${UI_STYLES.input} w-[160px] [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer`} 
+        />
+    </div>
   </div>
 );
 
@@ -111,11 +222,11 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
       <div 
-        className={`bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full ${width} overflow-hidden transform transition-all scale-100 opacity-100`}
+        className={`bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full ${width} overflow-hidden transform transition-all scale-100 opacity-100 flex flex-col max-h-[90vh]`}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800/50 flex-shrink-0">
           <div className="flex items-center gap-2.5 text-slate-100 font-bold text-lg">
             {icon}
             <span>{title}</span>
@@ -127,7 +238,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
             <X size={20} />
           </button>
         </div>
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar">
           {children}
         </div>
       </div>
@@ -139,12 +250,13 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, icon, chil
 interface AddressSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onComplete: (data: { address: string; zonecode: string; buildingName: string }) => void;
+  onComplete: (data: { address: string; zonecode: string; buildingName: string; coordinates?: {lat: string, lng: string} }) => void;
 }
 
 declare global {
   interface Window {
     daum: any;
+    kakao: any;
   }
 }
 
@@ -152,7 +264,6 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 1. 모달이 열려있지 않거나 스크립트가 없으면 리턴
     if (!isOpen || !window.daum) {
       if (isOpen && !window.daum) {
         alert("주소 검색 서비스를 불러올 수 없습니다. 네트워크 연결을 확인해주세요.");
@@ -164,15 +275,11 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
     const container = containerRef.current;
     if (!container) return;
 
-    // 2. 중요: 재진입 시 기존 내용 초기화
     container.innerHTML = '';
 
     try {
-      // 3. Daum 우편번호 서비스 생성
-      // 이 방식은 window.open을 사용하지 않고, 지정된 container element 내부에 iframe을 생성합니다.
       new window.daum.Postcode({
         oncomplete: function(data: any) {
-          // 주소 데이터 조합
           let addr = ''; 
           let extraAddr = ''; 
 
@@ -189,27 +296,55 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
              addr += ' (' + extraAddr + ')';
           }
 
-          // 완료 콜백 호출
-          onComplete({
-            address: addr,
-            zonecode: data.zonecode,
-            buildingName: data.buildingName
-          });
-
-          // 모달 닫기 요청 (부모 컴포넌트가 이 요청을 받아 isOpen을 false로 변경하면 언마운트됨)
+          // 주소 좌표 변환 (Kakao Map Geocoder)
+          if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
+             const geocoder = new window.kakao.maps.services.Geocoder();
+             geocoder.addressSearch(addr, function(result: any, status: any) {
+                 if (status === window.kakao.maps.services.Status.OK) {
+                     onComplete({
+                        address: addr,
+                        zonecode: data.zonecode,
+                        buildingName: data.buildingName,
+                        coordinates: { lat: result[0].y, lng: result[0].x }
+                     });
+                 } else {
+                     onComplete({
+                        address: addr,
+                        zonecode: data.zonecode,
+                        buildingName: data.buildingName
+                     });
+                 }
+             });
+          } else {
+             onComplete({
+                address: addr,
+                zonecode: data.zonecode,
+                buildingName: data.buildingName
+             });
+          }
           onClose();
         },
         width: '100%',
         height: '100%',
-        // autoClose: false로 설정하여 라이브러리가 완료 후 스스로 postMessage를 보내 닫으려는 동작 방지
         autoClose: false,
-        animation: false, // 임베드 모드에서는 애니메이션 끔
+        animation: false,
+        // [New] Theme configuration for Dark Mode
+        theme: {
+            bgColor: "#1E293B", // slate-800 (배경)
+            searchBgColor: "#0F172A", // slate-900 (검색창 배경)
+            contentBgColor: "#1E293B", // slate-800 (리스트 배경)
+            pageBgColor: "#1E293B", // slate-800 (페이지 배경)
+            textColor: "#E2E8F0", // slate-200 (글자)
+            queryTextColor: "#FFFFFF", // white (검색창 글자)
+            postcodeTextColor: "#60A5FA", // blue-400 (우편번호)
+            emphTextColor: "#60A5FA", // blue-400 (강조)
+            outlineColor: "#334155" // slate-700 (테두리)
+        }
       }).embed(container);
     } catch (error) {
       console.error("Daum Postcode Embed Error:", error);
     }
 
-    // Cleanup: 컴포넌트가 언마운트되거나 닫힐 때 내부 HTML 정리
     return () => {
       if (container) container.innerHTML = '';
     };
@@ -219,12 +354,7 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   if (!isOpen) return null;
 
   return (
-    // 배경을 어둡게 처리하는 Modal 컴포넌트 재사용
     <Modal isOpen={isOpen} onClose={onClose} title="주소 검색" width="max-w-lg">
-      {/* 
-        이 div 안에 Daum 우편번호 서비스의 iframe이 삽입됩니다.
-        높이를 고정값(450px)으로 주어 내부 스크롤이 생기도록 합니다. 
-      */}
       <div 
         ref={containerRef} 
         className="w-full h-[450px] border border-slate-600 rounded bg-slate-900"
@@ -234,7 +364,7 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
   );
 };
 
-// --- Address Input Component (통합 주소 입력 폼) ---
+// --- Address Input Component ---
 export interface AddressInputProps {
   label?: string;
   required?: boolean;
@@ -242,6 +372,7 @@ export interface AddressInputProps {
   addressDetail: string;
   onAddressChange: (val: string) => void;
   onDetailChange: (val: string) => void;
+  onCoordinateChange?: (lat: string, lng: string) => void;
   className?: string;
 }
 
@@ -252,27 +383,25 @@ export const AddressInput: React.FC<AddressInputProps> = ({
   addressDetail,
   onAddressChange,
   onDetailChange,
+  onCoordinateChange,
   className = ""
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const detailInputRef = useRef<HTMLInputElement>(null);
 
-  // 주소 선택 완료 핸들러
-  const handleComplete = useCallback((data: { address: string }) => {
-    // 1. 주소 업데이트
+  const handleComplete = useCallback((data: { address: string, coordinates?: {lat: string, lng: string} }) => {
     onAddressChange(data.address);
-    
-    // 2. 모달 닫기 (즉시 언마운트)
+    if (data.coordinates && onCoordinateChange) {
+        onCoordinateChange(data.coordinates.lat, data.coordinates.lng);
+    }
     setIsOpen(false);
     
-    // 3. 상세 주소 입력창으로 포커스 이동
-    // React 상태 업데이트 후 DOM 렌더링 시간을 고려하여 약간의 지연 시간 부여
     setTimeout(() => {
         if (detailInputRef.current) {
             detailInputRef.current.focus();
         }
     }, 150);
-  }, [onAddressChange]);
+  }, [onAddressChange, onCoordinateChange]);
 
   const handleOpen = useCallback(() => setIsOpen(true), []);
   const handleClose = useCallback(() => setIsOpen(false), []);
@@ -283,7 +412,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
         {label} {required && <span className="text-red-400">*</span>}
       </label>
       <div className="flex flex-col gap-2">
-        {/* Row 1: Readonly Address + Search Button */}
         <div className="flex gap-2 w-full">
           <div 
             className="flex-1 relative cursor-pointer" 
@@ -310,7 +438,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
           </Button>
         </div>
 
-        {/* Row 2: Detail Input */}
         <input
            ref={detailInputRef}
            type="text"
@@ -321,7 +448,6 @@ export const AddressInput: React.FC<AddressInputProps> = ({
         />
       </div>
 
-      {/* Address Search Modal (Embed Type) */}
       <AddressSearchModal
         isOpen={isOpen}
         onClose={handleClose}
@@ -334,7 +460,7 @@ export const AddressInput: React.FC<AddressInputProps> = ({
 // --- Table Component ---
 export interface Column<T> {
   header: string;
-  accessor: keyof T | ((item: T) => React.ReactNode);
+  accessor: keyof T | ((item: T, index: number) => React.ReactNode);
   width?: string;
 }
 
@@ -369,7 +495,7 @@ export const DataTable = <T extends { id: number | string }>({ columns, data, on
                   {columns.map((col, colIndex) => (
                     <td key={colIndex} className={UI_STYLES.td}>
                       {typeof col.accessor === 'function' 
-                        ? col.accessor(row) 
+                        ? col.accessor(row, rowIndex) 
                         : (row[col.accessor] as React.ReactNode)}
                     </td>
                   ))}
@@ -420,7 +546,7 @@ export const Pagination: React.FC<PaginationProps> = ({ totalItems, itemsPerPage
   };
 
   return (
-    <div className="flex items-center justify-center mt-5 px-2">
+    <div className="flex items-center justify-center mt-5 px-2 pb-4">
       <div className="flex items-center space-x-1">
         <button 
           onClick={() => onPageChange(currentPage - 1)}
@@ -456,7 +582,7 @@ export const Pagination: React.FC<PaginationProps> = ({ totalItems, itemsPerPage
   );
 };
 
-// --- Action Bar (Bottom buttons) ---
+// --- Action Bar ---
 export const ActionBar: React.FC<{
   onRegister?: () => void;
   onExcel?: () => void;
@@ -504,3 +630,94 @@ export const FormRow: React.FC<{ label: string; required?: boolean; children: Re
     </div>
   </div>
 );
+
+// --- API Search Modals (Reuse) ---
+
+export const MarketSearchModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (market: Market) => void;
+}> = ({ isOpen, onClose, onSelect }) => {
+  const [keyword, setKeyword] = useState('');
+  const [list, setList] = useState<Market[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (isOpen) {
+        setKeyword('');
+        setPage(1);
+        handleSearch('');
+    }
+  }, [isOpen]);
+
+  const handleSearch = async (kw: string) => {
+    const data = await MarketAPI.getList({ name: kw });
+    setList(data);
+    setPage(1);
+  };
+
+  const columns: Column<Market>[] = [
+    { header: '시장명', accessor: 'name' },
+    { header: '주소', accessor: 'address' },
+    { header: '담당자', accessor: 'managerName' },
+    { header: '선택', accessor: (item) => (
+        <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
+    ), width: '80px' }
+  ];
+
+  const currentItems = list.slice((page - 1) * 5, page * 5);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="시장 찾기" width="max-w-3xl">
+       <SearchFilterBar onSearch={() => handleSearch(keyword)}>
+          <InputGroup label="시장명" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="시장명 검색" />
+       </SearchFilterBar>
+       <DataTable columns={columns} data={currentItems} />
+       <Pagination totalItems={list.length} itemsPerPage={5} currentPage={page} onPageChange={setPage} />
+    </Modal>
+  );
+};
+
+export const ReceiverSearchModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (receiver: Receiver) => void;
+}> = ({ isOpen, onClose, onSelect }) => {
+  const [keyword, setKeyword] = useState('');
+  const [list, setList] = useState<Receiver[]>([]);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    if (isOpen) {
+        setKeyword('');
+        setPage(1);
+        handleSearch('');
+    }
+  }, [isOpen]);
+
+  const handleSearch = async (kw: string) => {
+    const data = await ReceiverAPI.getList({ macAddress: kw });
+    setList(data);
+    setPage(1);
+  };
+
+  const columns: Column<Receiver>[] = [
+    { header: 'MAC', accessor: 'macAddress' },
+    { header: '시장명', accessor: 'marketName' },
+    { header: '선택', accessor: (item) => (
+        <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
+    ), width: '80px' }
+  ];
+
+  const currentItems = list.slice((page - 1) * 5, page * 5);
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="수신기 찾기" width="max-w-3xl">
+       <SearchFilterBar onSearch={() => handleSearch(keyword)}>
+          <InputGroup label="MAC주소" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="MAC 검색" />
+       </SearchFilterBar>
+       <DataTable columns={columns} data={currentItems} />
+       <Pagination totalItems={list.length} itemsPerPage={5} currentPage={page} onPageChange={setPage} />
+    </Modal>
+  );
+};

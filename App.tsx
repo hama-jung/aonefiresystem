@@ -3,10 +3,25 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Dashboard2 } from './pages/Dashboard2';
 import { UserManagement } from './pages/UserManagement';
 import { MarketManagement } from './pages/MarketManagement';
+import { StoreManagement } from './pages/StoreManagement';
 import { RoleManagement } from './pages/RoleManagement';
 import { DistributorManagement } from './pages/DistributorManagement';
+import { SmsTransmission } from './pages/SmsTransmission';
+import { WorkLogManagement } from './pages/WorkLogManagement';
+import { ReceiverManagement } from './pages/ReceiverManagement';
+import { RepeaterManagement } from './pages/RepeaterManagement';
+import { MenuManagement } from './pages/MenuManagement';
+import { DetectorManagement } from './pages/DetectorManagement';
+import { TransmitterManagement } from './pages/TransmitterManagement';
+import { AlarmManagement } from './pages/AlarmManagement';
+import { CommonCodeManagement } from './pages/CommonCodeManagement';
+import { FireHistoryManagement } from './pages/FireHistoryManagement';
+import { DeviceStatusManagement } from './pages/DeviceStatusManagement';
+import { DataReceptionManagement } from './pages/DataReceptionManagement';
+import { UartCommunication } from './pages/UartCommunication';
 
 // Placeholder components for routes not fully implemented
 const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
@@ -27,20 +42,29 @@ const App: React.FC = () => {
           <Layout>
             <Routes>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard2" element={<Dashboard2 />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="/markets" element={<MarketManagement />} />
+              
+              {/* Actual Components linked to routes */}
+              <Route path="/stores" element={<StoreManagement />} />
               <Route path="/roles" element={<RoleManagement />} />
               <Route path="/distributors" element={<DistributorManagement />} />
+              <Route path="/sms" element={<SmsTransmission />} />
+              <Route path="/work-logs" element={<WorkLogManagement />} />
+              <Route path="/receivers" element={<ReceiverManagement />} />
+              <Route path="/repeaters" element={<RepeaterManagement />} />
+              <Route path="/menus" element={<MenuManagement />} />
+              <Route path="/detectors" element={<DetectorManagement />} />
+              <Route path="/transmitters" element={<TransmitterManagement />} />
+              <Route path="/alarms" element={<AlarmManagement />} />
+              <Route path="/common-codes" element={<CommonCodeManagement />} />
               
-              {/* Placeholders for other menu items */}
-              <Route path="/stores" element={<PlaceholderPage title="상가 관리" />} />
-              <Route path="/sms" element={<PlaceholderPage title="문자 전송" />} />
-              <Route path="/access-logs" element={<PlaceholderPage title="접속 로그" />} />
-              <Route path="/receivers" element={<PlaceholderPage title="R형 수신기 관리" />} />
-              <Route path="/repeaters" element={<PlaceholderPage title="중계기 관리" />} />
-              <Route path="/detectors" element={<PlaceholderPage title="화재감지기 관리" />} />
-              <Route path="/fire-history" element={<PlaceholderPage title="화재 이력 관리" />} />
-              <Route path="/device-status" element={<PlaceholderPage title="기기 상태 관리" />} />
+              {/* Data Management Routes */}
+              <Route path="/fire-history" element={<FireHistoryManagement />} />
+              <Route path="/device-status" element={<DeviceStatusManagement />} />
+              <Route path="/data-reception" element={<DataReceptionManagement />} />
+              <Route path="/uart-communication" element={<UartCommunication />} />
               
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

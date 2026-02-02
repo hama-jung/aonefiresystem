@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
@@ -20,8 +21,6 @@ export const ReceiverManagement: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchMarket, setSearchMarket] = useState('');
   const [searchMac, setSearchMac] = useState('');
-  const [searchIp, setSearchIp] = useState('');
-  const [searchPhone, setSearchPhone] = useState('');
   const [isFiltered, setIsFiltered] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

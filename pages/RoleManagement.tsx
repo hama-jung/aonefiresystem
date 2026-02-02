@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  PageHeader, Button, DataTable, InputGroup, Column, FormRow, SearchFilterBar, Pagination, ActionBar, FormSection, UI_STYLES
+  PageHeader, Button, DataTable, InputGroup, Column, FormRow, SearchFilterBar, Pagination, ActionBar, FormSection, UI_STYLES, StatusBadge // Import StatusBadge
 } from '../components/CommonUI';
 import { RoleItem } from '../types';
 import { RoleAPI } from '../services/api';
@@ -121,6 +121,7 @@ export const RoleManagement: React.FC = () => {
     { header: '역할코드', accessor: 'code', width: '120px' },
     { header: '역할명', accessor: 'name', width: '200px' },
     { header: '역할설명', accessor: 'description' },
+    { header: '상태', accessor: (r) => <StatusBadge status={r.status} />, width: '100px' },
   ];
 
   // -- Pagination Logic --

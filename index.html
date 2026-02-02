@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
   <head>
@@ -32,7 +33,6 @@
       }
     </script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <!-- Google Material Icons -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined|Material+Icons+Round" rel="stylesheet">
     
     <style>
@@ -57,14 +57,7 @@
         background: #64748b;
       }
     </style>
-    <!-- 다음 우편번호 서비스 스크립트 -->
     <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
-    
-    <!-- 카카오 지도 API -->
-    <!-- 
-      [수정됨] 사용자 스크린샷의 JavaScript 키 적용: 32dedbb3ff4f6976aa4823a3bb613ef7
-      &libraries=services,clusterer 파라미터는 검색 및 클러스터링 기능을 위해 필요합니다.
-    -->
     <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=32dedbb3ff4f6976aa4823a3bb613ef7&libraries=services,clusterer"></script>
     
 <script type="importmap">
@@ -77,14 +70,15 @@
     "react-router-dom": "https://esm.sh/react-router-dom@^7.12.0",
     "xlsx": "https://esm.sh/xlsx@^0.18.5",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.1",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <!-- [MODIFIED] 로드 경로를 루트의 index.tsx로 변경 -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

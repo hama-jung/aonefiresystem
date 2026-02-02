@@ -1,26 +1,24 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
   Pagination, Column, Modal, UI_STYLES, ITEMS_PER_PAGE,
   DateRangePicker, validateDateRange 
 } from '../components/CommonUI';
-import { usePageTitle } from '../components/Layout'; // Import Hook
-import { DeviceStatusItem, CommonCode } from '../types';
-import { DeviceStatusAPI, CommonCodeAPI } from '../services/api';
+import { FireHistoryItem, CommonCode } from '../types';
+import { FireHistoryAPI, CommonCodeAPI } from '../services/api';
 import { FileSpreadsheet, Trash2 } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 
-export const DeviceStatusManagement: React.FC = () => {
-  const pageTitle = usePageTitle('기기 상태 관리'); // Use Hook
-  
-  const [statusList, setStatusList] = useState<DeviceStatusItem[]>([]);
+export const FireHistoryManagement: React.FC = () => {
+  const [historyList, setHistoryList] = useState<FireHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Common Code Map (Code -> Name)
+  // 공통코드 매핑 상태 (DB에서 가져온 코드 -> 명칭)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
 
-  // --- Search Filters ---
+  // --- Search Filters & State ---
   const today = new Date();
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(today.getMonth() - 1);
@@ -30,8 +28,9 @@ export const DeviceStatusManagement: React.FC = () => {
   const [startDate, setStartDate] = useState(formatDate(oneMonthAgo));
   const [endDate, setEndDate] = useState(formatDate(today));
   const [searchMarket, setSearchMarket] = useState('');
-  const [searchStatus, setSearchStatus] = useState<'all' | 'processed' | 'unprocessed'>('all');
+  const [searchStatus, setSearchStatus] = useState<'all' | 'fire' | 'false'>('all');
   
+  // [공통규칙 적용] 검색 필터 상태 관리
   const [isFiltered, setIsFiltered] = useState(false);
 
   // Selection
@@ -39,35 +38,47 @@ export const DeviceStatusManagement: React.FC = () => {
 
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<DeviceStatusItem | null>(null);
-  const [modalStatus, setModalStatus] = useState<'처리' | '미처리'>('미처리');
+  const [selectedItem, setSelectedItem] = useState<FireHistoryItem | null>(null);
+  const [modalType, setModalType] = useState<'화재' | '오탐'>('화재');
   const [modalMemo, setModalMemo] = useState('');
 
   // --- Helpers ---
-  const getErrorName = (code: string) => codeMap[code] || code;
+  
+  // 공통코드 매핑 함수 (DB 데이터를 사용)
+  const getStatusName = (code: string) => {
+    // 코드가 맵에 있으면 명칭 반환, 없으면 코드 그대로 반환
+    return codeMap[code] || code;
+  };
 
-  // --- Initial Data Load ---
+  // 상태값에 따른 텍스트 색상 결정
+  const getStatusColor = (name: string) => {
+    if (name.includes('화재')) return 'text-red-400 font-bold';
+    if (name.includes('고장') || name.includes('단선') || name.includes('오류')) return 'text-orange-400 font-bold';
+    if (name.includes('해소') || name.includes('정상') || name.includes('복구')) return 'text-blue-400';
+    return 'text-slate-300';
+  };
+
+  // 초기 데이터 로드 (이력 + 공통코드 병렬 조회)
   const initData = async () => {
     setLoading(true);
     try {
-      // Fetch common codes and initial list in parallel
-      const [codes, list] = await Promise.all([
-        CommonCodeAPI.getList(),
-        DeviceStatusAPI.getList({
-            startDate: formatDate(oneMonthAgo),
-            endDate: formatDate(today)
-        })
-      ]);
+        const [codes, history] = await Promise.all([
+            CommonCodeAPI.getList(), // 전체 공통코드 조회
+            FireHistoryAPI.getList({ // 초기 로드 시 기본 날짜 범위 적용
+                startDate: formatDate(oneMonthAgo),
+                endDate: formatDate(today)
+            }) 
+        ]);
 
-      // Map codes
-      const map: Record<string, string> = {};
-      codes.forEach((c: CommonCode) => {
-        map[c.code] = c.name;
-      });
-      setCodeMap(map);
-
-      setStatusList(list);
-      setCurrentPage(1);
+        // 코드 맵 생성 (code -> name)
+        const map: Record<string, string> = {};
+        codes.forEach((c: CommonCode) => {
+            map[c.code] = c.name;
+        });
+        setCodeMap(map);
+        
+        setHistoryList(history);
+        setCurrentPage(1);
 
     } catch (e: any) {
         if (e.message && e.message.includes('Could not find the table')) {
@@ -76,7 +87,7 @@ export const DeviceStatusManagement: React.FC = () => {
             alert('데이터 로드 실패: ' + e.message);
         }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -86,19 +97,24 @@ export const DeviceStatusManagement: React.FC = () => {
 
   // --- Handlers ---
   const handleSearch = async () => {
-    if (!validateDateRange(startDate, endDate)) return;
-
+    // 공통 유효성 검사 (1개월 범위, 미래 날짜 차단 등)
+    if (!validateDateRange(startDate, endDate)) {
+        return;
+    }
+    
+    // [공통규칙 적용] 검색 버튼 클릭 시 필터링 상태 활성화
     setIsFiltered(true);
+    
     setLoading(true);
     try {
-        const data = await DeviceStatusAPI.getList({
+        const data = await FireHistoryAPI.getList({
             startDate,
             endDate,
             marketName: searchMarket,
             status: searchStatus
         });
-        setStatusList(data);
-        setCurrentPage(1);
+        setHistoryList(data);
+        setCurrentPage(1); // 검색 시 1페이지로 리셋
     } catch(e) {
         console.error(e);
         alert('검색 중 오류가 발생했습니다.');
@@ -107,7 +123,9 @@ export const DeviceStatusManagement: React.FC = () => {
     }
   };
 
+  // [공통규칙 적용] 초기화(전체보기) 핸들러
   const handleReset = async () => {
+    // 1. 검색 조건 초기화 (날짜는 기본 1개월 전으로 복귀)
     const resetStart = formatDate(oneMonthAgo);
     const resetEnd = formatDate(today);
     
@@ -115,15 +133,18 @@ export const DeviceStatusManagement: React.FC = () => {
     setEndDate(resetEnd);
     setSearchMarket('');
     setSearchStatus('all');
+    
+    // 2. 필터 상태 해제
     setIsFiltered(false);
 
+    // 3. 데이터 다시 로드
     setLoading(true);
     try {
-        const data = await DeviceStatusAPI.getList({
+        const data = await FireHistoryAPI.getList({
             startDate: resetStart,
             endDate: resetEnd
         });
-        setStatusList(data);
+        setHistoryList(data);
         setCurrentPage(1);
     } catch(e) {
         console.error(e);
@@ -139,10 +160,19 @@ export const DeviceStatusManagement: React.FC = () => {
     }
     if (confirm(`선택한 ${selectedIds.size}개 항목을 삭제하시겠습니까?`)) {
         try {
-            await Promise.all(Array.from(selectedIds).map((id: number) => DeviceStatusAPI.delete(id)));
+            await Promise.all(Array.from(selectedIds).map((id: number) => FireHistoryAPI.delete(id)));
             alert("삭제되었습니다.");
             setSelectedIds(new Set());
-            handleSearch(); // Refresh list
+            // 새로고침 (현재 검색 조건 유지)
+            // 현재 상태가 filtered라면 검색 조건으로, 아니면 초기 조건으로 리로드
+            // 여기서는 간단히 현재 state 값을 사용하여 다시 검색 호출
+            const data = await FireHistoryAPI.getList({
+                startDate,
+                endDate,
+                marketName: searchMarket,
+                status: searchStatus
+            });
+            setHistoryList(data);
         } catch (e: any) {
             alert(`삭제 실패: ${e.message}`);
         }
@@ -150,11 +180,13 @@ export const DeviceStatusManagement: React.FC = () => {
   };
 
   const handleExcel = () => {
-    const excelData = statusList.map(item => ({
+    // 엑셀 다운로드 시 코드가 아닌 명칭으로 변환하여 내보내기
+    const excelData = historyList.map(item => ({
         ...item,
-        deviceErrorName: getErrorName(item.errorCode)
+        receiverStatusName: getStatusName(item.receiverStatus),
+        repeaterStatusName: getStatusName(item.repeaterStatus)
     }));
-    exportToExcel(excelData, '기기상태관리_목록');
+    exportToExcel(excelData, '화재이력관리_목록');
   };
 
   // Checkbox logic
@@ -167,16 +199,17 @@ export const DeviceStatusManagement: React.FC = () => {
 
   const toggleAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-        setSelectedIds(new Set(statusList.map(item => item.id)));
+        setSelectedIds(new Set(historyList.map(item => item.id)));
     } else {
         setSelectedIds(new Set());
     }
   };
 
   // Modal Logic
-  const openModal = (item: DeviceStatusItem) => {
+  const openModal = (item: FireHistoryItem) => {
     setSelectedItem(item);
-    setModalStatus(item.processStatus);
+    // Set initial values from existing item if available
+    setModalType((item.falseAlarmStatus === '오탐' ? '오탐' : '화재'));
     setModalMemo(item.note || '');
     setIsModalOpen(true);
   };
@@ -184,10 +217,18 @@ export const DeviceStatusManagement: React.FC = () => {
   const handleModalSave = async () => {
     if (selectedItem) {
         try {
-            await DeviceStatusAPI.save(selectedItem.id, modalStatus, modalMemo);
+            await FireHistoryAPI.save(selectedItem.id, modalType, modalMemo);
             alert("저장되었습니다.");
             setIsModalOpen(false);
-            handleSearch(); // Refresh list
+            
+            // 목록 갱신
+            const data = await FireHistoryAPI.getList({
+                startDate,
+                endDate,
+                marketName: searchMarket,
+                status: searchStatus
+            });
+            setHistoryList(data);
         } catch (e: any) {
             alert(`저장 실패: ${e.message}`);
         }
@@ -195,7 +236,7 @@ export const DeviceStatusManagement: React.FC = () => {
   };
 
   // --- Columns ---
-  const columns: Column<DeviceStatusItem>[] = [
+  const columns: Column<FireHistoryItem>[] = [
     { 
         header: '선택', 
         accessor: (item) => (
@@ -210,51 +251,68 @@ export const DeviceStatusManagement: React.FC = () => {
     },
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '시장명', accessor: 'marketName' },
-    { header: '수신기 MAC', accessor: 'receiverMac', width: '120px' },
-    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
-    { header: '기기 구분', accessor: 'deviceType', width: '100px' },
-    { header: '기기 ID', accessor: 'deviceId', width: '100px' },
-    { header: '기기 상태', accessor: (item) => (
-        <span className={item.deviceStatus === '에러' ? 'text-red-400 font-bold' : 'text-blue-400'}>{item.deviceStatus}</span>
-    ), width: '100px' },
-    { header: '기기 에러 내용', accessor: (item) => getErrorName(item.errorCode) },
+    { header: '수신기 MAC', accessor: 'receiverMac' },
+    { 
+        header: '수신기상태', 
+        accessor: (item) => {
+            const name = getStatusName(item.receiverStatus);
+            return <span className={getStatusColor(name)}>{name}</span>;
+        }
+    },
+    { header: '중계기 ID', accessor: 'repeaterId' },
+    { 
+        header: '중계기상태', 
+        accessor: (item) => {
+            const name = getStatusName(item.repeaterStatus);
+            return <span className={getStatusColor(name)}>{name}</span>;
+        }
+    },
+    { 
+        header: '감지기ID_챔버', 
+        accessor: (item) => item.detectorInfoChamber || '' 
+    },
+    { 
+        header: '감지기ID_온도', 
+        accessor: (item) => item.detectorInfoTemp || '' 
+    },
+    { header: '등록자', accessor: 'registrar' },
     { 
         header: '등록일', 
         accessor: (item) => item.registeredAt ? new Date(item.registeredAt).toLocaleString() : '-', 
         width: '180px' 
     },
     { 
-        header: '처리 결과', 
+        header: '오탐여부', 
         accessor: (item) => (
             <button 
-                onClick={(e) => { 
-                    // 상태와 관계없이 항상 모달 오픈 가능
-                    e.stopPropagation(); 
-                    openModal(item); 
-                }}
-                className={`text-sm font-bold hover:underline cursor-pointer ${
-                    item.processStatus === '미처리' ? 'text-blue-400' : 'text-green-400'
+                onClick={(e) => { e.stopPropagation(); openModal(item); }}
+                className={`text-sm hover:underline ${
+                    item.falseAlarmStatus === '등록' ? 'text-slate-400' :
+                    item.falseAlarmStatus === '화재' ? 'text-red-400 font-bold' :
+                    'text-orange-400 font-bold'
                 }`}
             >
-                [{item.processStatus}]
+                [{item.falseAlarmStatus}]
             </button>
         ),
         width: '100px'
     },
   ];
 
-  const currentItems = statusList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const currentItems = historyList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <>
-      <PageHeader title={pageTitle} />
+      <PageHeader title="화재 이력 관리" />
       
       {/* Disclaimer */}
       <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">
-        가상의 데이터입니다. 실제 데이터를 받은 후 삭제예정입니다.
+        ⚠️ 공통코드 관리 메뉴에 등록된 코드명(예: 화재알람, 화재해소)과 연동되어 표시됩니다.
       </div>
 
+      {/* [공통규칙 적용] SearchFilterBar에 onReset과 isFiltered 전달 */}
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
+        {/* 기간 검색 (DateRangePicker 사용) */}
         <DateRangePicker 
             startDate={startDate}
             endDate={endDate}
@@ -262,32 +320,33 @@ export const DeviceStatusManagement: React.FC = () => {
             onEndDateChange={setEndDate}
         />
         
-        {/* 설치시장 - 반응형을 위해 wrapper 제거 */}
+        {/* 설치시장 검색 - 반응형을 위해 wrapper 제거 */}
         <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
 
-        {/* 처리여부 - 공통UI 스타일 적용 */}
+        {/* 화재여부 라디오 버튼 - 공통UI 스타일 적용 */}
         <div className="flex flex-col gap-1.5 w-full">
-            <label className={UI_STYLES.label}>처리여부</label>
+            <label className={UI_STYLES.label}>화재여부</label>
             <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
                 <label className="flex items-center gap-2 cursor-pointer hover:text-white">
                     <input type="radio" checked={searchStatus === 'all'} onChange={() => setSearchStatus('all')} className="accent-blue-500 w-4 h-4"/>
                     <span>전체</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input type="radio" checked={searchStatus === 'processed'} onChange={() => setSearchStatus('processed')} className="accent-blue-500 w-4 h-4"/>
-                    <span>처리</span>
+                    <input type="radio" checked={searchStatus === 'fire'} onChange={() => setSearchStatus('fire')} className="accent-blue-500 w-4 h-4"/>
+                    <span>화재</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer hover:text-white">
-                    <input type="radio" checked={searchStatus === 'unprocessed'} onChange={() => setSearchStatus('unprocessed')} className="accent-blue-500 w-4 h-4"/>
-                    <span>미처리</span>
+                    <input type="radio" checked={searchStatus === 'false'} onChange={() => setSearchStatus('false')} className="accent-blue-500 w-4 h-4"/>
+                    <span>오탐</span>
                 </label>
             </div>
         </div>
       </SearchFilterBar>
 
+      {/* List Header Actions */}
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm font-bold text-slate-300">
-           전체 {statusList.length} 개 (페이지 {currentPage})
+           전체 {historyList.length} 개 (페이지 {currentPage})
          </span>
          <div className="flex gap-2">
             <Button variant="success" onClick={handleExcel} icon={<FileSpreadsheet size={16} />}>엑셀다운로드</Button>
@@ -302,7 +361,7 @@ export const DeviceStatusManagement: React.FC = () => {
                 <thead>
                     <tr>
                         <th className={UI_STYLES.th} style={{width:'50px'}}>
-                            <input type="checkbox" onChange={toggleAll} checked={selectedIds.size > 0 && selectedIds.size === statusList.length} className="w-4 h-4 accent-blue-500" />
+                            <input type="checkbox" onChange={toggleAll} checked={selectedIds.size > 0 && selectedIds.size === historyList.length} className="w-4 h-4 accent-blue-500" />
                         </th>
                         {columns.slice(1).map((col, idx) => (
                             <th key={idx} className={UI_STYLES.th} style={{width: col.width}}>{col.header}</th>
@@ -343,13 +402,13 @@ export const DeviceStatusManagement: React.FC = () => {
           </div>
           <div className="flex-1 flex justify-center w-full md:w-auto">
              <Pagination 
-                totalItems={statusList.length}
+                totalItems={historyList.length}
                 itemsPerPage={ITEMS_PER_PAGE}
                 currentPage={currentPage}
                 onPageChange={setCurrentPage}
              />
           </div>
-          {/* Spacer to balance the layout if needed */}
+          {/* Spacer to balance the layout if needed, or keeping it empty for now */}
           <div className="w-[74px] hidden md:block"></div> 
       </div>
 
@@ -360,12 +419,12 @@ export const DeviceStatusManagement: React.FC = () => {
                 <label className="w-16 font-bold text-slate-300">선택</label>
                 <div className="flex gap-6">
                     <label className="flex items-center gap-2 cursor-pointer text-slate-200">
-                        <input type="radio" checked={modalStatus === '미처리'} onChange={() => setModalStatus('미처리')} className="accent-blue-500 w-5 h-5"/>
-                        미처리
+                        <input type="radio" checked={modalType === '화재'} onChange={() => setModalType('화재')} className="accent-blue-500 w-5 h-5"/>
+                        화재
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer text-slate-200">
-                        <input type="radio" checked={modalStatus === '처리'} onChange={() => setModalStatus('처리')} className="accent-blue-500 w-5 h-5"/>
-                        처리
+                        <input type="radio" checked={modalType === '오탐'} onChange={() => setModalType('오탐')} className="accent-blue-500 w-5 h-5"/>
+                        오탐
                     </label>
                 </div>
             </div>

@@ -30,20 +30,20 @@ export const WorkLogManagement: React.FC = () => {
   const handleEdit = (log: WorkLog) => { 
       setSelectedLog(log); 
       setFormData({ ...log }); 
-      setSelectedMarketForForm({ id: log.market_id, name: log.marketName || '' } as Market); // [CHANGED] market_id
+      setSelectedMarketForForm({ id: log.market_id, name: log.marketName || '' } as Market); 
       setAttachmentFile(null); 
       setView('form'); 
   };
 
   const handleMarketSelect = (market: Market) => {
     setSelectedMarketForForm(market);
-    setFormData({ ...formData, market_id: market.id }); // [CHANGED] market_id
+    setFormData({ ...formData, market_id: market.id }); 
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; } // [CHANGED] market_id
+    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; } 
     
     try {
       let uploadedUrl = formData.attachment;
@@ -58,7 +58,6 @@ export const WorkLogManagement: React.FC = () => {
 
   const fetchMarkets = async () => { const data = await MarketAPI.getList({ name: marketSearchName }); setMarketList(data); setMarketModalPage(1); };
 
-  // ... (Other handlers omitted for brevity, identical logic) ...
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) setAttachmentFile(e.target.files[0]); };
   const handleRemoveFile = () => { if(confirm('삭제하시겠습니까?')) { setFormData({...formData, attachment: undefined}); setAttachmentFile(null); } };
 
@@ -123,6 +122,10 @@ export const WorkLogManagement: React.FC = () => {
              <SearchFilterBar onSearch={() => fetchLogs({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchLogs({});}}>
                 <InputGroup label="시장명" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
              </SearchFilterBar>
+             <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{logs.length}</span> 건</span>
+                <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+             </div>
              <DataTable 
                 columns={[
                     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
