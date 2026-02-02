@@ -108,18 +108,19 @@ const MapSection: React.FC<{
 
         const position = new window.kakao.maps.LatLng(market.x, market.y);
         
-        let iconName = 'check_circle';
-        let bgColor = 'bg-blue-500'; // Normal color
+        // --- Icon Logic Changed ---
+        let iconName = 'store'; // Normal: Store Shape
+        let bgColor = 'bg-blue-500'; 
         let borderColor = 'border-blue-300';
         let isFire = false;
 
         if (market.status === 'Fire' || market.status === '화재') {
-             iconName = 'local_fire_department';
+             iconName = 'local_fire_department'; // Fire: Flame Shape
              bgColor = 'bg-red-600';
              borderColor = 'border-red-400';
              isFire = true;
         } else if (market.status === 'Error' || market.status === '고장') {
-             iconName = 'error_outline';
+             iconName = 'build'; // Error: Tool/Pliers Shape
              bgColor = 'bg-orange-500';
              borderColor = 'border-orange-300';
         } else {
@@ -299,8 +300,8 @@ export const Dashboard: React.FC = () => {
       {/* Main Layout Grid */}
       <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
         
-        {/* [Left Panel] Stats & Logs (Width fixed or proportional) */}
-        <div className="lg:w-[450px] xl:w-[500px] flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-1">
+        {/* [Left Panel] Stats & Logs (Ratio 40%) */}
+        <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-1">
           
           {/* 1. Status Cards (3 Columns) */}
           <div className="grid grid-cols-3 gap-3">
@@ -422,7 +423,7 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* [Right Panel] Map Area (Flexible Width) */}
+        {/* [Right Panel] Map Area (Ratio 60%) */}
         <div className="flex-1 flex flex-col h-full min-h-[500px]">
            <MapSection 
               markets={mapData}
