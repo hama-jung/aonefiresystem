@@ -113,7 +113,7 @@ export const ReceiverManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="R형 수신기 관리" />
+      <PageHeader title="R형 수신기 현황" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedReceiver ? "수신기 수정" : "수신기 등록"}>

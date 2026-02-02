@@ -7,7 +7,7 @@ import {
 import { Market, Distributor } from '../types';
 import { MarketAPI, DistributorAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
-import { Search, Upload, Paperclip, X, Plus, Map as MapIcon } from 'lucide-react';
+import { Search, Upload, Paperclip, X, Plus, Map as MapIcon, Menu as MenuIcon, Download } from 'lucide-react';
 import { VisualMapConsole } from '../components/VisualMapConsole';
 
 const ITEMS_PER_PAGE = 10;
@@ -41,6 +41,14 @@ const ConfigRadioGroup: React.FC<{
   </div>
 );
 
+// --- Interface for managing images locally ---
+interface ImageItem {
+    id: string; // Unique ID for Drag key
+    url?: string;
+    file?: File;
+    name: string;
+}
+
 export const MarketManagement: React.FC = () => {
   const [view, setView] = useState<'list' | 'form'>('list');
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -59,9 +67,11 @@ export const MarketManagement: React.FC = () => {
   // --- Form Data State ---
   const [formData, setFormData] = useState<Partial<Market>>({});
   
-  // Image Upload
-  const [mapImageFile, setMapImageFile] = useState<File | null>(null);
+  // Multiple Image Upload State
+  const [imageList, setImageList] = useState<ImageItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Drag state
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   // SMS Lists Management (Edit Mode Only)
   const [fireSmsList, setFireSmsList] = useState<string[]>([]);
@@ -127,7 +137,6 @@ export const MarketManagement: React.FC = () => {
       managerPhone: '',
       managerEmail: '',
       memo: '',
-      // Default Configs
       enableMarketSms: '사용',
       enableStoreSms: '사용',
       enableMultiMedia: '사용',
@@ -139,7 +148,7 @@ export const MarketManagement: React.FC = () => {
     });
     setFireSmsList([]);
     setFaultSmsList([]);
-    setMapImageFile(null);
+    setImageList([]);
     if(fileInputRef.current) fileInputRef.current.value = '';
     setView('form'); 
   };
@@ -147,17 +156,36 @@ export const MarketManagement: React.FC = () => {
   const handleEdit = (market: Market) => { 
     setSelectedMarket(market);
     setFormData({ ...market });
-    // Initialize SMS Lists
     setFireSmsList(market.smsFire || []);
     setFaultSmsList(market.smsFault || []);
-    setMapImageFile(null);
+    
+    // Initialize Image List from mapImages (or legacy mapImage)
+    const initialImages: ImageItem[] = [];
+    if (market.mapImages && market.mapImages.length > 0) {
+        market.mapImages.forEach((url, idx) => {
+            initialImages.push({
+                id: `existing-${idx}-${Date.now()}`,
+                url: url,
+                name: decodeURIComponent(url.split('/').pop() || `이미지_${idx + 1}`)
+            });
+        });
+    } else if (market.mapImage) {
+        initialImages.push({
+            id: `legacy-${Date.now()}`,
+            url: market.mapImage,
+            name: decodeURIComponent(market.mapImage.split('/').pop() || '이미지_1')
+        });
+    }
+    setImageList(initialImages);
+
     if(fileInputRef.current) fileInputRef.current.value = '';
     setView('form'); 
   };
 
   const handleOpenMapEditor = (e: React.MouseEvent, market: Market) => {
-    e.stopPropagation(); // prevent row click
-    if (!market.mapImage) {
+    e.stopPropagation(); 
+    // Check either legacy or new array
+    if (!market.mapImage && (!market.mapImages || market.mapImages.length === 0)) {
         alert('등록된 지도 이미지가 없습니다.\n먼저 현장 수정에서 지도를 등록해주세요.');
         return;
     }
@@ -186,19 +214,26 @@ export const MarketManagement: React.FC = () => {
     if (!formData.address) { alert('주소를 입력해주세요.'); return; }
 
     try {
-      let uploadedUrl = formData.mapImage;
-      if (mapImageFile) {
-        uploadedUrl = await MarketAPI.uploadMapImage(mapImageFile);
+      // 1. Upload new files and gather all URLs
+      const uploadedUrls: string[] = [];
+      
+      for (const item of imageList) {
+          if (item.file) {
+              const url = await MarketAPI.uploadMapImage(item.file);
+              uploadedUrls.push(url);
+          } else if (item.url) {
+              uploadedUrls.push(item.url);
+          }
       }
 
-      // 폼 데이터 구성
+      // 2. Construct final data
       const newMarket: Market = {
         ...formData as Market,
         id: selectedMarket?.id || 0,
-        mapImage: uploadedUrl,
+        mapImages: uploadedUrls, // Save array
+        mapImage: uploadedUrls.length > 0 ? uploadedUrls[0] : undefined, // Maintain legacy column with first image
         smsFire: fireSmsList,
         smsFault: faultSmsList,
-        // status is monitoring status, usually not edited manually here but maintained
         status: selectedMarket?.status || 'Normal',
       };
 
@@ -224,57 +259,82 @@ export const MarketManagement: React.FC = () => {
     }
   };
 
-  // --- Handlers: Image ---
+  // --- Handlers: Multiple Image ---
   const handleFileSelectClick = () => {
-    if (formData.mapImage || mapImageFile) {
-      alert("등록된 이미지를 삭제해 주세요.");
-      return;
+    if (imageList.length >= 10) {
+        alert("이미지는 최대 10장까지만 등록 가능합니다.");
+        return;
     }
     fileInputRef.current?.click();
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      setMapImageFile(e.target.files[0]);
+      const newFiles = Array.from(e.target.files);
+      const remainingSlots = 10 - imageList.length;
+      
+      if (newFiles.length > remainingSlots) {
+          alert(`최대 10장까지만 등록 가능합니다. (${remainingSlots}장 추가 가능)`);
+          return;
+      }
+
+      const newItems: ImageItem[] = newFiles.slice(0, remainingSlots).map(file => ({
+          id: `new-${Date.now()}-${Math.random()}`,
+          file: file,
+          name: file.name
+      }));
+
+      setImageList(prev => [...prev, ...newItems]);
+    }
+    // Reset input to allow selecting same file again
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleRemoveImage = (index: number) => {
+    if (confirm("이미지를 목록에서 제거하시겠습니까?")) {
+        setImageList(prev => prev.filter((_, i) => i !== index));
     }
   };
 
-  const handleRemoveFile = () => {
-    if (confirm("이미지를 삭제하시겠습니까?")) {
-        setFormData({ ...formData, mapImage: undefined });
-        setMapImageFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+  const handleDownloadImage = (item: ImageItem) => {
+      const url = item.url || (item.file ? URL.createObjectURL(item.file) : '');
+      if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = item.name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          if (item.file) URL.revokeObjectURL(url);
+      }
   };
 
-  const getFileName = () => {
-     if (mapImageFile) return mapImageFile.name;
-     if (formData.mapImage) {
-        try {
-           const url = new URL(formData.mapImage);
-           return decodeURIComponent(url.pathname.split('/').pop() || 'image.jpg');
-        } catch {
-           return '지도_이미지.jpg';
-        }
-     }
-     return '';
+  // --- Handlers: Drag & Drop (Image Reordering) ---
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+      setDraggedItemIndex(index);
+      e.dataTransfer.effectAllowed = "move";
+      // Firefox requires dataTransfer data to be set
+      e.dataTransfer.setData("text/plain", index.toString());
   };
 
-  const handleDownload = async () => {
-    if (mapImageFile) {
-        const url = URL.createObjectURL(mapImageFile);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = mapImageFile.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        return;
-    }
-    if (formData.mapImage) {
-        window.open(formData.mapImage, '_blank');
-    }
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+      e.preventDefault(); // Necessary to allow dropping
+      if (draggedItemIndex === null || draggedItemIndex === index) return;
+      
+      // Reorder logic on hover (optional, or do it on drop)
+      // Here implementing simple reorder on Drop for stability
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+      e.preventDefault();
+      if (draggedItemIndex === null || draggedItemIndex === index) return;
+
+      const newList = [...imageList];
+      const [draggedItem] = newList.splice(draggedItemIndex, 1);
+      newList.splice(index, 0, draggedItem);
+      
+      setImageList(newList);
+      setDraggedItemIndex(null);
   };
 
   // --- Handlers: SMS Lists ---
@@ -360,7 +420,6 @@ export const MarketManagement: React.FC = () => {
   const modalDistLast = distPage * MODAL_ITEMS_PER_PAGE;
   const modalDistFirst = modalDistLast - MODAL_ITEMS_PER_PAGE;
   const currentDists = distList.slice(modalDistFirst, modalDistLast);
-  // const distTotalPages = Math.ceil(distList.length / MODAL_ITEMS_PER_PAGE);
 
   // --- View: Form ---
   if (view === 'form') {
@@ -514,10 +573,11 @@ export const MarketManagement: React.FC = () => {
                  )}
               </FormRow>
 
-              {/* 지도 이미지 (Edit Only) */}
-              <FormRow label="현장지도 이미지" className="col-span-1 md:col-span-2">
+              {/* 지도 이미지 (Edit Only, Multi-upload) */}
+              <FormRow label="현장지도 이미지 (최대 10장)" className="col-span-1 md:col-span-2">
                  {selectedMarket ? (
-                    <div className="flex flex-col gap-2 w-full">
+                    <div className="flex flex-col gap-3 w-full">
+                       {/* Controls */}
                        <div className="flex items-center gap-2">
                           <input 
                              type="file" 
@@ -525,28 +585,70 @@ export const MarketManagement: React.FC = () => {
                              onChange={handleFileChange}
                              className="hidden" 
                              accept="image/*"
+                             multiple
                           />
                           <Button type="button" variant="secondary" onClick={handleFileSelectClick} icon={<Upload size={16} />}>
-                             파일 선택
+                             이미지 추가
                           </Button>
-                          
-                          {(formData.mapImage || mapImageFile) && (
-                             <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600">
-                                <Paperclip size={14} className="text-slate-400" />
-                                <span 
-                                    onClick={handleDownload}
-                                    className={`text-sm ${formData.mapImage || mapImageFile ? 'text-blue-400 cursor-pointer hover:underline' : 'text-slate-300'}`}
-                                    title="클릭하여 다운로드"
-                                >
-                                    {getFileName()}
-                                </span>
-                                <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2 p-1 rounded hover:bg-slate-600 transition-colors">
-                                    <X size={16} />
-                                </button>
-                             </div>
-                          )}
+                          <span className="text-xs text-slate-400">
+                             ({imageList.length} / 10) 드래그하여 순서 변경 가능
+                          </span>
                        </div>
-                       <p className="text-xs text-slate-500 mt-1">최대 10MB, jpg/png/gif 지원</p>
+
+                       {/* List of Images */}
+                       <div className="bg-slate-900 border border-slate-700 rounded-md p-2 min-h-[100px] flex flex-col gap-2">
+                          {imageList.length === 0 && (
+                              <div className="flex items-center justify-center h-20 text-slate-500 text-sm">
+                                  등록된 이미지가 없습니다.
+                              </div>
+                          )}
+                          {imageList.map((item, idx) => (
+                              <div 
+                                key={item.id}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, idx)}
+                                onDragOver={(e) => handleDragOver(e, idx)}
+                                onDrop={(e) => handleDrop(e, idx)}
+                                className={`
+                                    flex items-center justify-between p-2 rounded border transition-all cursor-move
+                                    ${draggedItemIndex === idx ? 'bg-blue-900/30 border-blue-500 opacity-50' : 'bg-slate-800 border-slate-600 hover:bg-slate-700'}
+                                `}
+                              >
+                                  <div className="flex items-center gap-3 overflow-hidden">
+                                      <MenuIcon size={16} className="text-slate-500 cursor-move" />
+                                      <Paperclip size={16} className="text-blue-400 flex-shrink-0" />
+                                      <span 
+                                        className="text-sm text-slate-300 truncate cursor-pointer hover:underline hover:text-blue-300"
+                                        onClick={() => handleDownloadImage(item)}
+                                        title={item.name}
+                                      >
+                                          {item.name}
+                                      </span>
+                                      <span className="text-[10px] bg-slate-900 px-1.5 rounded text-slate-500 border border-slate-700">
+                                          {idx + 1}번
+                                      </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleDownloadImage(item)}
+                                        className="p-1 text-slate-400 hover:text-blue-400 transition-colors"
+                                        title="다운로드"
+                                      >
+                                          <Download size={16} />
+                                      </button>
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleRemoveImage(idx)} 
+                                        className="p-1 text-slate-400 hover:text-red-400 transition-colors"
+                                        title="삭제"
+                                      >
+                                          <X size={16} />
+                                      </button>
+                                  </div>
+                              </div>
+                          ))}
+                       </div>
                     </div>
                  ) : (
                     <div className="text-sm text-orange-400">* 등록 후 수정 시에만 추가 가능</div>
