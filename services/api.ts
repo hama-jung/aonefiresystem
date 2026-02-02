@@ -71,14 +71,46 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
 async function getDeviceListWithMarket<T>(table: string, params: any) {
     try {
       let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
+      
       if (params) {
+          // [MODIFIED] 날짜 필터 잠시 비활성화 (2026년 등 미래 데이터 표시를 위해)
+          // 실제 운영 시에는 아래 주석을 해제하여 날짜 검색을 활성화해야 합니다.
+          /*
+          if (params.startDate) {
+              query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
+          }
+          if (params.endDate) {
+              query = query.lte('registeredAt', `${params.endDate}T23:59:59`);
+          }
+          */
+
           Object.keys(params).forEach(key => {
-              if (params[key] && key !== 'marketName') {
-                  if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
-                  // [FIX] market_id -> marketId
-                  else if (key === 'marketId') query = query.eq('marketId', params[key]);
-                  else query = query.eq(key, params[key]);
+              // 유효하지 않거나 'all'인 값은 패스
+              if (!params[key] || params[key] === 'all') return;
+
+              // 날짜 검색 키와 마켓 이름(후처리용)은 여기서 제외
+              if (['marketName', 'startDate', 'endDate'].includes(key)) return;
+
+              // [FIX] 페이지별 'status' 필터의 의미가 다르므로 테이블별 분기 처리
+              if (key === 'status') {
+                  if (table === 'fire_history') {
+                      if (params[key] === 'fire') query = query.eq('falseAlarmStatus', '화재');
+                      if (params[key] === 'false') query = query.eq('falseAlarmStatus', '오탐');
+                      // 'all'인 경우는 위에서 걸러짐
+                      return; 
+                  }
+                  if (table === 'device_status') {
+                      if (params[key] === 'processed') query = query.eq('processStatus', '처리');
+                      if (params[key] === 'unprocessed') query = query.eq('processStatus', '미처리');
+                      return;
+                  }
+                  // 리시버/리피터 등 일반 기기 관리의 status('사용'/'미사용')는 아래 로직을 탐
               }
+
+              if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+              // [FIX] market_id -> marketId
+              else if (key === 'marketId') query = query.eq('marketId', params[key]);
+              else query = query.eq(key, params[key]);
           });
       }
       const { data, error } = await query;
@@ -88,6 +120,8 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
           ...item,
           marketName: item.markets?.name || '-'
       }));
+      
+      // marketName은 JOIN 된 테이블의 컬럼이므로 JS 레벨에서 필터링
       if (params?.marketName) {
           result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
