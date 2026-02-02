@@ -32,7 +32,7 @@ export interface User {
 
 export interface Market {
   id: number;
-  distributorId?: number; 
+  distributorId?: number; // distributor_id -> distributorId
   distributorName?: string;
   name: string;
   address: string;

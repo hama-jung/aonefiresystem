@@ -7,6 +7,7 @@ import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater
 const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'latitude', 'longitude', 'handlingItems'];
 // [FIX] distributor_id -> distributorId, market_id -> marketId
 const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'distributorId', 'marketId', 'status', 'smsReceive'];
+// [FIX] distributor_id -> distributorId
 const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'status'];
 // [FIX] market_id -> marketId
 const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
