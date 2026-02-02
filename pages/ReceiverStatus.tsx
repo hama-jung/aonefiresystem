@@ -3,7 +3,7 @@ import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber } from '../components/CommonUI';
 import { usePageTitle } from '../components/Layout';
-import { Search, Upload, CheckCircle, RefreshCw } from 'lucide-react';
+import { Search, Upload, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 10;
@@ -13,8 +13,7 @@ const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => {
 });
 
 export const ReceiverStatus: React.FC = () => {
-  // Page Title 강제 설정 (v3.5 표시로 배포 확인 용이하게 함)
-  const pageTitle = "R형 수신기 현황 (v3.5)";
+  const pageTitle = "R형 수신기 현황";
 
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [receivers, setReceivers] = useState<Receiver[]>([]);
@@ -154,15 +153,6 @@ export const ReceiverStatus: React.FC = () => {
     <>
       <PageHeader title={pageTitle} />
       
-      {/* FORCE UPDATE INDICATOR - 화면 상단에 배포 성공 메시지 표시 */}
-      <div className="mb-6 p-4 bg-emerald-900/40 border border-emerald-500/50 rounded-lg flex items-center gap-3 shadow-lg animate-pulse">
-         <div className="bg-emerald-500 text-black p-1 rounded-full"><CheckCircle size={20} /></div>
-         <div>
-            <h3 className="text-emerald-400 font-bold text-lg">시스템 업데이트 완료 (v3.5)</h3>
-            <p className="text-emerald-200 text-sm">소스코드와 화면이 동기화되었습니다. 파일명 변경(ReceiverStatus)을 통해 캐시를 초기화했습니다.</p>
-         </div>
-      </div>
-
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedReceiver ? "수신기 수정" : "수신기 등록"}>

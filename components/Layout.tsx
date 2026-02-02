@@ -179,10 +179,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 ))}
               </nav>
             </div>
-            {/* BUILD SUCCESS INDICATOR */}
-            <div className="p-3 text-center border-t border-slate-700 bg-indigo-900 text-indigo-100 font-bold text-xs">
-               v3.1 (Build Fixed)
-            </div>
           </div>
         </aside>
 

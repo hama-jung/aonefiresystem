@@ -26,11 +26,6 @@ import { UartCommunication } from './pages/UartCommunication';
 const App: React.FC = () => {
   return (
     <div className="h-screen flex flex-col">
-      {/* 배포 확인용 디버그 배너 - 배포 성공 시 이 빨간 줄이 반드시 보여야 함 */}
-      <div className="bg-red-600 text-white text-center text-xs font-bold py-1 px-4 shadow-md z-[9999]">
-        🚀 SYSTEM DEPLOYMENT CHECK: VERSION 4.0 (If you see this, deployment is successful)
-      </div>
-      
       <HashRouter>
         <Routes>
           <Route path="/" element={<Login />} />
