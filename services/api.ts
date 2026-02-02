@@ -1,14 +1,30 @@
 import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
-// --- DB Column Whitelists (스크린샷 기반 CamelCase 완벽 일치) ---
-// stores 테이블 스크린샷 기준: id, name, managerName, managerPhone, status, storeImage, memo, receiverMac, repeaterId, detectorId, mode, address, addressDetail, handlingItems, marketId
+// --- DB Column Whitelists (CamelCase 기준) ---
 const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
 const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
 const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
 const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
 
 // --- Helper Utilities ---
+
+// 1. 데이터 정규화: DB에서 market_id(snake)로 오든 marketId(camel)로 오든 Frontend에서는 marketId로 통일
+function normalizeData(data: any[]): any[] {
+  if (!data || !Array.isArray(data)) return [];
+  return data.map(item => {
+    const newItem = { ...item };
+    // market_id -> marketId 매핑
+    if (newItem.market_id !== undefined && newItem.marketId === undefined) {
+      newItem.marketId = newItem.market_id;
+    }
+    // distributor_id -> distributorId 매핑
+    if (newItem.distributor_id !== undefined && newItem.distributorId === undefined) {
+      newItem.distributorId = newItem.distributor_id;
+    }
+    return newItem;
+  });
+}
 
 function mapToWhitelist(item: any, columns: string[]): any {
   const payload: any = {};
@@ -33,7 +49,6 @@ const generateSafeFileName = (prefix: string, originalName: string) => {
 
 async function supabaseSaver<T extends { id: number }>(table: string, item: any, columns: string[]): Promise<T> {
   const { id } = item;
-  // DB 컬럼명 그대로 매핑 (변환 없음)
   const dbData = mapToWhitelist(item, columns);
   
   let query;
@@ -49,7 +64,7 @@ async function supabaseSaver<T extends { id: number }>(table: string, item: any,
     throw new Error(error.message);
   }
   
-  return data[0] as T;
+  return normalizeData(data)[0] as T;
 }
 
 async function supabaseReader<T>(table: string, params?: Record<string, any>, searchFields?: string[]) {
@@ -68,11 +83,10 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
         console.error(`Error reading from ${table}:`, error);
         return [];
     }
-    return data as T[];
+    return normalizeData(data) as T[];
   } catch (e) { return []; }
 }
 
-// 기기 목록 조회 (시장 조인 포함)
 async function getDeviceListWithMarket<T>(table: string, params: any) {
     try {
       // marketId 관계를 통해 시장명 가져오기
@@ -83,25 +97,21 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
               if (!params[key] || params[key] === 'all') return;
               if (['marketName', 'startDate', 'endDate'].includes(key)) return;
 
-              // DB 컬럼 그대로 검색
               if (key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
               else query = query.eq(key, params[key]);
           });
       }
       
       const { data, error } = await query;
-      if (error) {
-          console.error(`Error in getDeviceListWithMarket for ${table}:`, error);
-          return [];
-      }
+      if (error) return [];
       
-      // Join된 markets(name)을 평탄화하여 marketName으로 반환
-      let result = (data || []).map((item: any) => ({
+      const normalizedData = normalizeData(data || []);
+      
+      let result = normalizedData.map((item: any) => ({
           ...item,
           marketName: item.markets?.name || '-'
       }));
       
-      // 검색된 시장명 필터링 (메모리상 처리)
       if (params?.marketName) {
           result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
@@ -116,7 +126,9 @@ export const AuthAPI = {
     const { data } = await supabase.from('users').select('*').eq('userId', id).single();
     if (data && data.password === pw && data.status === '사용') {
       const { password, ...userInfo } = data;
-      return { success: true, user: userInfo };
+      // 사용자 정보 정규화 (market_id -> marketId)
+      const normalizedUser = normalizeData([userInfo])[0];
+      return { success: true, user: normalizedUser };
     }
     throw new Error('아이디나 비밀번호가 틀립니다.');
   },
@@ -131,11 +143,11 @@ export const AuthAPI = {
 
 export const UserAPI = {
   getList: async (params?: any) => {
-    // users 테이블은 distributors, markets 와 FK 연결
     const { data, error } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
     if(error) return [];
 
-    return (data || []).map((u: any) => ({
+    const normalizedData = normalizeData(data || []);
+    return normalizedData.map((u: any) => ({
       ...u,
       department: u.distributors?.name || u.markets?.name || u.department
     })) as User[];
@@ -158,7 +170,9 @@ export const MarketAPI = {
     }
     const { data, error } = await query;
     if (error) return [];
-    return (data || []).map((m: any) => ({
+    
+    const normalizedData = normalizeData(data || []);
+    return normalizedData.map((m: any) => ({
       ...m,
       distributorName: m.distributors?.name || '-'
     })) as Market[];
@@ -175,20 +189,16 @@ export const MarketAPI = {
 
 export const StoreAPI = {
   getList: async (params?: any) => {
-    // Join markets to get name
     let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
     
-    // DB column is definitely 'marketId' as per screenshot
     if (params?.marketId) query = query.eq('marketId', params.marketId);
     if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
     
     const { data, error } = await query;
-    if (error) {
-        console.error("StoreAPI Error:", error);
-        return [];
-    }
+    if (error) return [];
     
-    return (data || []).map((s: any) => ({ 
+    const normalizedData = normalizeData(data || []);
+    return normalizedData.map((s: any) => ({ 
         ...s,
         marketName: s.markets?.name || '-' 
     })) as Store[];
@@ -304,7 +314,7 @@ export const CommonAPI = {
 export const MenuAPI = {
   getAll: async () => {
     const { data } = await supabase.from('menus').select('*').order('sortOrder', { ascending: true });
-    return data as MenuItemDB[];
+    return normalizeData(data || []) as MenuItemDB[];
   },
   getTree: async () => {
     const list = await MenuAPI.getAll();
@@ -325,8 +335,6 @@ export const MenuAPI = {
 
 export const FireHistoryAPI = {
   getList: async (params?: any) => {
-      // Fire history usually links to market via marketId or Name. We will try join if possible.
-      // Assuming fire_history has marketId based on migration scripts.
       let query = supabase.from('fire_history').select('*').order('registeredAt', { ascending: false });
       if(params?.startDate && params?.endDate) {
           query = query.gte('registeredAt', `${params.startDate}T00:00:00`).lte('registeredAt', `${params.endDate}T23:59:59`);
@@ -336,7 +344,7 @@ export const FireHistoryAPI = {
       
       const { data, error } = await query;
       if(error) return [];
-      return data as FireHistoryItem[];
+      return normalizeData(data) as FireHistoryItem[];
   },
   save: async (id: number, status: string, note: string) => {
     await supabase.from('fire_history').update({ falseAlarmStatus: status, note: note }).eq('id', id);
@@ -356,7 +364,7 @@ export const DeviceStatusAPI = {
       
       const { data, error } = await query;
       if(error) return [];
-      return data as DeviceStatusItem[];
+      return normalizeData(data) as DeviceStatusItem[];
   },
   save: async (id: number, status: string, note: string) => {
     await supabase.from('device_status').update({ processStatus: status, note: note }).eq('id', id);
@@ -373,7 +381,7 @@ export const DataReceptionAPI = {
       }
       const { data, error } = await query;
       if(error) return [];
-      return data as DataReceptionItem[];
+      return normalizeData(data) as DataReceptionItem[];
   },
   delete: async (id: number) => { await supabase.from('data_reception').delete().eq('id', id); return true; }
 };
@@ -385,9 +393,12 @@ export const DashboardAPI = {
       const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
       const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러');
       
-      // Fetch logs - join markets if possible, otherwise just get raw
       const { data: fH } = await supabase.from('fire_history').select('*, markets(name)').order('registeredAt', { ascending: false }).limit(5);
       const { data: dS } = await supabase.from('device_status').select('*, markets(name)').eq('deviceStatus', '에러').order('registeredAt', { ascending: false }).limit(5);
+
+      const normalizedMkts = normalizeData(mkts || []);
+      const normalizedFH = normalizeData(fH || []);
+      const normalizedDS = normalizeData(dS || []);
 
       return {
         stats: [
@@ -395,13 +406,13 @@ export const DashboardAPI = {
           { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
           { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
         ],
-        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
-        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
+        fireEvents: normalizedFH.map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
+        faultEvents: normalizedDS.map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
         commEvents: [],
-        mapData: (mkts || []).map((m: any) => ({ 
+        mapData: normalizedMkts.map((m: any) => ({ 
             id: m.id, 
             name: m.name, 
-            x: m.latitude,  // Dashboard.tsx maps this to position
+            x: m.latitude,  
             y: m.longitude, 
             address: m.address, 
             status: m.status || 'Normal',

@@ -66,11 +66,6 @@ const MapSection: React.FC<{
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
   const [overlays, setOverlays] = useState<any[]>([]);
-  
-  // Filters
-  const [selectedSido, setSelectedSido] = useState('');
-  const [selectedGugun, setSelectedGugun] = useState('');
-  const [keyword, setKeyword] = useState('');
 
   // 1. Wait for Kakao Script Load
   useEffect(() => {
@@ -110,37 +105,26 @@ const MapSection: React.FC<{
     overlays.forEach(o => o.setMap(null));
     const newOverlays: any[] = [];
 
-    // Filter Logic
-    const filteredMarkets = markets.filter(m => {
-        const matchSido = selectedSido ? (m.address || '').includes(selectedSido) : true;
-        const matchGugun = selectedGugun ? (m.address || '').includes(selectedGugun) : true;
-        const matchName = keyword ? m.name.includes(keyword) : true;
-        return matchSido && matchGugun && matchName;
-    });
+    markets.forEach((market) => {
+        // Safe coordinate parsing
+        const lat = parseFloat(market.x);
+        const lng = parseFloat(market.y);
 
-    filteredMarkets.forEach((market) => {
-        // DashboardAPI maps latitude -> x, longitude -> y
-        if (!market.x || !market.y) return;
+        if (isNaN(lat) || isNaN(lng)) return;
 
-        const position = new window.kakao.maps.LatLng(market.x, market.y);
+        const position = new window.kakao.maps.LatLng(lat, lng);
         
         // --- Icon Logic (Requested Shapes) ---
         let iconName = 'store'; // Normal: Store
-        let bgColor = 'bg-blue-500';
         let isFire = false;
 
         // Check status (Handling both English and Korean)
         const status = market.status || 'Normal';
         if (status === 'Fire' || status === '화재') {
              iconName = 'local_fire_department'; // Fire: Flame
-             bgColor = 'bg-red-600';
              isFire = true;
         } else if (status === 'Error' || status === '고장') {
              iconName = 'build'; // Error: Pliers/Tool
-             bgColor = 'bg-orange-500';
-        } else {
-             // Normal
-             bgColor = 'bg-white';
         }
 
         const content = document.createElement('div');
@@ -169,7 +153,7 @@ const MapSection: React.FC<{
     });
 
     setOverlays(newOverlays);
-  }, [mapInstance, markets, selectedSido, selectedGugun, keyword]);
+  }, [mapInstance, markets]);
 
   // 4. Focus Location
   useEffect(() => {
@@ -182,29 +166,6 @@ const MapSection: React.FC<{
 
   return (
       <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900 group">
-          {/* Filters Overlay */}
-          <div className="absolute top-4 left-4 z-20 flex flex-col md:flex-row gap-2 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm border border-slate-700 shadow-lg">
-              <select 
-                value={selectedSido}
-                onChange={(e) => setSelectedSido(e.target.value)}
-                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
-              >
-                  <option value="">시/도 선택</option>
-                  {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              
-              <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="현장명 검색" 
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    className="bg-slate-800 text-white text-sm border border-slate-600 rounded pl-2 pr-8 py-1 focus:outline-none focus:border-blue-500 w-40"
-                  />
-                  <Search size={14} className="absolute right-2 top-2 text-slate-400" />
-              </div>
-          </div>
-
           {!isKakaoLoaded && (
              <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 z-10">
                 <MapIcon className="animate-pulse mr-2" /> 지도 로딩 중...
@@ -224,6 +185,10 @@ export const Dashboard: React.FC = () => {
   // Timer State
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
+
+  // Filters State (Moved to Dashboard root)
+  const [selectedSido, setSelectedSido] = useState('');
+  const [keyword, setKeyword] = useState('');
 
   // Pagination States
   const [firePage, setFirePage] = useState(1);
@@ -263,7 +228,7 @@ export const Dashboard: React.FC = () => {
       if (!data || !data.mapData) return;
       const target = data.mapData.find((m: any) => m.id === marketId);
       if (target && target.x && target.y) {
-          setFocusLocation({ lat: target.x, lng: target.y });
+          setFocusLocation({ lat: parseFloat(target.x), lng: parseFloat(target.y) });
       }
   };
 
@@ -281,16 +246,47 @@ export const Dashboard: React.FC = () => {
   const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
   const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
 
-  // Header Right Content (Timer)
+  // Filter Map Data
+  const filteredMapData = (mapData || []).filter((m: any) => {
+      const matchSido = selectedSido ? (m.address || '').includes(selectedSido) : true;
+      const matchName = keyword ? m.name.includes(keyword) : true;
+      return matchSido && matchName;
+  });
+
+  // Header Right Content (Filters + Timer)
   const refreshControlUI = (
-    <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
-      <span className="text-slate-400">
-        기준 시각 : <span className="text-slate-200 font-bold ml-1 tracking-wide">{lastUpdated.toLocaleTimeString()}</span>
-      </span>
-      <div className="w-px h-3 bg-slate-600"></div>
-      <span className="text-slate-400 flex items-center">
-        <span className="text-blue-400 font-bold w-5 text-right mr-1">{timeLeft}</span>초 후 새로고침
-      </span>
+    <div className="flex items-center gap-3">
+        {/* Filters moved here for visibility */}
+        <div className="flex items-center gap-2 mr-4">
+            <select 
+                value={selectedSido}
+                onChange={(e) => setSelectedSido(e.target.value)}
+                className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
+            >
+                <option value="">전국 전체</option>
+                {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <div className="relative">
+                <input 
+                    type="text" 
+                    placeholder="현장명 검색" 
+                    value={keyword}
+                    onChange={(e) => setKeyword(e.target.value)}
+                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded pl-2 pr-7 py-1.5 focus:outline-none focus:border-blue-500 w-32"
+                />
+                <Search size={12} className="absolute right-2 top-2 text-slate-400" />
+            </div>
+        </div>
+
+        <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
+            <span className="text-slate-400">
+                기준 시각 : <span className="text-slate-200 font-bold ml-1 tracking-wide">{lastUpdated.toLocaleTimeString()}</span>
+            </span>
+            <div className="w-px h-3 bg-slate-600"></div>
+            <span className="text-slate-400 flex items-center">
+                <span className="text-blue-400 font-bold w-5 text-right mr-1">{timeLeft}</span>초 후 새로고침
+            </span>
+        </div>
     </div>
   );
 
@@ -427,7 +423,7 @@ export const Dashboard: React.FC = () => {
         {/* [Right Panel] 60% Width Fixed Map Area */}
         <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a]">
            <MapSection 
-              markets={mapData}
+              markets={filteredMapData}
               focusLocation={focusLocation}
               onMarketSelect={(m) => setSelectedMarket(m)}
            />
