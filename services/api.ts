@@ -189,13 +189,27 @@ export const MarketAPI = {
 
 export const StoreAPI = {
   getList: async (params?: any) => {
-    let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
+    // 시장명을 필터링하기 위해 !inner 조인을 사용할지 결정
+    // marketName 검색어가 있으면 inner join으로 검색된 시장만 포함
+    let selectStmt = '*, markets(name)';
+    if (params?.marketName) {
+        selectStmt = '*, markets!inner(name)';
+    }
+
+    let query = supabase.from('stores').select(selectStmt).order('id', { ascending: false });
     
     if (params?.marketId) query = query.eq('marketId', params.marketId);
     if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
+    if (params?.address) query = query.ilike('address', `%${params.address}%`);
+    
+    // Joined Table filtering
+    if (params?.marketName) query = query.ilike('markets.name', `%${params.marketName}%`);
     
     const { data, error } = await query;
-    if (error) return [];
+    if (error) {
+        console.error("StoreAPI.getList error", error);
+        return [];
+    }
     
     const normalizedData = normalizeData(data || []);
     return normalizedData.map((s: any) => ({ 
