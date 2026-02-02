@@ -42,7 +42,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleRegister = () => {
     setSelectedStore(null);
-    setFormData({ status: '사용', mode: '복합', marketId: 0 }); // market_id -> marketId
+    setFormData({ status: '사용', mode: '복합', marketId: 0 }); 
     setSelectedMarketName('');
     setStoreImageFile(null);
     setView('form');
@@ -51,17 +51,8 @@ export const StoreManagement: React.FC = () => {
   const handleEdit = (store: Store) => {
     setSelectedStore(store);
     
-    const { 
-      id, name, managerName, managerPhone, status, storeImage, memo, 
-      receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, marketId // market_id -> marketId
-    } = store;
-
-    setFormData({ 
-      id, name, managerName, managerPhone, status, storeImage, memo, 
-      receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, marketId 
-    });
+    // Spread all properties to ensure we catch everything
+    setFormData({ ...store });
     
     setSelectedMarketName(store.marketName || '-');
     setView('form');
@@ -74,14 +65,14 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleMarketSelect = (market: Market) => {
-    setFormData(prev => ({ ...prev, marketId: market.id })); // market_id -> marketId
+    setFormData(prev => ({ ...prev, marketId: market.id }));
     setSelectedMarketName(market.name);
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; } // market_id -> marketId
+    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; }
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
 
     try {
@@ -110,7 +101,7 @@ export const StoreManagement: React.FC = () => {
   ];
 
   const storeColumns: Column<Store>[] = [
-    { header: 'No', accessor: 'id', width: '60px' },
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '소속시장', accessor: 'marketName' },
     { header: '상가명', accessor: 'name' },
     { header: '대표자', accessor: 'managerName' },
@@ -124,6 +115,7 @@ export const StoreManagement: React.FC = () => {
         <PageHeader title="기기 관리 (상가)" />
         <form onSubmit={handleSave}>
           <FormSection title={selectedStore ? "기기 수정" : "기기 등록"}>
+            {/* 소속 시장 */}
             <FormRow label="소속 시장" required>
                <div className="flex gap-2 w-full">
                  <div onClick={openMarketModal} className="flex-1 relative cursor-pointer">
@@ -140,10 +132,12 @@ export const StoreManagement: React.FC = () => {
                </div>
             </FormRow>
 
+            {/* 상가명 */}
             <FormRow label="상가명" required>
                <InputGroup value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="상가명 입력" />
             </FormRow>
 
+            {/* 주소 (Full Width) */}
             <div className="col-span-1 md:col-span-2">
               <AddressInput 
                  label="주소"
@@ -155,6 +149,7 @@ export const StoreManagement: React.FC = () => {
               />
             </div>
 
+            {/* 대표자 정보 */}
             <FormRow label="대표자">
                <InputGroup value={formData.managerName || ''} onChange={(e) => setFormData({...formData, managerName: e.target.value})} />
             </FormRow>
@@ -167,6 +162,7 @@ export const StoreManagement: React.FC = () => {
                />
             </FormRow>
 
+            {/* 기기 정보 */}
             <FormRow label="수신기 MAC">
                <InputGroup value={formData.receiverMac || ''} onChange={(e) => setFormData({...formData, receiverMac: e.target.value})} maxLength={4} />
             </FormRow>
@@ -174,6 +170,7 @@ export const StoreManagement: React.FC = () => {
                <InputGroup value={formData.repeaterId || ''} onChange={(e) => setFormData({...formData, repeaterId: e.target.value})} maxLength={2} />
             </FormRow>
 
+            {/* 사용여부 (Full Width) */}
             <FormRow label="사용여부" className="col-span-1 md:col-span-2">
                <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
             </FormRow>
