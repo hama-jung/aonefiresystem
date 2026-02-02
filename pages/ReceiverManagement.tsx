@@ -7,15 +7,14 @@ import { Search, Upload, CheckCircle } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
-import React, { useState, useEffect, useRef } from 'react';
-// 캐시 파괴용 랜덤 번호: 998234 
-// (이 번호를 넣고 저장 후 다시 Push 하세요)
-
 const ITEMS_PER_PAGE = 10;
-const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: `${val}시간`, label: `${val}시간` }; });
+const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { 
+  const val = String(i + 1).padStart(2, '0'); 
+  return { value: `${val}시간`, label: `${val}시간` }; 
+});
 
 export const ReceiverManagement: React.FC = () => {
-  // [강제 수정] usePageTitle 훅이 DB에서 '관리'를 가져와도, 여기서 강제로 '현황'을 우선 표시하도록 유도
+  // usePageTitle이 '관리'를 반환하더라도 강제로 '현황'으로 치환하여 표시
   const pageTitleRaw = usePageTitle('R형 수신기 현황');
   const pageTitle = pageTitleRaw.replace('관리', '현황'); 
 
@@ -41,7 +40,7 @@ export const ReceiverManagement: React.FC = () => {
         const data = await ReceiverAPI.getList(overrides); 
         setReceivers(data); 
       } catch (e) {
-        console.error(e);
+        console.error("데이터 로드 실패", e);
       } finally {
         setLoading(false);
       }
@@ -49,7 +48,14 @@ export const ReceiverManagement: React.FC = () => {
   
   useEffect(() => { fetchReceivers(); }, []);
 
-  const handleRegister = () => { setSelectedReceiver(null); setFormData({ transmissionInterval: '01시간', status: '사용' }); setSelectedMarketForForm(null); setImageFile(null); setView('form'); };
+  const handleRegister = () => { 
+    setSelectedReceiver(null); 
+    setFormData({ transmissionInterval: '01시간', status: '사용' }); 
+    setSelectedMarketForForm(null); 
+    setImageFile(null); 
+    setView('form'); 
+  };
+
   const handleEdit = (receiver: Receiver) => { 
       setSelectedReceiver(receiver); 
       setFormData({ ...receiver }); 
@@ -131,13 +137,19 @@ export const ReceiverManagement: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const handleExcelSave = async () => {
+     // 엑셀 저장 로직 구현 (필요시)
+     alert("일괄 등록 기능은 API 연동이 필요합니다.");
+  };
+
   return (
     <>
       <PageHeader title={pageTitle} />
       
-      {/* File Update Check Marker */}
-      <div className="mb-4 bg-green-900/30 border border-green-600 text-green-200 p-2 rounded text-sm font-bold flex items-center gap-2 animate-pulse">
-         <CheckCircle size={16} /> [V3 FIX APPLIED] 이 배지가 보이면 빌드가 성공한 것입니다.
+      {/* 배포 확인용 배지 */}
+      <div className="mb-4 bg-indigo-900/30 border border-indigo-500 text-indigo-200 p-3 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg">
+         <CheckCircle size={20} className="text-indigo-400" /> 
+         <span>[v3.1 BUILD FIXED] 이 메시지가 보이면 배포가 성공한 것입니다.</span>
       </div>
 
       {view === 'form' ? (
@@ -200,6 +212,7 @@ export const ReceiverManagement: React.FC = () => {
              </FormSection>
              {excelData.length > 0 && <DataTable columns={[{header:'MAC', accessor:'macAddress'}, {header:'IP', accessor:'ip'}]} data={excelData.slice(0, 10)} />}
              <div className="flex justify-center gap-3 mt-8">
+                {/* 엑셀 등록 기능 버튼 임시 비활성화 or 추후 구현 */}
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
           </div>

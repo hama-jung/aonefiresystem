@@ -1,8 +1,10 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css'; // [FIX] Ensure CSS is imported
+import './index.css';
+
+// 배포 버전 확인용 로그
+console.log('%c A-ONE Fire System v3.5 Loaded ', 'background: #222; color: #bada55; font-size: 20px;');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
