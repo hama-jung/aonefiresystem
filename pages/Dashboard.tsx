@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/CommonUI';
-import { AlertTriangle, WifiOff, Video, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
-import { SIDO_LIST } from '../utils/addressData'; // Reuse SIDO list
+import { SIDO_LIST } from '../utils/addressData';
 
 declare global {
   interface Window {
@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-// --- Helper: Pagination Control for Lists ---
+// --- Helper: Pagination Control ---
 const ListPagination: React.FC<{ 
     total: number, 
     limit: number, 
@@ -24,7 +24,7 @@ const ListPagination: React.FC<{
     if (totalPages <= 1) return null;
 
     return (
-        <div className="flex justify-center items-center gap-2 py-2 border-t border-slate-700/50">
+        <div className="flex justify-center items-center gap-2 py-2 border-t border-slate-700/50 mt-auto">
             <button 
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
@@ -56,7 +56,7 @@ const ListPagination: React.FC<{
     );
 };
 
-// --- Component: Map Container with Filters ---
+// --- Component: Map Container ---
 const MapSection: React.FC<{ 
   markets: any[];
   focusLocation: { lat: number, lng: number } | null;
@@ -64,67 +64,84 @@ const MapSection: React.FC<{
 }> = ({ markets, focusLocation, onMarketSelect }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
   const [overlays, setOverlays] = useState<any[]>([]);
   
-  // Filter States
+  // Filters
   const [selectedSido, setSelectedSido] = useState('');
   const [selectedGugun, setSelectedGugun] = useState('');
   const [keyword, setKeyword] = useState('');
 
-  // Filtered Markets
-  const filteredMarkets = markets.filter(m => {
-      const matchSido = selectedSido ? m.address.includes(selectedSido) : true;
-      const matchGugun = selectedGugun ? m.address.includes(selectedGugun) : true;
-      const matchName = keyword ? m.name.includes(keyword) : true;
-      return matchSido && matchGugun && matchName;
-  });
-
-  // 1. Initialize Map
+  // 1. Wait for Kakao Script Load
   useEffect(() => {
-    if (!mapRef.current || !window.kakao) return;
-
-    const container = mapRef.current;
-    const options = {
-      center: new window.kakao.maps.LatLng(36.5, 127.8),
-      level: 12
-    };
-    const map = new window.kakao.maps.Map(container, options);
-    setMapInstance(map);
-
-    const zoomControl = new window.kakao.maps.ZoomControl();
-    map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
+    const checkKakao = setInterval(() => {
+      if (window.kakao && window.kakao.maps) {
+        setIsKakaoLoaded(true);
+        clearInterval(checkKakao);
+      }
+    }, 500); // Check every 500ms
+    return () => clearInterval(checkKakao);
   }, []);
 
-  // 2. Render Markers
+  // 2. Initialize Map
   useEffect(() => {
-    if (!mapInstance) return;
+    if (!isKakaoLoaded || !mapRef.current) return;
+
+    if (!mapInstance) {
+      const container = mapRef.current;
+      const options = {
+        center: new window.kakao.maps.LatLng(37.5665, 126.9780), // Seoul Center
+        level: 11 // Zoom level matches the screenshot (Province view)
+      };
+      const map = new window.kakao.maps.Map(container, options);
+      
+      const zoomControl = new window.kakao.maps.ZoomControl();
+      map.addControl(zoomControl, window.kakao.maps.ControlPosition.RIGHT);
+      
+      setMapInstance(map);
+    }
+  }, [isKakaoLoaded]);
+
+  // 3. Update Markers
+  useEffect(() => {
+    if (!mapInstance || !markets) return;
 
     // Clear existing
     overlays.forEach(o => o.setMap(null));
     const newOverlays: any[] = [];
+
+    // Filter Logic
+    const filteredMarkets = markets.filter(m => {
+        const matchSido = selectedSido ? m.address.includes(selectedSido) : true;
+        const matchGugun = selectedGugun ? m.address.includes(selectedGugun) : true;
+        const matchName = keyword ? m.name.includes(keyword) : true;
+        return matchSido && matchGugun && matchName;
+    });
 
     filteredMarkets.forEach((market) => {
         if (!market.x || !market.y) return;
 
         const position = new window.kakao.maps.LatLng(market.x, market.y);
         
-        // --- Icon Logic Changed ---
-        let iconName = 'store'; // Normal: Store Shape
-        let bgColor = 'bg-blue-500'; 
+        // --- Icon Logic (Requested Shapes) ---
+        let iconName = 'store'; // Normal: Store
+        let bgColor = 'bg-blue-500';
         let borderColor = 'border-blue-300';
         let isFire = false;
 
-        if (market.status === 'Fire' || market.status === '화재') {
-             iconName = 'local_fire_department'; // Fire: Flame Shape
+        // Check status (Handling both English and Korean)
+        const status = market.status || 'Normal';
+        if (status === 'Fire' || status === '화재') {
+             iconName = 'local_fire_department'; // Fire: Flame
              bgColor = 'bg-red-600';
              borderColor = 'border-red-400';
              isFire = true;
-        } else if (market.status === 'Error' || market.status === '고장') {
-             iconName = 'build'; // Error: Tool/Pliers Shape
+        } else if (status === 'Error' || status === '고장') {
+             iconName = 'build'; // Error: Pliers/Tool
              bgColor = 'bg-orange-500';
              borderColor = 'border-orange-300';
         } else {
-             // Normal status
+             // Normal
              bgColor = 'bg-white';
              borderColor = 'border-slate-300';
         }
@@ -133,13 +150,11 @@ const MapSection: React.FC<{
         content.className = 'relative flex items-center justify-center group cursor-pointer';
         content.onclick = () => onMarketSelect(market);
         
-        // Google Icon Marker Style
         content.innerHTML = `
-            ${isFire ? '<div class="absolute w-16 h-16 bg-red-500 rounded-full animate-ping opacity-60"></div>' : ''}
-            <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (market.status === 'Error' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
-               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (market.status === 'Error' ? 'text-white' : 'text-blue-600')} text-2xl">${iconName}</span>
+            ${isFire ? '<div class="absolute w-20 h-20 bg-red-500 rounded-full animate-ping opacity-60"></div>' : ''}
+            <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
+               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-xl">${iconName}</span>
             </div>
-            <!-- Tooltip -->
             <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
                <div class="font-bold text-center">${market.name}</div>
                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800/95"></div>
@@ -157,9 +172,9 @@ const MapSection: React.FC<{
     });
 
     setOverlays(newOverlays);
-  }, [mapInstance, filteredMarkets]); // Re-render when filtered list changes
+  }, [mapInstance, markets, selectedSido, selectedGugun, keyword]);
 
-  // 3. Focus Logic
+  // 4. Focus Location
   useEffect(() => {
     if (mapInstance && focusLocation) {
         const moveLatLon = new window.kakao.maps.LatLng(focusLocation.lat, focusLocation.lng);
@@ -170,12 +185,12 @@ const MapSection: React.FC<{
 
   return (
       <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900 group">
-          {/* Map Overlay Controls */}
-          <div className="absolute top-4 left-4 z-20 flex flex-col md:flex-row gap-2 bg-slate-900/80 p-2 rounded-lg backdrop-blur-sm border border-slate-700 shadow-lg">
+          {/* Filters Overlay */}
+          <div className="absolute top-4 left-4 z-20 flex flex-col md:flex-row gap-2 bg-slate-900/90 p-2 rounded-lg backdrop-blur-sm border border-slate-700 shadow-lg">
               <select 
                 value={selectedSido}
                 onChange={(e) => setSelectedSido(e.target.value)}
-                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
               >
                   <option value="">시/도 선택</option>
                   {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
@@ -184,10 +199,9 @@ const MapSection: React.FC<{
               <select 
                 value={selectedGugun}
                 onChange={(e) => setSelectedGugun(e.target.value)}
-                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500"
+                className="bg-slate-800 text-white text-sm border border-slate-600 rounded px-2 py-1 focus:outline-none focus:border-blue-500 min-w-[100px]"
               >
                   <option value="">시/군/구 선택</option>
-                  {/* Mock data for example */}
                   <option value="강남구">강남구</option>
                   <option value="안양시">안양시</option>
               </select>
@@ -204,23 +218,27 @@ const MapSection: React.FC<{
               </div>
           </div>
 
+          {!isKakaoLoaded && (
+             <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 z-10">
+                <MapIcon className="animate-pulse mr-2" /> 지도 로딩 중...
+             </div>
+          )}
           <div ref={mapRef} className="w-full h-full" />
       </div>
   );
 };
 
-// --- Main Dashboard ---
 export const Dashboard: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [focusLocation, setFocusLocation] = useState<{lat: number, lng: number} | null>(null);
   
-  // Refresh Timer State
+  // Timer State
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Pagination States for Lists
+  // Pagination States
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
   const [commPage, setCommPage] = useState(1);
@@ -232,7 +250,7 @@ export const Dashboard: React.FC = () => {
     try {
       const result = await DashboardAPI.getData();
       setData(result);
-      setLastUpdated(new Date()); // Update timestamp
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to fetch dashboard data", error);
     } finally {
@@ -240,20 +258,17 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  // Timer Effect: Countdown and Auto-refresh every 60s
   useEffect(() => {
-    fetchData(); // Initial load
-
+    fetchData();
     const timerInterval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          fetchData(); // Refresh data
-          return 60;   // Reset timer
+          fetchData();
+          return 60;
         }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timerInterval);
   }, []);
 
@@ -275,12 +290,11 @@ export const Dashboard: React.FC = () => {
 
   const { stats, fireEvents, faultEvents, commEvents, mapData } = data || { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] };
 
-  // Paginated Data
   const currentFireEvents = fireEvents.slice((firePage - 1) * ITEMS_LIMIT, firePage * ITEMS_LIMIT);
   const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
   const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
 
-  // --- Header Refresh Control UI ---
+  // Header Right Content (Timer)
   const refreshControlUI = (
     <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
       <span className="text-slate-400">
@@ -297,54 +311,54 @@ export const Dashboard: React.FC = () => {
     <div className="flex flex-col h-full text-slate-200">
       <PageHeader title="대시보드" rightContent={refreshControlUI} />
 
-      {/* Main Layout Grid */}
-      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)]">
+      {/* Main Layout: Fixed Height Calculation */}
+      <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] min-h-[600px]">
         
-        {/* [Left Panel] Stats & Logs (Ratio 40%) */}
-        <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pr-1">
+        {/* [Left Panel] 40% Width Fixed */}
+        <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-hidden">
           
-          {/* 1. Status Cards (3 Columns) */}
-          <div className="grid grid-cols-3 gap-3">
-             {/* Fire Status */}
-             <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-lg p-4 shadow-lg border border-red-500/50 flex flex-col items-center justify-center relative overflow-hidden group">
+          {/* 1. Status Cards */}
+          <div className="grid grid-cols-3 gap-3 flex-shrink-0">
+             {/* Fire */}
+             <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-lg p-4 shadow-lg border border-red-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
                 <div className="absolute -right-4 -top-4 text-red-500/30 group-hover:text-red-500/40 transition-colors">
                    <AlertTriangle size={64} />
                 </div>
                 <div className="text-red-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
                    <AlertTriangle size={12}/> 화재발생
                 </div>
-                <div className="text-3xl font-black text-white z-10">{stats[0]?.value || 0}</div>
+                <div className="text-4xl font-black text-white z-10">{stats[0]?.value || 0}</div>
              </div>
 
-             {/* Fault Status */}
-             <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg p-4 shadow-lg border border-orange-400/50 flex flex-col items-center justify-center relative overflow-hidden group">
+             {/* Fault */}
+             <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg p-4 shadow-lg border border-orange-400/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
                 <div className="absolute -right-4 -top-4 text-orange-400/30 group-hover:text-orange-400/40 transition-colors">
                    <BatteryWarning size={64} />
                 </div>
                 <div className="text-orange-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
                    <BatteryWarning size={12}/> 고장발생
                 </div>
-                <div className="text-3xl font-black text-white z-10">{stats[1]?.value || 0}</div>
+                <div className="text-4xl font-black text-white z-10">{stats[1]?.value || 0}</div>
              </div>
 
-             {/* Comm Status */}
-             <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg p-4 shadow-lg border border-slate-500/50 flex flex-col items-center justify-center relative overflow-hidden group">
+             {/* Comm */}
+             <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg p-4 shadow-lg border border-slate-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
                 <div className="absolute -right-4 -top-4 text-slate-400/30 group-hover:text-slate-400/40 transition-colors">
                    <WifiOff size={64} />
                 </div>
                 <div className="text-slate-200 text-xs font-bold mb-1 z-10 flex items-center gap-1">
                    <WifiOff size={12}/> 통신이상
                 </div>
-                <div className="text-3xl font-black text-white z-10">{stats[2]?.value || 0}</div>
+                <div className="text-4xl font-black text-white z-10">{stats[2]?.value || 0}</div>
              </div>
           </div>
 
-          {/* 2. Log Lists Area */}
-          <div className="flex-1 flex flex-col gap-4">
+          {/* 2. Log Lists (Scrollable Area) */}
+          <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
              
              {/* Fire History List */}
-             <div className="bg-slate-800 border border-red-900/50 rounded-lg shadow-sm flex flex-col min-h-[220px]">
-                <div className="bg-red-950/50 px-4 py-3 border-b border-red-900/50 flex justify-between items-center">
+             <div className="bg-slate-800 border border-red-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-red-950/50 px-4 py-2.5 border-b border-red-900/50 flex justify-between items-center flex-shrink-0">
                    <div className="flex items-center gap-2 text-red-200 font-bold text-sm">
                       <AlertTriangle size={16} className="text-red-500 animate-pulse" /> 최근 화재 발생현황
                    </div>
@@ -352,12 +366,12 @@ export const Dashboard: React.FC = () => {
                       더보기 <ArrowRight size={12} />
                    </button>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-2">
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
                    {currentFireEvents.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
                    ) : (
                       currentFireEvents.map((log: any) => (
-                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 p-2 rounded border border-slate-700 hover:border-red-500/50 cursor-pointer transition-colors flex justify-between items-center group">
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-red-500/50 cursor-pointer transition-colors flex justify-between items-center group">
                             <div className="flex items-center gap-2 overflow-hidden">
                                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0"></span>
                                <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
@@ -371,8 +385,8 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Fault History List */}
-             <div className="bg-slate-800 border border-orange-900/50 rounded-lg shadow-sm flex flex-col min-h-[220px]">
-                <div className="bg-orange-950/50 px-4 py-3 border-b border-orange-900/50 flex justify-between items-center">
+             <div className="bg-slate-800 border border-orange-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-orange-950/50 px-4 py-2.5 border-b border-orange-900/50 flex justify-between items-center flex-shrink-0">
                    <div className="flex items-center gap-2 text-orange-200 font-bold text-sm">
                       <BatteryWarning size={16} className="text-orange-500" /> 최근 고장 발생현황
                    </div>
@@ -380,12 +394,12 @@ export const Dashboard: React.FC = () => {
                       더보기 <ArrowRight size={12} />
                    </button>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-2">
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
                    {currentFaultEvents.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
                    ) : (
                       currentFaultEvents.map((log: any) => (
-                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 p-2 rounded border border-slate-700 hover:border-orange-500/50 cursor-pointer transition-colors flex justify-between items-center group">
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-orange-500/50 cursor-pointer transition-colors flex justify-between items-center group">
                             <div className="flex items-center gap-2 overflow-hidden">
                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></span>
                                <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
@@ -399,18 +413,18 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Comm Error List */}
-             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm flex flex-col min-h-[220px]">
-                <div className="bg-slate-700/50 px-4 py-3 border-b border-slate-600 flex justify-between items-center">
+             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-slate-700/50 px-4 py-2.5 border-b border-slate-600 flex justify-between items-center flex-shrink-0">
                    <div className="flex items-center gap-2 text-slate-300 font-bold text-sm">
                       <WifiOff size={16} className="text-slate-400" /> 수신기 통신 이상 내역
                    </div>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-2">
+                <div className="flex-1 p-2 flex flex-col gap-1.5">
                    {currentCommEvents.length === 0 ? (
                       <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
                    ) : (
                       currentCommEvents.map((log: any) => (
-                         <div key={log.id} className="bg-slate-900/50 p-2 rounded border border-slate-700 flex justify-between items-center">
+                         <div key={log.id} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 flex justify-between items-center">
                             <span className="text-xs text-slate-400">{log.msg}</span>
                             <span className="text-[10px] text-slate-600">{new Date(log.time).toLocaleTimeString()}</span>
                          </div>
@@ -423,8 +437,8 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* [Right Panel] Map Area (Ratio 60%) */}
-        <div className="flex-1 flex flex-col h-full min-h-[500px]">
+        {/* [Right Panel] 60% Width Fixed Map Area */}
+        <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a]">
            <MapSection 
               markets={mapData}
               focusLocation={focusLocation}
