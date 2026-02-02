@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  ChevronDown, ChevronRight, LogOut, Menu, Bell, Key, HelpCircle, User,
-  Home, Users, Cpu, Activity, Settings
+  ChevronDown, ChevronRight, LogOut, Menu, Bell, Key, User
 } from 'lucide-react';
-import { MenuItemDB, MenuItem } from '../types';
+import { MenuItemDB } from '../types';
 import { Modal, InputGroup, Button } from './CommonUI';
 import { AuthAPI, MenuAPI } from '../services/api';
 import { getIcon } from '../utils/iconMapper';
@@ -23,6 +22,11 @@ export const usePageTitle = (defaultTitle: string) => {
   // Find menu item matching the current path
   const currentMenu = menus.find(m => m.path === location.pathname);
   
+  // [Safety Fix] DB에 '관리'로 남아있어도 화면엔 '현황'으로 강제 변환하여 표시
+  if (currentMenu?.label.includes('수신기 관리')) return 'R형 수신기 현황';
+  if (currentMenu?.label.includes('중계기 관리')) return '중계기 현황';
+  if (currentMenu?.label.includes('감지기 관리')) return '화재감지기 현황';
+  
   return currentMenu ? currentMenu.label : defaultTitle;
 };
 
@@ -36,6 +40,14 @@ const SidebarItem: React.FC<{ item: MenuItemDB; level?: number }> = ({ item, lev
   // 폰트 크기: text-[14px]
   const baseClasses = "w-full flex items-center gap-3 px-5 py-2.5 text-[14px] font-medium transition-all duration-200";
 
+  // [UI Fix] 메뉴명 강제 보정 (DB 데이터가 아직 '관리'여도 '현황'으로 표시)
+  let displayLabel = item.label;
+  if (displayLabel === 'R형 수신기 관리') displayLabel = 'R형 수신기 현황';
+  if (displayLabel === '중계기 관리') displayLabel = '중계기 현황';
+  if (displayLabel === '화재감지기 관리') displayLabel = '화재감지기 현황';
+  if (displayLabel === '발신기 관리') displayLabel = '발신기 현황';
+  if (displayLabel === '경종 관리') displayLabel = '경종 현황';
+
   if (hasChildren) {
     return (
       <div className="mb-1">
@@ -45,7 +57,7 @@ const SidebarItem: React.FC<{ item: MenuItemDB; level?: number }> = ({ item, lev
         >
           <div className="flex items-center gap-3">
             {getIcon(item.icon)}
-            <span>{item.label}</span>
+            <span>{displayLabel}</span>
           </div>
           {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
@@ -72,7 +84,7 @@ const SidebarItem: React.FC<{ item: MenuItemDB; level?: number }> = ({ item, lev
       `}
     >
       {!level && getIcon(item.icon)}
-      <span>{item.label}</span>
+      <span>{displayLabel}</span>
     </NavLink>
   );
 };
@@ -247,9 +259,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 ))}
               </nav>
             </div>
-            {/* Version Indicator */}
-            <div className="p-3 text-center text-[10px] text-slate-500 border-t border-slate-700 bg-[#263245]">
-               v1.1 (Updated)
+            {/* Version Indicator - HIGHLY VISIBLE FOR DEBUGGING */}
+            <div className="p-3 text-center border-t border-slate-700 bg-red-900/50">
+               <span className="text-[11px] font-bold text-white animate-pulse">
+                 v2.0 (ROOT FILE ACTIVE)
+               </span>
             </div>
           </div>
         </aside>

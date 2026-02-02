@@ -3,7 +3,7 @@ import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber } from '../components/CommonUI';
 import { usePageTitle } from '../components/Layout';
-import { Search, Upload, Paperclip, X } from 'lucide-react';
+import { Search, Upload, CheckCircle } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
@@ -11,7 +11,11 @@ const ITEMS_PER_PAGE = 10;
 const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: `${val}시간`, label: `${val}시간` }; });
 
 export const ReceiverManagement: React.FC = () => {
-  const pageTitle = usePageTitle('R형 수신기 현황');
+  // [강제 수정] usePageTitle 훅이 DB에서 '관리'를 가져와도, 여기서 강제로 '현황'을 우선 표시하도록 유도
+  // Layout.tsx에서도 수정했지만, 페이지 레벨에서 한 번 더 확실하게 처리
+  const pageTitleRaw = usePageTitle('R형 수신기 현황');
+  const pageTitle = pageTitleRaw.replace('관리', '현황'); // '관리'라는 단어가 있으면 '현황'으로 치환
+
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [receivers, setReceivers] = useState<Receiver[]>([]);
   const [selectedReceiver, setSelectedReceiver] = useState<Receiver | null>(null);
@@ -35,7 +39,7 @@ export const ReceiverManagement: React.FC = () => {
   const handleEdit = (receiver: Receiver) => { 
       setSelectedReceiver(receiver); 
       setFormData({ ...receiver }); 
-      setSelectedMarketForForm({ id: receiver.marketId, name: receiver.marketName || '' } as Market); // market_id -> marketId
+      setSelectedMarketForForm({ id: receiver.marketId, name: receiver.marketName || '' } as Market); 
       setImageFile(null); 
       setView('form'); 
   };
@@ -43,7 +47,7 @@ export const ReceiverManagement: React.FC = () => {
   const handleMarketSelect = (market: Market) => {
     if (view === 'form') {
       setSelectedMarketForForm(market);
-      setFormData({ ...formData, marketId: market.id }); // market_id -> marketId
+      setFormData({ ...formData, marketId: market.id }); 
     } else if (view === 'excel') {
       setExcelMarket(market);
     }
@@ -52,7 +56,7 @@ export const ReceiverManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId) { alert('설치 시장을 선택해주세요.'); return; } // market_id -> marketId
+    if (!formData.marketId) { alert('설치 시장을 선택해주세요.'); return; } 
     if (!formData.macAddress) { alert('MAC ADDRESS를 입력해주세요.'); return; }
 
     try {
@@ -97,7 +101,7 @@ export const ReceiverManagement: React.FC = () => {
 
         const parsedData: Receiver[] = data.map((row: any) => ({
           id: 0,
-          marketId: excelMarket!.id, // market_id -> marketId
+          marketId: excelMarket!.id, 
           marketName: excelMarket!.name,
           macAddress: row['MAC주소'] ? String(row['MAC주소']) : '',
           ip: row['IP주소'] || '',
@@ -116,6 +120,12 @@ export const ReceiverManagement: React.FC = () => {
   return (
     <>
       <PageHeader title={pageTitle} />
+      
+      {/* File Update Check Marker */}
+      <div className="mb-4 bg-blue-900/30 border border-blue-500 text-blue-200 p-2 rounded text-sm font-bold flex items-center gap-2">
+         <CheckCircle size={16} /> [ROOT FILE ACTIVE] 이 문구가 보이면 루트 파일이 정상적으로 로드된 것입니다.
+      </div>
+
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedReceiver ? "수신기 수정" : "수신기 등록"}>
@@ -171,45 +181,4 @@ export const ReceiverManagement: React.FC = () => {
                    </div>
                 </FormRow>
                 <FormRow label="엑셀 파일" required>
-                   <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
-                </FormRow>
-             </FormSection>
-             {excelData.length > 0 && <DataTable columns={[{header:'MAC', accessor:'macAddress'}, {header:'IP', accessor:'ip'}]} data={excelData.slice(0, 10)} />}
-             <div className="flex justify-center gap-3 mt-8">
-                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
-             </div>
-          </div>
-      ) : (
-          <>
-             <SearchFilterBar onSearch={() => {setIsFiltered(true); fetchReceivers();}} onReset={() => {setSearchMarket(''); setSearchMac(''); setIsFiltered(false); fetchReceivers({});}} isFiltered={isFiltered}>
-                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-                <InputGroup label="MAC주소" value={searchMac} onChange={(e) => setSearchMac(e.target.value)} />
-             </SearchFilterBar>
-             
-             <div className="flex justify-between items-center mb-2">
-               <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{receivers.length}</span> 건 (페이지 {currentPage})</span>
-               <div className="flex gap-2">
-                  <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
-                  <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
-               </div>
-             </div>
-
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
-                    { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: 'IP주소', accessor: 'ip', width: '200px' },
-                    { header: '전화번호', accessor: (r) => formatPhoneNumber(r.emergencyPhone) || '-', width: '200px' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '120px' },
-                ]}
-                data={receivers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
-                onRowClick={handleEdit}
-             />
-             <Pagination totalItems={receivers.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
-          </>
-      )}
-      <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
-    </>
-  );
-};
+                   <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="
