@@ -24,8 +24,8 @@ export interface User {
   phone: string;
   email?: string;
   department?: string;
-  distributor_id?: number;
-  market_id?: number;      
+  distributorId?: number; // distributor_id -> distributorId
+  marketId?: number;      // market_id -> marketId
   status: '사용' | '미사용';
   smsReceive?: '수신' | '미수신';
 }
@@ -33,7 +33,6 @@ export interface User {
 export interface Market {
   id: number;
   distributorId?: number; 
-  // [FIXED] Added distributorName to fix type errors in MarketManagement
   distributorName?: string;
   name: string;
   address: string;
@@ -60,7 +59,7 @@ export interface Market {
 
 export interface Store {
   id: number;
-  market_id: number;       // [CRITICAL] DB: market_id
+  marketId: number;       // market_id -> marketId
   marketName?: string;     
   name: string;
   managerName?: string;
@@ -81,7 +80,7 @@ export interface Store {
 
 export interface Receiver {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   macAddress: string;
   ip?: string;
@@ -96,7 +95,7 @@ export interface Receiver {
 
 export interface Repeater {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -110,7 +109,7 @@ export interface Repeater {
 
 export interface Detector {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   stores?: { id: number; name: string }[]; 
   receiverMac: string;
@@ -127,7 +126,7 @@ export interface Detector {
 
 export interface Transmitter {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -140,7 +139,7 @@ export interface Transmitter {
 
 export interface Alarm {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -168,7 +167,7 @@ export interface Distributor {
 
 export interface WorkLog {
   id: number;
-  market_id: number;
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   workDate: string;
   content: string;
@@ -178,7 +177,7 @@ export interface WorkLog {
 
 export interface FireHistoryItem {
   id: number;
-  market_id?: number;
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   receiverStatus: string; 
@@ -194,7 +193,7 @@ export interface FireHistoryItem {
 
 export interface DeviceStatusItem {
   id: number;
-  market_id?: number;
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -209,7 +208,7 @@ export interface DeviceStatusItem {
 
 export interface DataReceptionItem {
   id: number;
-  market_id?: number;
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   logType: string; 
   receiverId: string; 
@@ -236,7 +235,6 @@ export interface MenuItemDB {
   children?: MenuItemDB[]; 
 }
 
-// [FIXED] Defined MenuItem interface to resolve import error in Layout.tsx
 export interface MenuItem {
   label: string;
   path?: string;

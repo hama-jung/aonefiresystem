@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TransmitterAPI } from '../services/api';
 import { Transmitter, Receiver } from '../types';
@@ -26,7 +25,7 @@ export const TransmitterManagement: React.FC = () => {
   const handleReceiverSelect = (r: Receiver) => {
     setFormData({ 
         ...formData, 
-        market_id: r.market_id, 
+        marketId: r.marketId, // market_id -> marketId
         marketName: r.marketName,
         receiverMac: r.macAddress 
     });
@@ -35,7 +34,7 @@ export const TransmitterManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
+    if (!formData.marketId || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } // market_id -> marketId
     
     try {
       const newTransmitter: Transmitter = { ...formData as Transmitter, id: selectedTransmitter?.id || 0 };

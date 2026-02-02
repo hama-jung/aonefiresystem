@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';
@@ -34,7 +33,7 @@ export const DetectorManagement: React.FC = () => {
   const handleReceiverSelect = (r: Receiver) => {
     setFormData({ 
       ...formData, 
-      market_id: r.market_id, 
+      marketId: r.marketId, // market_id -> marketId
       marketName: r.marketName,
       receiverMac: r.macAddress,
     });
@@ -49,13 +48,13 @@ export const DetectorManagement: React.FC = () => {
   };
 
   const fetchStores = async () => {
-    if (!formData.market_id) { setStoreList([]); return; }
-    const data = await StoreAPI.getList({ market_id: formData.market_id });
+    if (!formData.marketId) { setStoreList([]); return; } // market_id -> marketId
+    const data = await StoreAPI.getList({ marketId: formData.marketId }); // market_id -> marketId
     setStoreList(data);
   };
 
   const openStoreModal = () => {
-    if (!formData.market_id) { alert('먼저 R형 수신기를 선택해주세요.'); return; }
+    if (!formData.marketId) { alert('먼저 R형 수신기를 선택해주세요.'); return; } // market_id -> marketId
     fetchStores();
     setIsStoreModalOpen(true);
   };
@@ -67,7 +66,7 @@ export const DetectorManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
+    if (!formData.marketId || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } // market_id -> marketId
     
     try {
       const newDetector: Detector = {
@@ -108,7 +107,7 @@ export const DetectorManagement: React.FC = () => {
 
         const parsedData: Detector[] = data.map((row: any) => ({
           id: 0,
-          market_id: excelMarket!.id,
+          marketId: excelMarket!.id, // market_id -> marketId
           marketName: excelMarket!.name,
           receiverMac: row['수신기MAC'] ? String(row['수신기MAC']) : '',
           repeaterId: row['중계기ID'] ? String(row['중계기ID']) : '',

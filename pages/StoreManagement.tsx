@@ -42,7 +42,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleRegister = () => {
     setSelectedStore(null);
-    setFormData({ status: '사용', mode: '복합', market_id: 0 });
+    setFormData({ status: '사용', mode: '복합', marketId: 0 }); // market_id -> marketId
     setSelectedMarketName('');
     setStoreImageFile(null);
     setView('form');
@@ -51,17 +51,16 @@ export const StoreManagement: React.FC = () => {
   const handleEdit = (store: Store) => {
     setSelectedStore(store);
     
-    // [FIX] marketId 필드가 남아있지 않도록 필요한 데이터만 골라서 상태에 담음
     const { 
       id, name, managerName, managerPhone, status, storeImage, memo, 
       receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, market_id 
+      latitude, longitude, handlingItems, marketId // market_id -> marketId
     } = store;
 
     setFormData({ 
       id, name, managerName, managerPhone, status, storeImage, memo, 
       receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, market_id 
+      latitude, longitude, handlingItems, marketId 
     });
     
     setSelectedMarketName(store.marketName || '-');
@@ -75,14 +74,14 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleMarketSelect = (market: Market) => {
-    setFormData(prev => ({ ...prev, market_id: market.id }));
+    setFormData(prev => ({ ...prev, marketId: market.id })); // market_id -> marketId
     setSelectedMarketName(market.name);
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; }
+    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; } // market_id -> marketId
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
 
     try {

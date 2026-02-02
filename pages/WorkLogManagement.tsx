@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { WorkLogAPI, MarketAPI } from '../services/api';
 import { WorkLog, Market } from '../types';
@@ -30,20 +29,20 @@ export const WorkLogManagement: React.FC = () => {
   const handleEdit = (log: WorkLog) => { 
       setSelectedLog(log); 
       setFormData({ ...log }); 
-      setSelectedMarketForForm({ id: log.market_id, name: log.marketName || '' } as Market); 
+      setSelectedMarketForForm({ id: log.marketId, name: log.marketName || '' } as Market); // market_id -> marketId
       setAttachmentFile(null); 
       setView('form'); 
   };
 
   const handleMarketSelect = (market: Market) => {
     setSelectedMarketForForm(market);
-    setFormData({ ...formData, market_id: market.id }); 
+    setFormData({ ...formData, marketId: market.id }); // market_id -> marketId
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; } 
+    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; } // market_id -> marketId
     
     try {
       let uploadedUrl = formData.attachment;

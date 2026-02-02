@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { RepeaterAPI } from '../services/api';
 import { Repeater, Market, Receiver } from '../types';
@@ -34,7 +33,7 @@ export const RepeaterManagement: React.FC = () => {
   const handleReceiverSelect = (receiver: Receiver) => {
     setFormData({ 
         ...formData, 
-        market_id: receiver.market_id, 
+        marketId: receiver.marketId, // market_id -> marketId
         marketName: receiver.marketName,
         receiverMac: receiver.macAddress 
     });
@@ -48,7 +47,7 @@ export const RepeaterManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
+    if (!formData.marketId || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } // market_id -> marketId
     
     try {
       let uploadedUrl = formData.image;
@@ -87,7 +86,7 @@ export const RepeaterManagement: React.FC = () => {
 
         const parsedData: Repeater[] = data.map((row: any) => ({
           id: 0,
-          market_id: excelMarket!.id,
+          marketId: excelMarket!.id, // market_id -> marketId
           marketName: excelMarket!.name,
           receiverMac: row['수신기MAC'] ? String(row['수신기MAC']) : '',
           repeaterId: row['중계기ID'] ? String(row['중계기ID']) : '',

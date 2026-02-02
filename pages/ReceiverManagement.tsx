@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
@@ -34,7 +33,7 @@ export const ReceiverManagement: React.FC = () => {
   const handleEdit = (receiver: Receiver) => { 
       setSelectedReceiver(receiver); 
       setFormData({ ...receiver }); 
-      setSelectedMarketForForm({ id: receiver.market_id, name: receiver.marketName || '' } as Market); 
+      setSelectedMarketForForm({ id: receiver.marketId, name: receiver.marketName || '' } as Market); // market_id -> marketId
       setImageFile(null); 
       setView('form'); 
   };
@@ -42,7 +41,7 @@ export const ReceiverManagement: React.FC = () => {
   const handleMarketSelect = (market: Market) => {
     if (view === 'form') {
       setSelectedMarketForForm(market);
-      setFormData({ ...formData, market_id: market.id });
+      setFormData({ ...formData, marketId: market.id }); // market_id -> marketId
     } else if (view === 'excel') {
       setExcelMarket(market);
     }
@@ -51,7 +50,7 @@ export const ReceiverManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.market_id) { alert('설치 시장을 선택해주세요.'); return; } 
+    if (!formData.marketId) { alert('설치 시장을 선택해주세요.'); return; } // market_id -> marketId
     if (!formData.macAddress) { alert('MAC ADDRESS를 입력해주세요.'); return; }
 
     try {
@@ -96,7 +95,7 @@ export const ReceiverManagement: React.FC = () => {
 
         const parsedData: Receiver[] = data.map((row: any) => ({
           id: 0,
-          market_id: excelMarket!.id,
+          marketId: excelMarket!.id, // market_id -> marketId
           marketName: excelMarket!.name,
           macAddress: row['MAC주소'] ? String(row['MAC주소']) : '',
           ip: row['IP주소'] || '',

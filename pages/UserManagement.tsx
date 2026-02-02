@@ -52,6 +52,9 @@ export const UserManagement: React.FC = () => {
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
   
+  // ID 저장 변수 (시장/총판 ID 연결용)
+  const [linkedId, setLinkedId] = useState<{distributorId?: number, marketId?: number}>({});
+
   // --- ID Creation Modal States ---
   const [isIdModalOpen, setIsIdModalOpen] = useState(false);
   const [modalIdInput, setModalIdInput] = useState('');
@@ -117,6 +120,7 @@ export const UserManagement: React.FC = () => {
     setPasswordConfirm('');
     setPasswordError('');
     setIsIdChecked(false);
+    setLinkedId({});
     setView('form'); 
   };
   
@@ -127,13 +131,13 @@ export const UserManagement: React.FC = () => {
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
-    setIsIdChecked(true); // 수정 모드는 이미 존재하는 아이디이므로 체크된 것으로 간주
+    setIsIdChecked(true);
+    setLinkedId({ distributorId: user.distributorId, marketId: user.marketId });
     setView('form'); 
   };
 
   // --- ID Modal Handlers ---
   const handleOpenIdModal = () => {
-    // 신규 등록일 때만 모달 오픈
     if (!selectedUser) {
       setModalIdInput('');
       setIdCheckResult(null);
@@ -143,7 +147,7 @@ export const UserManagement: React.FC = () => {
 
   const handleModalIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setModalIdInput(e.target.value);
-    setIdCheckResult(null); // 입력 변경 시 결과 초기화 (사용 버튼 비활성화)
+    setIdCheckResult(null);
   };
 
   const handleIdModalCheck = async () => {
@@ -152,7 +156,6 @@ export const UserManagement: React.FC = () => {
       return;
     }
 
-    // 1. 정규식 검사
     if (!ID_REGEX.test(modalIdInput)) {
       setIdCheckResult({ message: '아이디는 영문, 숫자 포함 6자 ~ 12자로 생성해주세요.', available: false });
       return;
@@ -163,7 +166,7 @@ export const UserManagement: React.FC = () => {
       
       if (exists) {
         setIdCheckResult({ message: `${modalIdInput}는 사용불가능합니다.`, available: false });
-        setModalIdInput(''); // 사용 불가능하면 입력창 초기화
+        setModalIdInput('');
       } else {
         setIdCheckResult({ message: `${modalIdInput}는 사용가능합니다.`, available: true });
       }
@@ -208,8 +211,17 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleSelectCompany = (company: CompanyItem) => {
-    // 확인 절차 없이 즉시 반영
     setDepartmentName(company.name);
+    // ID 파싱 (D_123, M_456 형식)
+    const [type, idStr] = company.id.split('_');
+    const id = parseInt(idStr, 10);
+    
+    if (type === 'D') {
+        setLinkedId({ distributorId: id });
+    } else if (type === 'M') {
+        setLinkedId({ marketId: id });
+    }
+    
     setIsCompanyModalOpen(false);
   };
 
@@ -230,13 +242,11 @@ export const UserManagement: React.FC = () => {
     e.preventDefault();
     const form = e.target as HTMLFormElement;
 
-    // 아이디 중복체크 확인 (신규 등록일 경우)
     if (!selectedUser && !isIdChecked) {
       alert('아이디 만들기를 진행해주세요.');
       return;
     }
 
-    // 비밀번호 검사 (신규 or 변경 시)
     if (!selectedUser || password) {
        if (!password) {
          alert('비밀번호를 입력해주세요.');
@@ -261,7 +271,9 @@ export const UserManagement: React.FC = () => {
       department: departmentName,
       status: (form.elements.namedItem('status') as RadioNodeList).value as '사용' | '미사용',
       smsReceive: (form.elements.namedItem('smsReceive') as RadioNodeList).value as '수신' | '미수신',
-      password: password || undefined, // 비밀번호 변경 시 함께 전송
+      password: password || undefined,
+      distributorId: linkedId.distributorId,
+      marketId: linkedId.marketId
     };
 
     try {
@@ -289,19 +301,16 @@ export const UserManagement: React.FC = () => {
   
   const handleCancel = () => { setView('list'); };
 
-  // -- Pagination Logic --
   const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
   const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
   const currentUsers = users.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE);
 
-  // -- Modal Pagination Logic --
   const modalIndexOfLast = modalCurrentPage * MODAL_ITEMS_PER_PAGE;
   const modalIndexOfFirst = modalIndexOfLast - MODAL_ITEMS_PER_PAGE;
   const modalCurrentItems = companyList.slice(modalIndexOfFirst, modalIndexOfLast);
-  const modalTotalPages = Math.ceil(companyList.length / MODAL_ITEMS_PER_PAGE);
+  // const modalTotalPages = Math.ceil(companyList.length / MODAL_ITEMS_PER_PAGE);
 
-  // -- Columns --
   const columns: Column<User>[] = [
     { header: 'No', accessor: 'id', width: '60px' },
     { header: '사용자 ID', accessor: 'userId' },
@@ -331,13 +340,12 @@ export const UserManagement: React.FC = () => {
         <PageHeader title={selectedUser ? "사용자 수정" : "사용자 신규등록"} />
         <form onSubmit={handleSave}>
           <FormSection title="기본 정보">
-            {/* 1행: 사용자 ID (아이디 만들기 모달 트리거) */}
             <FormRow label="사용자 ID" required>
               <div className="flex gap-2 w-full">
                  <InputGroup 
                    className="flex-1"
                    value={inputUserId} 
-                   onChange={(e) => {}} // ReadOnly processed by click handler for new users
+                   onChange={(e) => {}} 
                    onClick={handleOpenIdModal}
                    readOnly
                    disabled={!!selectedUser} 
@@ -356,7 +364,6 @@ export const UserManagement: React.FC = () => {
               <InputGroup name="name" defaultValue={selectedUser?.name} placeholder="사용자 성명" required />
             </FormRow>
 
-            {/* 2행: 비밀번호, 비밀번호 확인 */}
             <FormRow label="비밀번호" required={!selectedUser}>
               <div className="flex flex-col gap-1">
                 <InputGroup 
@@ -378,14 +385,12 @@ export const UserManagement: React.FC = () => {
                   onChange={(e) => setPasswordConfirm(e.target.value)}
                   placeholder="********" 
                 />
-                {/* 비밀번호 불일치 안내문 */}
                 {password && passwordConfirm && password !== passwordConfirm && (
                   <p className="text-xs text-red-400 font-medium">비밀번호가 맞지 않습니다.</p>
                 )}
               </div>
             </FormRow>
 
-            {/* 3행: 업체명, 사용자 역할 */}
             <FormRow label="업체명">
                <div className="flex gap-2 w-full">
                  <InputGroup 
@@ -404,7 +409,6 @@ export const UserManagement: React.FC = () => {
               <SelectGroup name="role" options={roleOptions} defaultValue={selectedUser?.role} />
             </FormRow>
 
-            {/* 4행: 연락처, SMS 수신 여부 */}
             <FormRow label="연락처" required>
               <InputGroup name="phone" defaultValue={selectedUser?.phone} placeholder="010-0000-0000" required />
             </FormRow>
@@ -421,7 +425,6 @@ export const UserManagement: React.FC = () => {
               </div>
             </FormRow>
 
-            {/* 5행: 사용 여부 (Full Width) */}
             <FormRow label="사용 여부" className="col-span-1 md:col-span-2">
               <div className={`${UI_STYLES.input} flex gap-6 items-center`}>
                 <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white">
@@ -447,7 +450,6 @@ export const UserManagement: React.FC = () => {
           </div>
         </form>
 
-        {/* 아이디 만들기 모달 */}
         <Modal 
           isOpen={isIdModalOpen} 
           onClose={() => setIsIdModalOpen(false)} 
@@ -465,7 +467,6 @@ export const UserManagement: React.FC = () => {
                    />
                    <Button onClick={handleIdModalCheck} className="whitespace-nowrap">확인</Button>
                 </div>
-                {/* 결과 메시지 표시 영역 */}
                 <div className="min-h-[20px]">
                    {idCheckResult ? (
                       <p className={`text-sm font-bold ${idCheckResult.available ? 'text-blue-400' : 'text-red-400'}`}>
@@ -499,7 +500,6 @@ export const UserManagement: React.FC = () => {
           </div>
         </Modal>
 
-        {/* 업체 찾기 모달 */}
         <Modal 
           isOpen={isCompanyModalOpen} 
           onClose={() => setIsCompanyModalOpen(false)} 
@@ -527,7 +527,6 @@ export const UserManagement: React.FC = () => {
     );
   }
 
-  // -- List View --
   return (
     <>
       <PageHeader title="사용자 관리" />
