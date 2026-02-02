@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
@@ -14,8 +15,10 @@ export const FireHistoryManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // 공통코드 매핑 상태 (DB에서 가져온 코드 -> 명칭)
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
 
+  // --- Search Filters & State ---
   const today = new Date();
   const oneMonthAgo = new Date();
   oneMonthAgo.setMonth(today.getMonth() - 1);
@@ -27,19 +30,27 @@ export const FireHistoryManagement: React.FC = () => {
   const [searchMarket, setSearchMarket] = useState('');
   const [searchStatus, setSearchStatus] = useState<'all' | 'fire' | 'false'>('all');
   
+  // [공통규칙 적용] 검색 필터 상태 관리
   const [isFiltered, setIsFiltered] = useState(false);
 
+  // Selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
+  // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<FireHistoryItem | null>(null);
   const [modalType, setModalType] = useState<'화재' | '오탐'>('화재');
   const [modalMemo, setModalMemo] = useState('');
 
+  // --- Helpers ---
+  
+  // 공통코드 매핑 함수 (DB 데이터를 사용)
   const getStatusName = (code: string) => {
+    // 코드가 맵에 있으면 명칭 반환, 없으면 코드 그대로 반환
     return codeMap[code] || code;
   };
 
+  // 상태값에 따른 텍스트 색상 결정
   const getStatusColor = (name: string) => {
     if (name.includes('화재')) return 'text-red-400 font-bold';
     if (name.includes('고장') || name.includes('단선') || name.includes('오류')) return 'text-orange-400 font-bold';
@@ -47,17 +58,19 @@ export const FireHistoryManagement: React.FC = () => {
     return 'text-slate-300';
   };
 
+  // 초기 데이터 로드 (이력 + 공통코드 병렬 조회)
   const initData = async () => {
     setLoading(true);
     try {
         const [codes, history] = await Promise.all([
-            CommonCodeAPI.getList(), 
-            FireHistoryAPI.getList({ 
+            CommonCodeAPI.getList(), // 전체 공통코드 조회
+            FireHistoryAPI.getList({ // 초기 로드 시 기본 날짜 범위 적용
                 startDate: formatDate(oneMonthAgo),
                 endDate: formatDate(today)
             }) 
         ]);
 
+        // 코드 맵 생성 (code -> name)
         const map: Record<string, string> = {};
         codes.forEach((c: CommonCode) => {
             map[c.code] = c.name;
@@ -82,11 +95,14 @@ export const FireHistoryManagement: React.FC = () => {
     initData();
   }, []);
 
+  // --- Handlers ---
   const handleSearch = async () => {
+    // 공통 유효성 검사 (1개월 범위, 미래 날짜 차단 등)
     if (!validateDateRange(startDate, endDate)) {
         return;
     }
     
+    // [공통규칙 적용] 검색 버튼 클릭 시 필터링 상태 활성화
     setIsFiltered(true);
     
     setLoading(true);
@@ -98,7 +114,7 @@ export const FireHistoryManagement: React.FC = () => {
             status: searchStatus
         });
         setHistoryList(data);
-        setCurrentPage(1); 
+        setCurrentPage(1); // 검색 시 1페이지로 리셋
     } catch(e) {
         console.error(e);
         alert('검색 중 오류가 발생했습니다.');
@@ -107,7 +123,9 @@ export const FireHistoryManagement: React.FC = () => {
     }
   };
 
+  // [공통규칙 적용] 초기화(전체보기) 핸들러
   const handleReset = async () => {
+    // 1. 검색 조건 초기화 (날짜는 기본 1개월 전으로 복귀)
     const resetStart = formatDate(oneMonthAgo);
     const resetEnd = formatDate(today);
     
@@ -116,8 +134,10 @@ export const FireHistoryManagement: React.FC = () => {
     setSearchMarket('');
     setSearchStatus('all');
     
+    // 2. 필터 상태 해제
     setIsFiltered(false);
 
+    // 3. 데이터 다시 로드
     setLoading(true);
     try {
         const data = await FireHistoryAPI.getList({
@@ -143,6 +163,9 @@ export const FireHistoryManagement: React.FC = () => {
             await Promise.all(Array.from(selectedIds).map((id: number) => FireHistoryAPI.delete(id)));
             alert("삭제되었습니다.");
             setSelectedIds(new Set());
+            // 새로고침 (현재 검색 조건 유지)
+            // 현재 상태가 filtered라면 검색 조건으로, 아니면 초기 조건으로 리로드
+            // 여기서는 간단히 현재 state 값을 사용하여 다시 검색 호출
             const data = await FireHistoryAPI.getList({
                 startDate,
                 endDate,
@@ -157,6 +180,7 @@ export const FireHistoryManagement: React.FC = () => {
   };
 
   const handleExcel = () => {
+    // 엑셀 다운로드 시 코드가 아닌 명칭으로 변환하여 내보내기
     const excelData = historyList.map(item => ({
         ...item,
         receiverStatusName: getStatusName(item.receiverStatus),
@@ -165,6 +189,7 @@ export const FireHistoryManagement: React.FC = () => {
     exportToExcel(excelData, '화재이력관리_목록');
   };
 
+  // Checkbox logic
   const toggleCheck = (id: number) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) newSet.delete(id);
@@ -180,8 +205,10 @@ export const FireHistoryManagement: React.FC = () => {
     }
   };
 
+  // Modal Logic
   const openModal = (item: FireHistoryItem) => {
     setSelectedItem(item);
+    // Set initial values from existing item if available
     setModalType((item.falseAlarmStatus === '오탐' ? '오탐' : '화재'));
     setModalMemo(item.note || '');
     setIsModalOpen(true);
@@ -194,6 +221,7 @@ export const FireHistoryManagement: React.FC = () => {
             alert("저장되었습니다.");
             setIsModalOpen(false);
             
+            // 목록 갱신
             const data = await FireHistoryAPI.getList({
                 startDate,
                 endDate,
@@ -207,6 +235,7 @@ export const FireHistoryManagement: React.FC = () => {
     }
   };
 
+  // --- Columns ---
   const columns: Column<FireHistoryItem>[] = [
     { 
         header: '선택', 
@@ -276,7 +305,14 @@ export const FireHistoryManagement: React.FC = () => {
     <>
       <PageHeader title="화재 이력 관리" />
       
+      {/* Disclaimer */}
+      <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">
+        ⚠️ 공통코드 관리 메뉴에 등록된 코드명(예: 화재알람, 화재해소)과 연동되어 표시됩니다.
+      </div>
+
+      {/* [공통규칙 적용] SearchFilterBar에 onReset과 isFiltered 전달 */}
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
+        {/* 기간 검색 (DateRangePicker 사용) */}
         <DateRangePicker 
             startDate={startDate}
             endDate={endDate}
@@ -284,8 +320,10 @@ export const FireHistoryManagement: React.FC = () => {
             onEndDateChange={setEndDate}
         />
         
+        {/* 설치시장 검색 - 반응형을 위해 wrapper 제거 */}
         <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
 
+        {/* 화재여부 라디오 버튼 - 공통UI 스타일 적용 */}
         <div className="flex flex-col gap-1.5 w-full">
             <label className={UI_STYLES.label}>화재여부</label>
             <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
@@ -305,6 +343,7 @@ export const FireHistoryManagement: React.FC = () => {
         </div>
       </SearchFilterBar>
 
+      {/* List Header Actions */}
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm font-bold text-slate-300">
            전체 {historyList.length} 개 (페이지 {currentPage})
@@ -356,6 +395,7 @@ export const FireHistoryManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Bottom Actions and Pagination */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
           <div>
              <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
@@ -368,9 +408,11 @@ export const FireHistoryManagement: React.FC = () => {
                 onPageChange={setCurrentPage}
              />
           </div>
+          {/* Spacer to balance the layout if needed, or keeping it empty for now */}
           <div className="w-[74px] hidden md:block"></div> 
       </div>
 
+      {/* Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="등록 팝업" width="max-w-md">
          <div className="flex flex-col gap-6 p-2">
             <div className="flex items-center gap-6">

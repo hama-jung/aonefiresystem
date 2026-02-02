@@ -2,14 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { AlarmAPI } from '../services/api';
 import { Alarm, Receiver } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, UI_STYLES } from '../components/CommonUI';
-import { usePageTitle } from '../components/Layout';
 import { Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 const ID_OPTIONS = Array.from({ length: 20 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: val, label: val }; });
 
 export const AlarmManagement: React.FC = () => {
-  const pageTitle = usePageTitle('경종 현황');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [alarms, setAlarms] = useState<Alarm[]>([]);
   const [selectedAlarm, setSelectedAlarm] = useState<Alarm | null>(null);
@@ -49,7 +47,7 @@ export const AlarmManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title={pageTitle} />
+      <PageHeader title="경종 현황" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedAlarm ? "경종 수정" : "경종 등록"}>

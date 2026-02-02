@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { RepeaterAPI } from '../services/api';
 import { Repeater, Market, Receiver } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, UI_STYLES } from '../components/CommonUI';
-import { usePageTitle } from '../components/Layout';
 import { Search, Upload, Paperclip, X } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -11,7 +10,6 @@ const ITEMS_PER_PAGE = 10;
 const REPEATER_ID_OPTIONS = Array.from({ length: 20 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: val, label: val }; });
 
 export const RepeaterManagement: React.FC = () => {
-  const pageTitle = usePageTitle('중계기 현황');
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [repeaters, setRepeaters] = useState<Repeater[]>([]);
   const [selectedRepeater, setSelectedRepeater] = useState<Repeater | null>(null);
@@ -106,7 +104,7 @@ export const RepeaterManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title={pageTitle} />
+      <PageHeader title="중계기 현황" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedRepeater ? "중계기 수정" : "중계기 등록"}>

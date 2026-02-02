@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
@@ -10,7 +11,7 @@ import { DataReceptionAPI } from '../services/api';
 import { Trash2 } from 'lucide-react';
 
 export const DataReceptionManagement: React.FC = () => {
-  const pageTitle = usePageTitle('데이터 수신 관리'); 
+  const pageTitle = usePageTitle('데이터 수신 관리'); // Use Hook
 
   const [dataList, setDataList] = useState<DataReceptionItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,7 +20,7 @@ export const DataReceptionManagement: React.FC = () => {
   // --- Search Filters ---
   const today = new Date();
   const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(today.getDate() - 7); 
+  oneWeekAgo.setDate(today.getDate() - 7); // Default to 7 days
 
   const formatDate = (d: Date) => d.toISOString().split('T')[0];
 
@@ -71,7 +72,7 @@ export const DataReceptionManagement: React.FC = () => {
         });
         setDataList(data);
         setCurrentPage(1);
-        setSelectedIds(new Set()); 
+        setSelectedIds(new Set()); // Reset selection
     } catch(e) {
         console.error(e);
         alert('검색 중 오류가 발생했습니다.');
@@ -115,13 +116,14 @@ export const DataReceptionManagement: React.FC = () => {
             await Promise.all(Array.from(selectedIds).map((id: number) => DataReceptionAPI.delete(id)));
             alert("삭제되었습니다.");
             setSelectedIds(new Set());
-            handleSearch(); 
+            handleSearch(); // Refresh list
         } catch (e: any) {
             alert(`삭제 실패: ${e.message}`);
         }
     }
   };
 
+  // Checkbox logic
   const toggleCheck = (id: number) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) newSet.delete(id);
@@ -137,6 +139,7 @@ export const DataReceptionManagement: React.FC = () => {
     }
   };
 
+  // --- Columns ---
   const columns: Column<DataReceptionItem>[] = [
     { 
         header: '선택', 
@@ -152,7 +155,7 @@ export const DataReceptionManagement: React.FC = () => {
     },
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { header: '설치시장', accessor: 'marketName', width: '120px' },
-    { header: '로그유형', accessor: 'logType', width: '100px' }, 
+    { header: '로그유형', accessor: 'logType', width: '100px' }, // Increased width to prevent wrapping
     { header: '수신기', accessor: 'receiverId', width: '80px' },
     { header: '중계기', accessor: 'repeaterId', width: '80px' },
     { header: '수신데이터', accessor: 'receivedData', width: '300px' },
@@ -172,7 +175,7 @@ export const DataReceptionManagement: React.FC = () => {
                 </div>
             );
         },
-        width: '110px' 
+        width: '110px' // Reduced width for compact view
     },
   ];
 
@@ -182,6 +185,11 @@ export const DataReceptionManagement: React.FC = () => {
     <>
       <PageHeader title={pageTitle} />
       
+      {/* Disclaimer */}
+      <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">
+        가상의 데이터입니다. 실제 데이터를 받은 후 삭제예정입니다.
+      </div>
+
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
         <DateRangePicker 
             startDate={startDate}
@@ -189,6 +197,8 @@ export const DataReceptionManagement: React.FC = () => {
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
         />
+        
+        {/* 설치시장 - 반응형을 위해 wrapper 제거 */}
         <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
       </SearchFilterBar>
 
@@ -196,6 +206,7 @@ export const DataReceptionManagement: React.FC = () => {
          <span className="text-sm font-bold text-slate-300">
            전체 {dataList.length} 개 (페이지 {currentPage})
          </span>
+         {/* 중복 검색 버튼 및 상단 삭제 버튼 제거됨 */}
       </div>
 
       {loading ? (
@@ -242,6 +253,7 @@ export const DataReceptionManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Bottom Actions and Pagination (Layout consistent with DeviceStatusManagement) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
           <div>
              <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
@@ -254,6 +266,7 @@ export const DataReceptionManagement: React.FC = () => {
                 onPageChange={setCurrentPage}
              />
           </div>
+          {/* Spacer to balance the layout if needed */}
           <div className="w-[74px] hidden md:block"></div> 
       </div>
     </>

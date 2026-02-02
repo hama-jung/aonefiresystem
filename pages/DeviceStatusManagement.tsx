@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, Button, DataTable, 
@@ -11,7 +12,7 @@ import { FileSpreadsheet, Trash2 } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 
 export const DeviceStatusManagement: React.FC = () => {
-  const pageTitle = usePageTitle('기기 상태 관리'); 
+  const pageTitle = usePageTitle('기기 상태 관리'); // Use Hook
   
   const [statusList, setStatusList] = useState<DeviceStatusItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,6 +51,7 @@ export const DeviceStatusManagement: React.FC = () => {
   const initData = async () => {
     setLoading(true);
     try {
+      // Fetch common codes and initial list in parallel
       const [codes, list] = await Promise.all([
         CommonCodeAPI.getList(),
         DeviceStatusAPI.getList({
@@ -58,6 +60,7 @@ export const DeviceStatusManagement: React.FC = () => {
         })
       ]);
 
+      // Map codes
       const map: Record<string, string> = {};
       codes.forEach((c: CommonCode) => {
         map[c.code] = c.name;
@@ -140,7 +143,7 @@ export const DeviceStatusManagement: React.FC = () => {
             await Promise.all(Array.from(selectedIds).map((id: number) => DeviceStatusAPI.delete(id)));
             alert("삭제되었습니다.");
             setSelectedIds(new Set());
-            handleSearch(); 
+            handleSearch(); // Refresh list
         } catch (e: any) {
             alert(`삭제 실패: ${e.message}`);
         }
@@ -155,6 +158,7 @@ export const DeviceStatusManagement: React.FC = () => {
     exportToExcel(excelData, '기기상태관리_목록');
   };
 
+  // Checkbox logic
   const toggleCheck = (id: number) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) newSet.delete(id);
@@ -170,6 +174,7 @@ export const DeviceStatusManagement: React.FC = () => {
     }
   };
 
+  // Modal Logic
   const openModal = (item: DeviceStatusItem) => {
     setSelectedItem(item);
     setModalStatus(item.processStatus);
@@ -183,13 +188,14 @@ export const DeviceStatusManagement: React.FC = () => {
             await DeviceStatusAPI.save(selectedItem.id, modalStatus, modalMemo);
             alert("저장되었습니다.");
             setIsModalOpen(false);
-            handleSearch(); 
+            handleSearch(); // Refresh list
         } catch (e: any) {
             alert(`저장 실패: ${e.message}`);
         }
     }
   };
 
+  // --- Columns ---
   const columns: Column<DeviceStatusItem>[] = [
     { 
         header: '선택', 
@@ -223,6 +229,7 @@ export const DeviceStatusManagement: React.FC = () => {
         accessor: (item) => (
             <button 
                 onClick={(e) => { 
+                    // 상태와 관계없이 항상 모달 오픈 가능
                     e.stopPropagation(); 
                     openModal(item); 
                 }}
@@ -243,6 +250,11 @@ export const DeviceStatusManagement: React.FC = () => {
     <>
       <PageHeader title={pageTitle} />
       
+      {/* Disclaimer */}
+      <div className="bg-orange-900/20 border border-orange-800 text-orange-200 px-4 py-2 rounded mb-6 text-sm flex items-center">
+        가상의 데이터입니다. 실제 데이터를 받은 후 삭제예정입니다.
+      </div>
+
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
         <DateRangePicker 
             startDate={startDate}
@@ -250,7 +262,11 @@ export const DeviceStatusManagement: React.FC = () => {
             onStartDateChange={setStartDate}
             onEndDateChange={setEndDate}
         />
+        
+        {/* 설치시장 - 반응형을 위해 wrapper 제거 */}
         <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+
+        {/* 처리여부 - 공통UI 스타일 적용 */}
         <div className="flex flex-col gap-1.5 w-full">
             <label className={UI_STYLES.label}>처리여부</label>
             <div className={`${UI_STYLES.input} flex gap-4 items-center`}>
@@ -323,6 +339,7 @@ export const DeviceStatusManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Bottom Actions and Pagination (Layout consistent with DeviceStatusManagement) */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mt-4 gap-4">
           <div>
              <Button variant="danger" onClick={handleDelete} icon={<Trash2 size={16} />}>삭제</Button>
@@ -335,9 +352,11 @@ export const DeviceStatusManagement: React.FC = () => {
                 onPageChange={setCurrentPage}
              />
           </div>
+          {/* Spacer to balance the layout if needed */}
           <div className="w-[74px] hidden md:block"></div> 
       </div>
 
+      {/* Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="등록 팝업" width="max-w-md">
          <div className="flex flex-col gap-6 p-2">
             <div className="flex items-center gap-6">

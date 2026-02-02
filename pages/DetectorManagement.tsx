@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, UI_STYLES, Modal } from '../components/CommonUI';
-import { usePageTitle } from '../components/Layout';
 import { Search, X, Upload } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -11,7 +10,6 @@ const ITEMS_PER_PAGE = 10;
 const ID_OPTIONS = Array.from({ length: 20 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: val, label: val }; });
 
 export const DetectorManagement: React.FC = () => {
-  const pageTitle = usePageTitle('화재감지기 현황');
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [detectors, setDetectors] = useState<Detector[]>([]);
   const [selectedDetector, setSelectedDetector] = useState<Detector | null>(null);
@@ -128,7 +126,7 @@ export const DetectorManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title={pageTitle} />
+      <PageHeader title="화재감지기 현황" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedDetector ? "화재감지기 수정" : "화재감지기 등록"}>
