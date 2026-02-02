@@ -7,6 +7,10 @@ import { Search, Upload, CheckCircle } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
+import React, { useState, useEffect, useRef } from 'react';
+// 캐시 파괴용 랜덤 번호: 998234 
+// (이 번호를 넣고 저장 후 다시 Push 하세요)
+
 const ITEMS_PER_PAGE = 10;
 const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: `${val}시간`, label: `${val}시간` }; });
 
