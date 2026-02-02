@@ -2,7 +2,8 @@ import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
 // --- DB Column Whitelists (CamelCase 기준) ---
-const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
+// [MODIFIED] latitude, longitude 추가 (상가 위치 정보 저장용)
+const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems', 'latitude', 'longitude'];
 const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
 const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
 const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
