@@ -5,10 +5,12 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // [CRITICAL] root를 현재 디렉토리('.')로 강제 지정하여 src 폴더 탐색을 방지함
-  root: '.', 
+  // 루트를 현재 디렉토리로 강제 설정
+  root: '.',
+  // 캐시 디렉토리를 변경하여 기존 캐시 무효화 시도
+  cacheDir: './.vite-cache-new',
   publicDir: 'public',
-  base: '/',
+  base: './', // 상대 경로 베이스
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'), 
@@ -20,8 +22,14 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'), // 명시적으로 루트의 index.html을 진입점으로 지정
+        main: path.resolve(__dirname, 'index.html'),
       },
     },
+  },
+  server: {
+    fs: {
+      // src 폴더가 있더라도 접근을 제한적으로 허용하지 않고 루트 기준만 허용
+      allow: ['.'] 
+    }
   }
 });

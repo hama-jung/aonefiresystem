@@ -260,10 +260,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </nav>
             </div>
             {/* Version Indicator - HIGHLY VISIBLE FOR DEBUGGING */}
-            <div className="p-3 text-center border-t border-slate-700 bg-red-900/50">
-               <span className="text-[11px] font-bold text-white animate-pulse">
-                 v2.0 (ROOT FILE ACTIVE)
-               </span>
+            <div className="p-3 text-center border-t border-slate-700 bg-green-800 text-white font-bold animate-pulse">
+               V3 FIX APPLIED (ROOT)
             </div>
           </div>
         </aside>

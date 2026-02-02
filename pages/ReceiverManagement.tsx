@@ -31,7 +31,18 @@ export const ReceiverManagement: React.FC = () => {
   const [excelData, setExcelData] = useState<Receiver[]>([]);
   const [excelMarket, setExcelMarket] = useState<Market | null>(null);
 
-  const fetchReceivers = async (overrides?: any) => { const data = await ReceiverAPI.getList(overrides); setReceivers(data); };
+  const fetchReceivers = async (overrides?: any) => { 
+      setLoading(true);
+      try {
+        const data = await ReceiverAPI.getList(overrides); 
+        setReceivers(data); 
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+  };
+  
   useEffect(() => { fetchReceivers(); }, []);
 
   const handleRegister = () => { setSelectedReceiver(null); setFormData({ transmissionInterval: '01시간', status: '사용' }); setSelectedMarketForForm(null); setImageFile(null); setView('form'); };
@@ -121,8 +132,8 @@ export const ReceiverManagement: React.FC = () => {
       <PageHeader title={pageTitle} />
       
       {/* File Update Check Marker */}
-      <div className="mb-4 bg-blue-900/30 border border-blue-500 text-blue-200 p-2 rounded text-sm font-bold flex items-center gap-2">
-         <CheckCircle size={16} /> [ROOT FILE ACTIVE] 이 문구가 보이면 루트 파일이 정상적으로 로드된 것입니다.
+      <div className="mb-4 bg-green-900/30 border border-green-600 text-green-200 p-2 rounded text-sm font-bold flex items-center gap-2 animate-pulse">
+         <CheckCircle size={16} /> [V3 FIX APPLIED] 이 배지가 보이면 빌드가 성공한 것입니다.
       </div>
 
       {view === 'form' ? (
