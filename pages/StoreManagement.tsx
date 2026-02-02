@@ -50,10 +50,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleEdit = (store: Store) => {
     setSelectedStore(store);
-    
-    // Spread all properties to ensure we catch everything
     setFormData({ ...store });
-    
     setSelectedMarketName(store.marketName || '-');
     setView('form');
   };

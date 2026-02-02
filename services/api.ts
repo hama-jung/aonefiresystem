@@ -2,12 +2,13 @@ import { supabase } from '../lib/supabaseClient';
 import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater, Detector, Transmitter, Alarm, MenuItemDB, CommonCode, FireHistoryItem, DeviceStatusItem, DataReceptionItem } from '../types';
 
 // --- DB Column Whitelists ---
-// DB 컬럼명이 snake_case로 변경됨에 따라 화이트리스트 업데이트
+// [CRITICAL FIX] 기획자 피드백 반영: DB 컬럼이 marketId, distributorId (CamelCase)로 되어 있음.
+// 따라서 snake_case 변환 없이 그대로 사용.
 
-const STORE_COLS = ['market_id', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
-const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributor_id', 'market_id', 'status', 'smsReceive'];
-const MARKET_COLS = ['distributor_id', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
-const DEVICE_BASE_COLS = ['market_id', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
+const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems'];
+const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
+const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
+const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
 
 // --- Helper Utilities ---
 
@@ -35,10 +36,7 @@ const generateSafeFileName = (prefix: string, originalName: string) => {
 async function supabaseSaver<T extends { id: number }>(table: string, item: any, columns: string[]): Promise<T> {
   const { id } = item;
   
-  // [Pre-process] Frontend camelCase -> DB snake_case mapping for common IDs
-  if (item.marketId) item.market_id = item.marketId;
-  if (item.distributorId) item.distributor_id = item.distributorId;
-
+  // [FIX] 강제 변환 로직 삭제. DB 컬럼이 marketId이므로 그대로 저장.
   const dbData = mapToWhitelist(item, columns);
   
   let query;
@@ -75,7 +73,7 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
       let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
       
       if (params) {
-          // [MODIFIED] 날짜 필터 비활성화 상태 유지
+          // [MODIFIED] 날짜 필터 비활성화 상태 유지 (기존 요청 반영)
           /*
           if (params.startDate) {
               query = query.gte('registeredAt', `${params.startDate}T00:00:00`);
@@ -106,9 +104,8 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
                   }
               }
 
-              // [FIX] ID Mapping for Filtering
-              if (key === 'marketId') query = query.eq('market_id', params[key]); // frontend marketId -> DB market_id
-              else if(key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+              // [FIX] marketId 그대로 사용
+              if (key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
               else query = query.eq(key, params[key]);
           });
       }
@@ -117,7 +114,6 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
       
       let result = (data || []).map((item: any) => ({
           ...item,
-          marketId: item.market_id, // [FIX] Map back to camelCase
           marketName: item.markets?.name || '-'
       }));
       
@@ -136,13 +132,7 @@ export const AuthAPI = {
     const { data } = await supabase.from('users').select('*').eq('userId', id).single();
     if (data && data.password === pw && data.status === '사용') {
       const { password, ...userInfo } = data;
-      // Map IDs for session
-      const user = {
-          ...userInfo,
-          marketId: userInfo.market_id,
-          distributorId: userInfo.distributor_id
-      };
-      return { success: true, user };
+      return { success: true, user: userInfo };
     }
     throw new Error('아이디나 비밀번호가 틀립니다.');
   },
@@ -160,8 +150,6 @@ export const UserAPI = {
     const { data } = await supabase.from('users').select('*, distributors(name), markets(name)').order('id', { ascending: false });
     return (data || []).map((u: any) => ({
       ...u,
-      marketId: u.market_id,
-      distributorId: u.distributor_id,
       department: u.distributors?.name || u.markets?.name || u.department
     })) as User[];
   },
@@ -185,7 +173,6 @@ export const MarketAPI = {
     if (error) return [];
     return (data || []).map((m: any) => ({
       ...m,
-      distributorId: m.distributor_id,
       distributorName: m.distributors?.name || '-'
     })) as Market[];
   },
@@ -203,14 +190,13 @@ export const StoreAPI = {
   getList: async (params?: any) => {
     let query = supabase.from('stores').select('*, markets(name)').order('id', { ascending: false });
     
-    // [FIX] marketId -> market_id for DB query
-    if (params?.marketId) query = query.eq('market_id', params.marketId);
+    // [FIX] DB 컬럼 marketId 사용
+    if (params?.marketId) query = query.eq('marketId', params.marketId);
     if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
     
     const { data } = await query;
     return (data || []).map((s: any) => ({ 
         ...s, 
-        marketId: s.market_id, // Map back for frontend
         marketName: s.markets?.name || '-' 
     })) as Store[];
   },
@@ -223,12 +209,8 @@ export const StoreAPI = {
     return supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl;
   },
   saveBulk: async (stores: Store[]) => {
-    const payloads = stores.map(s => {
-        const payload: any = mapToWhitelist(s, STORE_COLS);
-        // Map ID for bulk insert
-        if (s.marketId) payload.market_id = s.marketId; 
-        return payload;
-    });
+    // [FIX] Bulk insert도 그대로
+    const payloads = stores.map(s => mapToWhitelist(s, STORE_COLS));
     const { error } = await supabase.from('stores').insert(payloads);
     if (error) throw error;
     return true;
@@ -263,9 +245,8 @@ export const DetectorAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Detector>('detectors', params),
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
-    // Map marketId before generic saver
-    const payload = { ...rest, market_id: rest.marketId }; 
-    const saved = await supabaseSaver('detectors', payload as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);
+    // [FIX] marketId 그대로 저장
+    const saved = await supabaseSaver('detectors', rest as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);
     
     if (saved.id && stores) {
         await supabase.from('detector_stores').delete().eq('detectorId', saved.id);
@@ -389,8 +370,9 @@ export const DashboardAPI = {
           { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
           { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
         ],
-        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.market_id })),
-        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.market_id })),
+        // [FIX] marketId 사용
+        fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
+        faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
         commEvents: [],
         mapData: (mkts || []).map((m: any) => ({ 
             id: m.id, 
@@ -409,7 +391,7 @@ export const DashboardAPI = {
 
 export const WorkLogAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<WorkLog>('work_logs', params),
-  save: async (log: WorkLog) => supabaseSaver('work_logs', log, ['market_id', 'workDate', 'content', 'attachment']),
+  save: async (log: WorkLog) => supabaseSaver('work_logs', log, ['marketId', 'workDate', 'content', 'attachment']),
   delete: async (id: number) => { await supabase.from('work_logs').delete().eq('id', id); return true; },
   uploadAttachment: async (file: File) => {
     const fileName = generateSafeFileName('log', file.name);
