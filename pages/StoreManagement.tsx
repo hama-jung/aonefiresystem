@@ -198,6 +198,10 @@ export const StoreManagement: React.FC = () => {
       <SearchFilterBar onSearch={() => { setIsFiltered(true); fetchStores(); }} onReset={() => { setSearchStore(''); setIsFiltered(false); fetchStores(); }}>
         <InputGroup label="상가명" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
       </SearchFilterBar>
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{stores.length}</span> 건</span>
+        <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+      </div>
       <DataTable<Store> 
         columns={storeColumns}
         data={stores.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)} 
