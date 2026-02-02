@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   PageHeader, SearchFilterBar, InputGroup, 
@@ -42,7 +43,7 @@ export const StoreManagement: React.FC = () => {
 
   const handleRegister = () => {
     setSelectedStore(null);
-    setFormData({ status: '사용', mode: '복합', marketId: 0 });
+    setFormData({ status: '사용', mode: '복합', market_id: 0 });
     setSelectedMarketName('');
     setStoreImageFile(null);
     setView('form');
@@ -55,13 +56,13 @@ export const StoreManagement: React.FC = () => {
     const { 
       id, name, managerName, managerPhone, status, storeImage, memo, 
       receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, marketId 
+      latitude, longitude, handlingItems, market_id 
     } = store;
 
     setFormData({ 
       id, name, managerName, managerPhone, status, storeImage, memo, 
       receiverMac, repeaterId, detectorId, mode, address, addressDetail, 
-      latitude, longitude, handlingItems, marketId 
+      latitude, longitude, handlingItems, market_id 
     });
     
     setSelectedMarketName(store.marketName || '-');
@@ -75,14 +76,14 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleMarketSelect = (market: Market) => {
-    setFormData(prev => ({ ...prev, marketId: market.id }));
+    setFormData(prev => ({ ...prev, market_id: market.id }));
     setSelectedMarketName(market.name);
     setIsMarketModalOpen(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; }
+    if (!formData.market_id) { alert('소속 시장을 선택해주세요.'); return; }
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
 
     try {
