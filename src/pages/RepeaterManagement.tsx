@@ -2,7 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RepeaterAPI } from '../services/api';
 import { Repeater, Market, Receiver } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, UI_STYLES } from '../components/CommonUI';
+import { 
+  PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, 
+  FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, 
+  UI_STYLES, Column 
+} from '../components/CommonUI';
 import { Search, Upload, Paperclip, X } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -103,6 +107,19 @@ export const RepeaterManagement: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const excelColumns: Column<Repeater>[] = [
+    { header: '수신기MAC', accessor: 'receiverMac' },
+    { header: '중계기ID', accessor: 'repeaterId' }
+  ];
+
+  const repeaterColumns: Column<Repeater>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
+    { header: '수신기MAC', accessor: 'receiverMac', width: '150px' },
+    { header: '중계기ID', accessor: 'repeaterId', width: '100px' },
+    { header: '설치시장', accessor: 'marketName' },
+    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
+  ];
+
   return (
     <>
       <PageHeader title="중계기 관리" />
@@ -170,7 +187,7 @@ export const RepeaterManagement: React.FC = () => {
                    <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
                 </FormRow>
              </FormSection>
-             {excelData.length > 0 && <DataTable columns={[{header:'수신기MAC', accessor:'receiverMac'}, {header:'중계기ID', accessor:'repeaterId'}]} data={excelData.slice(0, 10)} />}
+             {excelData.length > 0 && <DataTable<Repeater> columns={excelColumns} data={excelData.slice(0, 10)} />}
              <div className="flex justify-center gap-3 mt-8">
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
@@ -187,14 +204,8 @@ export const RepeaterManagement: React.FC = () => {
                   <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
                </div>
              </div>
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-                    { header: '수신기MAC', accessor: 'receiverMac', width: '150px' },
-                    { header: '중계기ID', accessor: 'repeaterId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
-                ]}
+             <DataTable<Repeater> 
+                columns={repeaterColumns}
                 data={repeaters.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />

@@ -2,7 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { TransmitterAPI } from '../services/api';
 import { Transmitter, Receiver } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, UI_STYLES, SelectGroup } from '../components/CommonUI';
+import { 
+  PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, 
+  FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, 
+  UI_STYLES, SelectGroup, Column 
+} from '../components/CommonUI';
 import { Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
@@ -46,6 +50,15 @@ export const TransmitterManagement: React.FC = () => {
     } catch (e: any) { alert(`저장 실패: ${e.message}`); }
   };
 
+  const transmitterColumns: Column<Transmitter>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
+    { header: '수신기 MAC', accessor: 'receiverMac', width: '150px' },
+    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
+    { header: '발신기 ID', accessor: 'transmitterId', width: '100px' },
+    { header: '설치시장', accessor: 'marketName' },
+    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
+  ];
+
   return (
     <>
       <PageHeader title="발신기 관리" />
@@ -88,15 +101,8 @@ export const TransmitterManagement: React.FC = () => {
              <SearchFilterBar onSearch={() => fetchTransmitters({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchTransmitters({});}}>
                 <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
              </SearchFilterBar>
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-                    { header: '수신기 MAC', accessor: 'receiverMac', width: '150px' },
-                    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
-                    { header: '발신기 ID', accessor: 'transmitterId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
-                ]}
+             <DataTable<Transmitter> 
+                columns={transmitterColumns}
                 data={transmitters.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />

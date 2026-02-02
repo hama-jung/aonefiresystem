@@ -1,27 +1,30 @@
 
 import React, { useState, useEffect } from 'react';
-import { TransmitterAPI } from '../services/api';
-import { Transmitter, Receiver } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, UI_STYLES, SelectGroup } from '../components/CommonUI';
+import { AlarmAPI } from '../services/api';
+import { Alarm, Receiver } from '../types';
+import { 
+  PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, 
+  FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, UI_STYLES, Column 
+} from '../components/CommonUI';
 import { Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 const ID_OPTIONS = Array.from({ length: 20 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: val, label: val }; });
 
-export const TransmitterManagement: React.FC = () => {
+export const AlarmManagement: React.FC = () => {
   const [view, setView] = useState<'list' | 'form'>('list');
-  const [transmitters, setTransmitters] = useState<Transmitter[]>([]);
-  const [selectedTransmitter, setSelectedTransmitter] = useState<Transmitter | null>(null);
-  const [formData, setFormData] = useState<Partial<Transmitter>>({});
+  const [alarms, setAlarms] = useState<Alarm[]>([]);
+  const [selectedAlarm, setSelectedAlarm] = useState<Alarm | null>(null);
+  const [formData, setFormData] = useState<Partial<Alarm>>({});
   const [isReceiverModalOpen, setIsReceiverModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchMarket, setSearchMarket] = useState('');
 
-  const fetchTransmitters = async (overrides?: any) => { const data = await TransmitterAPI.getList(overrides); setTransmitters(data); };
-  useEffect(() => { fetchTransmitters(); }, []);
+  const fetchAlarms = async (overrides?: any) => { const data = await AlarmAPI.getList(overrides); setAlarms(data); };
+  useEffect(() => { fetchAlarms(); }, []);
 
-  const handleRegister = () => { setSelectedTransmitter(null); setFormData({ repeaterId: '01', transmitterId: '01', status: '사용' }); setView('form'); };
-  const handleEdit = (t: Transmitter) => { setSelectedTransmitter(t); setFormData({ ...t }); setView('form'); };
+  const handleRegister = () => { setSelectedAlarm(null); setFormData({ repeaterId: '01', alarmId: '01', status: '사용' }); setView('form'); };
+  const handleEdit = (a: Alarm) => { setSelectedAlarm(a); setFormData({ ...a }); setView('form'); };
 
   const handleReceiverSelect = (r: Receiver) => {
     setFormData({ 
@@ -38,20 +41,29 @@ export const TransmitterManagement: React.FC = () => {
     if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
     
     try {
-      const newTransmitter: Transmitter = { ...formData as Transmitter, id: selectedTransmitter?.id || 0 };
-      await TransmitterAPI.save(newTransmitter);
+      const newAlarm: Alarm = { ...formData as Alarm, id: selectedAlarm?.id || 0 };
+      await AlarmAPI.save(newAlarm);
       alert('저장되었습니다.');
       setView('list');
-      fetchTransmitters();
+      fetchAlarms();
     } catch (e: any) { alert(`저장 실패: ${e.message}`); }
   };
 
+  const alarmColumns: Column<Alarm>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
+    { header: '수신기 MAC', accessor: 'receiverMac', width: '150px' },
+    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
+    { header: '경종 ID', accessor: 'alarmId', width: '100px' },
+    { header: '설치시장', accessor: 'marketName' },
+    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
+  ];
+
   return (
     <>
-      <PageHeader title="발신기 관리" />
+      <PageHeader title="경종 관리" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
-             <FormSection title={selectedTransmitter ? "발신기 수정" : "발신기 등록"}>
+             <FormSection title={selectedAlarm ? "경종 수정" : "경종 등록"}>
                 <FormRow label="R형 수신기 MAC" required className="col-span-1 md:col-span-2">
                   <div className="flex gap-2 w-full max-w-md">
                     <div onClick={() => setIsReceiverModalOpen(true)} className="flex-1 relative cursor-pointer">
@@ -71,36 +83,29 @@ export const TransmitterManagement: React.FC = () => {
                 <FormRow label="중계기 ID">
                   <SelectGroup options={ID_OPTIONS} value={formData.repeaterId || '01'} onChange={(e) => setFormData({...formData, repeaterId: e.target.value})} />
                 </FormRow>
-                <FormRow label="발신기 ID">
-                  <SelectGroup options={ID_OPTIONS} value={formData.transmitterId || '01'} onChange={(e) => setFormData({...formData, transmitterId: e.target.value})} />
+                <FormRow label="경종 ID">
+                  <SelectGroup options={ID_OPTIONS} value={formData.alarmId || '01'} onChange={(e) => setFormData({...formData, alarmId: e.target.value})} />
                 </FormRow>
                 <FormRow label="사용여부">
                   <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
                 </FormRow>
              </FormSection>
              <div className="flex justify-center gap-3 mt-8">
-                <Button type="submit" variant="primary" className="w-32">{selectedTransmitter ? '수정' : '신규등록'}</Button>
+                <Button type="submit" variant="primary" className="w-32">{selectedAlarm ? '수정' : '신규등록'}</Button>
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">목록</Button>
              </div>
           </form>
       ) : (
           <>
-             <SearchFilterBar onSearch={() => fetchTransmitters({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchTransmitters({});}}>
+             <SearchFilterBar onSearch={() => fetchAlarms({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchAlarms({});}}>
                 <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
              </SearchFilterBar>
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-                    { header: '수신기 MAC', accessor: 'receiverMac', width: '150px' },
-                    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
-                    { header: '발신기 ID', accessor: 'transmitterId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
-                ]}
-                data={transmitters.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
+             <DataTable<Alarm> 
+                columns={alarmColumns}
+                data={alarms.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />
-             <Pagination totalItems={transmitters.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
+             <Pagination totalItems={alarms.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
           </>
       )}
       <ReceiverSearchModal isOpen={isReceiverModalOpen} onClose={() => setIsReceiverModalOpen(false)} onSelect={handleReceiverSelect} />

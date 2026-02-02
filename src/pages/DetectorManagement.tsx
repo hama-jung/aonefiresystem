@@ -2,7 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, UI_STYLES, Modal } from '../components/CommonUI';
+import { 
+  PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, 
+  FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, ReceiverSearchModal, 
+  UI_STYLES, Modal, Column 
+} from '../components/CommonUI';
 import { Search, X, Upload } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -125,6 +129,22 @@ export const DetectorManagement: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const excelColumns: Column<Detector>[] = [
+    { header: '수신기MAC', accessor: 'receiverMac' },
+    { header: '중계기ID', accessor: 'repeaterId' },
+    { header: '감지기ID', accessor: 'detectorId' }
+  ];
+
+  const detectorColumns: Column<Detector>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
+    { header: '수신기 MAC', accessor: 'receiverMac', width: '120px' },
+    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
+    { header: '감지기 ID', accessor: 'detectorId', width: '100px' },
+    { header: '설치시장', accessor: 'marketName' },
+    { header: '설치상가', accessor: (item) => item.stores?.[0]?.name || '-' },
+    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
+  ];
+
   return (
     <>
       <PageHeader title="화재감지기 관리" />
@@ -205,7 +225,7 @@ export const DetectorManagement: React.FC = () => {
                    <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
                 </FormRow>
              </FormSection>
-             {excelData.length > 0 && <DataTable columns={[{header:'수신기MAC', accessor:'receiverMac'}, {header:'중계기ID', accessor:'repeaterId'}, {header:'감지기ID', accessor:'detectorId'}]} data={excelData.slice(0, 10)} />}
+             {excelData.length > 0 && <DataTable<Detector> columns={excelColumns} data={excelData.slice(0, 10)} />}
              <div className="flex justify-center gap-3 mt-8">
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
@@ -223,16 +243,8 @@ export const DetectorManagement: React.FC = () => {
                   <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
                </div>
              </div>
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-                    { header: '수신기 MAC', accessor: 'receiverMac', width: '120px' },
-                    { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
-                    { header: '감지기 ID', accessor: 'detectorId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: '설치상가', accessor: (item) => item.stores?.[0]?.name || '-' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
-                ]}
+             <DataTable<Detector> 
+                columns={detectorColumns}
                 data={detectors.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />

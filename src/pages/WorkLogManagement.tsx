@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { WorkLogAPI, MarketAPI } from '../services/api';
 import { WorkLog, Market } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, FormRow, Modal, UI_STYLES } from '../components/CommonUI';
+import { PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, FormRow, Modal, UI_STYLES, Column } from '../components/CommonUI';
 import { Search, Upload, Paperclip, X } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
@@ -60,6 +60,20 @@ export const WorkLogManagement: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files && e.target.files[0]) setAttachmentFile(e.target.files[0]); };
   const handleRemoveFile = () => { if(confirm('삭제하시겠습니까?')) { setFormData({...formData, attachment: undefined}); setAttachmentFile(null); } };
+
+  const marketColumns: Column<Market>[] = [
+    { header: '시장명', accessor: 'name' },
+    { header: '주소', accessor: 'address' },
+    { header: '선택', accessor: (item) => <Button variant="primary" onClick={() => handleMarketSelect(item)} className="px-2 py-1 text-xs">선택</Button>, width: '80px' }
+  ];
+
+  const logColumns: Column<WorkLog>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
+    { header: '작업일시', accessor: 'workDate', width: '150px' },
+    { header: '시장정보', accessor: 'marketName' },
+    { header: '작업내용', accessor: (item) => <div className="truncate max-w-[300px]" title={item.content}>{item.content}</div> },
+    { header: '등록일', accessor: (item) => item.created_at ? new Date(item.created_at).toLocaleDateString() : '-', width: '150px' },
+  ];
 
   return (
     <>
@@ -126,14 +140,8 @@ export const WorkLogManagement: React.FC = () => {
                 <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{logs.length}</span> 건</span>
                 <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
              </div>
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-                    { header: '작업일시', accessor: 'workDate', width: '150px' },
-                    { header: '시장정보', accessor: 'marketName' },
-                    { header: '작업내용', accessor: (item) => <div className="truncate max-w-[300px]" title={item.content}>{item.content}</div> },
-                    { header: '등록일', accessor: (item) => item.created_at ? new Date(item.created_at).toLocaleDateString() : '-', width: '150px' },
-                ]}
+             <DataTable<WorkLog> 
+                columns={logColumns}
                 data={logs.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />
@@ -144,12 +152,8 @@ export const WorkLogManagement: React.FC = () => {
            <SearchFilterBar onSearch={fetchMarkets}>
               <InputGroup label="시장명" value={marketSearchName} onChange={(e) => setMarketSearchName(e.target.value)} placeholder="시장명 검색" />
            </SearchFilterBar>
-           <DataTable 
-             columns={[
-                { header: '시장명', accessor: 'name' },
-                { header: '주소', accessor: 'address' },
-                { header: '선택', accessor: (item) => <Button variant="primary" onClick={() => handleMarketSelect(item)} className="px-2 py-1 text-xs">선택</Button>, width: '80px' }
-             ]} 
+           <DataTable<Market> 
+             columns={marketColumns} 
              data={marketList.slice((marketModalPage - 1) * MODAL_ITEMS_PER_PAGE, marketModalPage * MODAL_ITEMS_PER_PAGE)} 
            />
            <Pagination totalItems={marketList.length} itemsPerPage={MODAL_ITEMS_PER_PAGE} currentPage={marketModalPage} onPageChange={setMarketModalPage} />

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AlarmAPI } from '../services/api';
 import { Alarm, Receiver } from '../types';
@@ -25,7 +26,7 @@ export const AlarmManagement: React.FC = () => {
   const handleReceiverSelect = (r: Receiver) => {
     setFormData({ 
         ...formData, 
-        marketId: r.marketId, // market_id -> marketId
+        market_id: r.market_id, 
         marketName: r.marketName,
         receiverMac: r.macAddress 
     });
@@ -34,7 +35,7 @@ export const AlarmManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } // market_id -> marketId
+    if (!formData.market_id || !formData.receiverMac) { alert('R형 수신기를 선택해주세요.'); return; } 
     
     try {
       const newAlarm: Alarm = { ...formData as Alarm, id: selectedAlarm?.id || 0 };
@@ -47,7 +48,7 @@ export const AlarmManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="경종 현황" />
+      <PageHeader title="경종 관리" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedAlarm ? "경종 수정" : "경종 등록"}>

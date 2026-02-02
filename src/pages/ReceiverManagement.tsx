@@ -2,7 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber } from '../components/CommonUI';
+import { 
+  PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, 
+  FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, 
+  handlePhoneKeyDown, formatPhoneNumber, Column 
+} from '../components/CommonUI';
 import { Search, Upload, Paperclip, X } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -112,6 +116,20 @@ export const ReceiverManagement: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const excelColumns: Column<Receiver>[] = [
+    { header: 'MAC', accessor: 'macAddress' },
+    { header: 'IP', accessor: 'ip' }
+  ];
+
+  const receiverColumns: Column<Receiver>[] = [
+    { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
+    { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
+    { header: '설치시장', accessor: 'marketName' },
+    { header: 'IP주소', accessor: 'ip', width: '200px' },
+    { header: '전화번호', accessor: (r) => formatPhoneNumber(r.emergencyPhone) || '-', width: '200px' },
+    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '120px' },
+  ];
+
   return (
     <>
       <PageHeader title="R형 수신기 관리" />
@@ -173,7 +191,7 @@ export const ReceiverManagement: React.FC = () => {
                    <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
                 </FormRow>
              </FormSection>
-             {excelData.length > 0 && <DataTable columns={[{header:'MAC', accessor:'macAddress'}, {header:'IP', accessor:'ip'}]} data={excelData.slice(0, 10)} />}
+             {excelData.length > 0 && <DataTable<Receiver> columns={excelColumns} data={excelData.slice(0, 10)} />}
              <div className="flex justify-center gap-3 mt-8">
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
@@ -193,15 +211,8 @@ export const ReceiverManagement: React.FC = () => {
                </div>
              </div>
 
-             <DataTable 
-                columns={[
-                    { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
-                    { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
-                    { header: '설치시장', accessor: 'marketName' },
-                    { header: 'IP주소', accessor: 'ip', width: '200px' },
-                    { header: '전화번호', accessor: (r) => formatPhoneNumber(r.emergencyPhone) || '-', width: '200px' },
-                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '120px' },
-                ]}
+             <DataTable<Receiver> 
+                columns={receiverColumns}
                 data={receivers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
                 onRowClick={handleEdit}
              />
