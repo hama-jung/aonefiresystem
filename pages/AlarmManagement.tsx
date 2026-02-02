@@ -47,7 +47,7 @@ export const AlarmManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="경종 현황" />
+      <PageHeader title="경종 관리" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedAlarm ? "경종 수정" : "경종 등록"}>

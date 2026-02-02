@@ -126,7 +126,7 @@ export const DetectorManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="화재감지기 현황" />
+      <PageHeader title="화재감지기 관리" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedDetector ? "화재감지기 수정" : "화재감지기 등록"}>

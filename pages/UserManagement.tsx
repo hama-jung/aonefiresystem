@@ -7,7 +7,6 @@ import {
 import { User, RoleItem } from '../types';
 import { UserAPI, RoleAPI, CommonAPI } from '../services/api';
 import { exportToExcel } from '../utils/excel';
-import { SIDO_LIST, getSigungu } from '../utils/addressData';
 
 const ITEMS_PER_PAGE = 10;
 const MODAL_ITEMS_PER_PAGE = 5;
@@ -49,8 +48,6 @@ export const UserManagement: React.FC = () => {
   
   // Controlled Inputs for Validation
   const [departmentName, setDepartmentName] = useState('');
-  const [administrativeArea, setAdministrativeArea] = useState(''); // 담당 행정 구역
-  const [selectedRoleValue, setSelectedRoleValue] = useState(''); // 역할 선택 값
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [passwordError, setPasswordError] = useState('');
@@ -68,12 +65,6 @@ export const UserManagement: React.FC = () => {
   const [companyList, setCompanyList] = useState<CompanyItem[]>([]);
   const [modalCurrentPage, setModalCurrentPage] = useState(1);
   const [companySearchName, setCompanySearchName] = useState('');
-
-  // --- Admin Area Modal States ---
-  const [isAreaModalOpen, setIsAreaModalOpen] = useState(false);
-  const [selectedSido, setSelectedSido] = useState(SIDO_LIST[0]);
-  const [selectedSigun, setSelectedSigun] = useState('');
-  const [sigunguList, setSigunguList] = useState<string[]>([]);
 
   // -- Data Fetching --
   const fetchData = async (overrides?: { userId?: string, name?: string, role?: string, department?: string }) => {
@@ -106,15 +97,6 @@ export const UserManagement: React.FC = () => {
     fetchData();
   }, []);
 
-  // Update sigungu list when sido changes in modal
-  useEffect(() => {
-    if (selectedSido) {
-      const list = getSigungu(selectedSido);
-      setSigunguList(list);
-      setSelectedSigun(list.length > 0 ? list[0] : '');
-    }
-  }, [selectedSido]);
-
   // -- Handlers --
   const handleSearch = () => { 
     setIsFiltered(true);
@@ -134,8 +116,6 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(null); 
     setInputUserId('');
     setDepartmentName('');
-    setAdministrativeArea('');
-    setSelectedRoleValue('');
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
@@ -148,8 +128,6 @@ export const UserManagement: React.FC = () => {
     setSelectedUser(user); 
     setInputUserId(user.userId);
     setDepartmentName(user.department || '');
-    setAdministrativeArea(user.administrativeArea || '');
-    setSelectedRoleValue(user.role);
     setPassword('');
     setPasswordConfirm('');
     setPasswordError('');
@@ -247,29 +225,12 @@ export const UserManagement: React.FC = () => {
     setIsCompanyModalOpen(false);
   };
 
-  // --- Admin Area Modal Handlers ---
-  const handleOpenAreaModal = () => {
-    // Reset selection to default or keep previous selection logic if needed
-    setSelectedSido(SIDO_LIST[0]); 
-    setIsAreaModalOpen(true);
-  };
-
-  const handleSelectArea = () => {
-    if (selectedSido && selectedSigun) {
-        setAdministrativeArea(`${selectedSido} > ${selectedSigun}`);
-        setIsAreaModalOpen(false);
-    } else {
-        alert('행정구역과 시군구를 모두 선택해주세요.');
-    }
-  };
-
   const handleExcel = () => {
     const excelData = users.map((u, index) => ({
       'No': index + 1,
       '사용자 ID': u.userId,
       '성명': u.name,
       '소속/업체명': u.department,
-      '담당행정구역': u.administrativeArea || '-',
       '연락처': u.phone,
       '역할': u.role,
       '상태': u.status
@@ -301,21 +262,13 @@ export const UserManagement: React.FC = () => {
        }
     }
 
-    // Role Validation for '지자체'
-    const roleValue = (form.elements.namedItem('role') as HTMLSelectElement).value;
-    if (roleValue === '지자체' && !administrativeArea) {
-        alert('지자체 역할은 담당 행정 구역이 필수입니다.');
-        return;
-    }
-
     const newUser: User = {
       id: selectedUser?.id || 0,
       userId: inputUserId,
       name: (form.elements.namedItem('name') as HTMLInputElement).value,
-      role: roleValue,
+      role: (form.elements.namedItem('role') as HTMLSelectElement).value,
       phone: (form.elements.namedItem('phone') as HTMLInputElement).value,
       department: departmentName,
-      administrativeArea: administrativeArea,
       status: (form.elements.namedItem('status') as RadioNodeList).value as '사용' | '미사용',
       smsReceive: (form.elements.namedItem('smsReceive') as RadioNodeList).value as '수신' | '미수신',
       password: password || undefined,
@@ -452,30 +405,8 @@ export const UserManagement: React.FC = () => {
                  <Button type="button" variant="secondary" onClick={handleOpenCompanyModal}>찾기</Button>
                </div>
             </FormRow>
-
-            {/* 담당 행정 구역 추가 */}
-            <FormRow label="담당 행정 구역" required={selectedRoleValue === '지자체'}>
-               <div className="flex gap-2 w-full">
-                 <InputGroup 
-                    className="flex-1" 
-                    name="administrativeArea" 
-                    value={administrativeArea} 
-                    onChange={(e) => setAdministrativeArea(e.target.value)}
-                    placeholder="행정구역 선택" 
-                    readOnly 
-                    onClick={handleOpenAreaModal} 
-                  />
-                 <Button type="button" variant="secondary" onClick={handleOpenAreaModal}>선택</Button>
-               </div>
-            </FormRow>
-
             <FormRow label="사용자 역할" required>
-              <SelectGroup 
-                name="role" 
-                options={roleOptions} 
-                value={selectedRoleValue} 
-                onChange={(e) => setSelectedRoleValue(e.target.value)}
-              />
+              <SelectGroup name="role" options={roleOptions} defaultValue={selectedUser?.role} />
             </FormRow>
 
             <FormRow label="연락처" required>
@@ -569,7 +500,6 @@ export const UserManagement: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Company Modal */}
         <Modal 
           isOpen={isCompanyModalOpen} 
           onClose={() => setIsCompanyModalOpen(false)} 
@@ -592,35 +522,6 @@ export const UserManagement: React.FC = () => {
             currentPage={modalCurrentPage} 
             onPageChange={setModalCurrentPage} 
           />
-        </Modal>
-
-        {/* Admin Area Modal */}
-        <Modal 
-          isOpen={isAreaModalOpen} 
-          onClose={() => setIsAreaModalOpen(false)} 
-          title="담당행정구역 목록 팝업" 
-          width="max-w-xl"
-        >
-           <div className="flex flex-col gap-6 py-4">
-              <div className="grid grid-cols-2 gap-4">
-                 <SelectGroup 
-                    label="행정구역"
-                    options={SIDO_LIST.map(s => ({ value: s, label: s }))}
-                    value={selectedSido}
-                    onChange={(e) => setSelectedSido(e.target.value)}
-                 />
-                 <SelectGroup 
-                    label="시군구"
-                    options={sigunguList.map(s => ({ value: s, label: s }))}
-                    value={selectedSigun}
-                    onChange={(e) => setSelectedSigun(e.target.value)}
-                 />
-              </div>
-              <div className="flex justify-center gap-3 pt-4 border-t border-slate-700">
-                 <Button variant="secondary" onClick={() => setIsAreaModalOpen(false)} className="w-24">취소</Button>
-                 <Button variant="primary" onClick={handleSelectArea} className="w-24">확인</Button>
-              </div>
-           </div>
         </Modal>
       </>
     );

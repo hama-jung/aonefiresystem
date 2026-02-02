@@ -5,10 +5,10 @@ import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater
 
 // [FIX] market_id -> marketId
 const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'latitude', 'longitude', 'handlingItems'];
-// [FIX] distributor_id -> distributorId, market_id -> marketId, added administrativeArea
-const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
-// [FIX] distributor_id -> distributorId, added mapImages
-const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
+// [FIX] distributor_id -> distributorId, market_id -> marketId
+const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'distributorId', 'marketId', 'status', 'smsReceive'];
+// [FIX] distributor_id -> distributorId
+const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'status'];
 // [FIX] market_id -> marketId
 const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
 
@@ -336,16 +336,7 @@ export const DashboardAPI = {
         fireEvents: (fH || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
         faultEvents: (dS || []).map((e: any) => ({ id: e.id, msg: `${e.markets?.name || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
         commEvents: [],
-        mapData: (mkts || []).map((m: any) => ({ 
-            id: m.id, 
-            name: m.name, 
-            x: m.latitude, 
-            y: m.longitude, 
-            address: m.address, 
-            status: m.status || 'Normal',
-            mapImage: m.mapImage,
-            mapImages: m.mapImages // Pass mapImages to dashboard
-        }))
+        mapData: (mkts || []).map((m: any) => ({ id: m.id, name: m.name, x: m.latitude, y: m.longitude, address: m.address, status: m.status || 'Normal' }))
       };
     } catch (e) { return { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] }; }
   }

@@ -13,12 +13,6 @@ interface VisualMapConsoleProps {
 export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, initialMode = 'monitoring', onClose }) => {
   const [mode, setMode] = useState<'monitoring' | 'edit'>(initialMode);
   
-  // Map Images State
-  const mapImages = market.mapImages && market.mapImages.length > 0 
-    ? market.mapImages 
-    : (market.mapImage ? [market.mapImage] : []);
-  const [currentMapIndex, setCurrentMapIndex] = useState(0);
-
   // Device Lists
   const [detectors, setDetectors] = useState<Detector[]>([]);
   const [receivers, setReceivers] = useState<Receiver[]>([]);
@@ -49,7 +43,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       setReceivers(rcvData);
       setRepeaters(rptData);
 
-      // Extract CCTV URLs from detectors
+      // Extract CCTV URLs from detectors (assuming cctvUrl is stored in detector)
       const cctvs = detData
         .filter(d => d.cctvUrl && d.cctvUrl.trim() !== '')
         .map(d => ({
@@ -107,11 +101,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   };
   const handleNextCctv = () => {
       setCurrentCctvIndex(prev => (prev === cctvList.length - 1 ? 0 : prev + 1));
-  };
-
-  // Map Navigation
-  const handleMapChange = (idx: number) => {
-      setCurrentMapIndex(idx);
   };
 
   // --- Drag & Drop Logic ---
@@ -255,50 +244,28 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         <div className="flex-1 flex overflow-hidden relative">
             
             {/* Map Area */}
-            <div className="flex-1 flex flex-col relative bg-[#1a1a1a]">
-                <div 
-                    className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                >
-                    {mapImages.length > 0 ? (
-                        <div className="relative w-full h-full">
-                            <img 
-                                src={mapImages[currentMapIndex]} 
-                                alt={`Map ${currentMapIndex + 1}`} 
-                                className="w-full h-full object-contain pointer-events-none"
-                            />
-                            {/* Render Placed Devices */}
-                            {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
-                            {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
-                            {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
-                        </div>
-                    ) : (
-                        <div className="text-center text-slate-500">
-                            <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
-                            <p>등록된 도면 이미지가 없습니다.</p>
-                            {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
-                        </div>
-                    )}
-                </div>
-
-                {/* Map Pagination Footer */}
-                {mapImages.length > 1 && (
-                    <div className="h-14 bg-slate-800 border-t border-slate-700 flex items-center justify-center gap-2 z-20">
-                        {mapImages.map((_, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => handleMapChange(idx)}
-                                className={`
-                                    w-10 h-10 rounded-lg text-sm font-bold transition-all border
-                                    ${currentMapIndex === idx 
-                                        ? 'bg-blue-600 text-white border-blue-500 shadow-lg scale-110' 
-                                        : 'bg-slate-700 text-slate-400 border-slate-600 hover:bg-slate-600 hover:text-white'}
-                                `}
-                            >
-                                {idx + 1}
-                            </button>
-                        ))}
+            <div 
+                className="flex-1 relative bg-[#1a1a1a] overflow-hidden flex items-center justify-center select-none"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+            >
+                {market.mapImage ? (
+                    <div className="relative w-full h-full">
+                        <img 
+                            src={market.mapImage} 
+                            alt="Map" 
+                            className="w-full h-full object-contain pointer-events-none"
+                        />
+                        {/* Render Placed Devices */}
+                        {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
+                        {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
+                        {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
+                    </div>
+                ) : (
+                    <div className="text-center text-slate-500">
+                        <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
+                        <p>등록된 도면 이미지가 없습니다.</p>
+                        {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
                     </div>
                 )}
             </div>

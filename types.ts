@@ -24,16 +24,15 @@ export interface User {
   phone: string;
   email?: string;
   department?: string;
-  administrativeArea?: string; // [New] 담당 행정 구역
-  distributorId?: number; 
-  marketId?: number;      
+  distributorId?: number; // distributor_id -> distributorId
+  marketId?: number;      // market_id -> marketId
   status: '사용' | '미사용';
   smsReceive?: '수신' | '미수신';
 }
 
 export interface Market {
   id: number;
-  distributorId?: number; 
+  distributorId?: number; // distributor_id -> distributorId
   distributorName?: string;
   name: string;
   address: string;
@@ -54,14 +53,13 @@ export interface Market {
   enableCctvUrl?: '사용' | '미사용';
   smsFire?: string[];
   smsFault?: string[];
-  mapImage?: string; // Legacy support
-  mapImages?: string[]; // [New] 다중 이미지 지원
+  mapImage?: string;
   status: 'Normal' | 'Fire' | 'Error';
 }
 
 export interface Store {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;     
   name: string;
   managerName?: string;
@@ -82,7 +80,7 @@ export interface Store {
 
 export interface Receiver {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   macAddress: string;
   ip?: string;
@@ -97,7 +95,7 @@ export interface Receiver {
 
 export interface Repeater {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -111,7 +109,7 @@ export interface Repeater {
 
 export interface Detector {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   stores?: { id: number; name: string }[]; 
   receiverMac: string;
@@ -128,7 +126,7 @@ export interface Detector {
 
 export interface Transmitter {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -141,7 +139,7 @@ export interface Transmitter {
 
 export interface Alarm {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -169,7 +167,7 @@ export interface Distributor {
 
 export interface WorkLog {
   id: number;
-  marketId: number;       
+  marketId: number;       // market_id -> marketId
   marketName?: string;
   workDate: string;
   content: string;
@@ -179,7 +177,7 @@ export interface WorkLog {
 
 export interface FireHistoryItem {
   id: number;
-  marketId?: number;      
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   receiverStatus: string; 
@@ -195,7 +193,7 @@ export interface FireHistoryItem {
 
 export interface DeviceStatusItem {
   id: number;
-  marketId?: number;      
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   receiverMac: string;
   repeaterId: string;
@@ -210,7 +208,7 @@ export interface DeviceStatusItem {
 
 export interface DataReceptionItem {
   id: number;
-  marketId?: number;      
+  marketId?: number;      // market_id -> marketId
   marketName?: string;
   logType: string; 
   receiverId: string; 

@@ -104,7 +104,7 @@ export const RepeaterManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="중계기 현황" />
+      <PageHeader title="중계기 관리" />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedRepeater ? "중계기 수정" : "중계기 등록"}>
