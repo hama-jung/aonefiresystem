@@ -239,12 +239,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
 
           {/* Menu Area */}
-          <div className="overflow-y-auto h-[calc(100vh-5rem)] custom-scrollbar py-3">
-            <nav className="space-y-0.5">
-              {visibleMenuItems.map((item) => (
-                <SidebarItem key={item.id} item={item} />
-              ))}
-            </nav>
+          <div className="flex flex-col h-[calc(100vh-5rem)]">
+            <div className="flex-1 overflow-y-auto custom-scrollbar py-3">
+              <nav className="space-y-0.5">
+                {visibleMenuItems.map((item) => (
+                  <SidebarItem key={item.id} item={item} />
+                ))}
+              </nav>
+            </div>
+            {/* Version Indicator */}
+            <div className="p-3 text-center text-[10px] text-slate-500 border-t border-slate-700 bg-[#263245]">
+               v1.1 (Updated)
+            </div>
           </div>
         </aside>
 
@@ -329,7 +335,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {isPwModalOpen && (
           <Modal 
             isOpen={isPwModalOpen} 
-            onClose={() => setIsPwModalOpen(false)}
+            onClose={() => setIsPwModalOpen(false)} 
             title="비밀번호 변경"
             icon={<Key size={20} className="text-blue-500" />}
           >
