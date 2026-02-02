@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber } from '../components/CommonUI';
+import { usePageTitle } from '../components/Layout';
 import { Search, Upload, Paperclip, X } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
@@ -10,6 +11,7 @@ const ITEMS_PER_PAGE = 10;
 const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: `${val}시간`, label: `${val}시간` }; });
 
 export const ReceiverManagement: React.FC = () => {
+  const pageTitle = usePageTitle('R형 수신기 현황');
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [receivers, setReceivers] = useState<Receiver[]>([]);
   const [selectedReceiver, setSelectedReceiver] = useState<Receiver | null>(null);
@@ -113,7 +115,7 @@ export const ReceiverManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="R형 수신기 현황" />
+      <PageHeader title={pageTitle} />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedReceiver ? "수신기 수정" : "수신기 등록"}>

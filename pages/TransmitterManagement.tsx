@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { TransmitterAPI } from '../services/api';
 import { Transmitter, Receiver } from '../types';
 import { PageHeader, SearchFilterBar, InputGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, ReceiverSearchModal, UI_STYLES, SelectGroup } from '../components/CommonUI';
+import { usePageTitle } from '../components/Layout';
 import { Search } from 'lucide-react';
 
 const ITEMS_PER_PAGE = 10;
 const ID_OPTIONS = Array.from({ length: 20 }, (_, i) => { const val = String(i + 1).padStart(2, '0'); return { value: val, label: val }; });
 
 export const TransmitterManagement: React.FC = () => {
+  const pageTitle = usePageTitle('발신기 현황');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [transmitters, setTransmitters] = useState<Transmitter[]>([]);
   const [selectedTransmitter, setSelectedTransmitter] = useState<Transmitter | null>(null);
@@ -47,7 +49,7 @@ export const TransmitterManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="발신기 현황" />
+      <PageHeader title={pageTitle} />
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedTransmitter ? "발신기 수정" : "발신기 등록"}>
