@@ -12,9 +12,8 @@ const INTERVAL_OPTIONS = Array.from({ length: 23 }, (_, i) => { const val = Stri
 
 export const ReceiverManagement: React.FC = () => {
   // [강제 수정] usePageTitle 훅이 DB에서 '관리'를 가져와도, 여기서 강제로 '현황'을 우선 표시하도록 유도
-  // Layout.tsx에서도 수정했지만, 페이지 레벨에서 한 번 더 확실하게 처리
   const pageTitleRaw = usePageTitle('R형 수신기 현황');
-  const pageTitle = pageTitleRaw.replace('관리', '현황'); // '관리'라는 단어가 있으면 '현황'으로 치환
+  const pageTitle = pageTitleRaw.replace('관리', '현황'); 
 
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [receivers, setReceivers] = useState<Receiver[]>([]);
@@ -181,4 +180,45 @@ export const ReceiverManagement: React.FC = () => {
                    </div>
                 </FormRow>
                 <FormRow label="엑셀 파일" required>
-                   <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="
+                   <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
+                </FormRow>
+             </FormSection>
+             {excelData.length > 0 && <DataTable columns={[{header:'MAC', accessor:'macAddress'}, {header:'IP', accessor:'ip'}]} data={excelData.slice(0, 10)} />}
+             <div className="flex justify-center gap-3 mt-8">
+                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
+             </div>
+          </div>
+      ) : (
+          <>
+             <SearchFilterBar onSearch={() => {setIsFiltered(true); fetchReceivers();}} onReset={() => {setSearchMarket(''); setSearchMac(''); setIsFiltered(false); fetchReceivers({});}} isFiltered={isFiltered}>
+                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+                <InputGroup label="MAC주소" value={searchMac} onChange={(e) => setSearchMac(e.target.value)} />
+             </SearchFilterBar>
+             
+             <div className="flex justify-between items-center mb-2">
+               <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{receivers.length}</span> 건 (페이지 {currentPage})</span>
+               <div className="flex gap-2">
+                  <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+                  <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
+               </div>
+             </div>
+
+             <DataTable 
+                columns={[
+                    { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
+                    { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
+                    { header: '설치시장', accessor: 'marketName' },
+                    { header: 'IP주소', accessor: 'ip', width: '200px' },
+                    { header: '전화번호', accessor: (r) => formatPhoneNumber(r.emergencyPhone) || '-', width: '200px' },
+                    { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '120px' },
+                ]}
+                data={receivers.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
+                onRowClick={handleEdit}
+             />
+             <Pagination totalItems={receivers.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
+          </>
+      )}
+      <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
+    </>
+  );
+};
