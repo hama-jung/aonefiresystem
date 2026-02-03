@@ -362,38 +362,48 @@ export const StoreManagement: React.FC = () => {
     { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' },
   ];
 
-  // [수정] 엑셀 미리보기 컬럼: 모든 항목 포함 및 레이아웃 최적화
+  // [수정] 엑셀 미리보기 컬럼: 레이아웃 밸런스 조정 및 1줄/2줄 규칙 적용
   const excelColumns: Column<ExcelStoreItem>[] = [
     { 
         header: '구분', 
         accessor: (item) => (
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                item._status === '신규' 
-                ? 'bg-blue-900/40 text-blue-400 border-blue-800' 
-                : 'bg-orange-900/40 text-orange-400 border-orange-800'
-            }`}>
-                {item._status}
-            </span>
+            <div className="whitespace-nowrap px-1">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                    item._status === '신규' 
+                    ? 'bg-blue-900/40 text-blue-400 border-blue-800' 
+                    : 'bg-orange-900/40 text-orange-400 border-orange-800'
+                }`}>
+                    {item._status}
+                </span>
+            </div>
         ),
-        width: '60px'
+        width: '70px'
     },
-    { header: '수신기MAC', accessor: 'receiverMac', width: '90px' },
-    { header: '중계기ID', accessor: 'repeaterId', width: '80px' },
-    { header: '감지기번호', accessor: 'detectorId', width: '90px' },
-    { header: '기기위치', accessor: (item) => <div className="whitespace-nowrap">{item.name}</div>, width: '150px' },
-    { header: '대표자', accessor: (item) => <div className="whitespace-nowrap">{item.managerName}</div>, width: '100px' },
-    { header: '연락처', accessor: (item) => <div className="whitespace-nowrap">{item.managerPhone}</div>, width: '130px' },
-    { header: '감지모드', accessor: (item) => <div className="whitespace-nowrap">{item.mode}</div>, width: '80px' },
+    { header: '수신기MAC', accessor: (item) => <div className="whitespace-nowrap px-1">{item.receiverMac}</div>, width: '100px' },
+    { header: '중계기ID', accessor: (item) => <div className="whitespace-nowrap px-1">{item.repeaterId}</div>, width: '90px' },
+    { header: '감지기번호', accessor: (item) => <div className="whitespace-nowrap px-1">{item.detectorId}</div>, width: '100px' },
+    { header: '기기위치', accessor: (item) => <div className="whitespace-nowrap text-left px-1">{item.name}</div>, width: '160px' },
+    { header: '대표자', accessor: (item) => <div className="whitespace-nowrap px-1">{item.managerName}</div>, width: '100px' },
+    { header: '연락처', accessor: (item) => <div className="whitespace-nowrap px-1">{item.managerPhone}</div>, width: '140px' },
+    { header: '감지모드', accessor: (item) => <div className="whitespace-nowrap px-1">{item.mode}</div>, width: '90px' },
     { 
         header: '주소', 
         accessor: (item) => (
-            <div className="text-left whitespace-normal leading-tight min-w-[200px]">
+            <div className="text-left whitespace-normal leading-snug py-1 min-w-[200px] max-w-[350px] px-1">
                 {`${item.address || ''} ${item.addressDetail || ''}`.trim()}
             </div>
         )
     },
-    { header: '취급품목', accessor: (item) => <div className="whitespace-nowrap">{item.handlingItems}</div>, width: '120px' },
-    { header: '비고', accessor: (item) => <div className="whitespace-nowrap">{item.memo}</div>, width: '100px' },
+    { header: '취급품목', accessor: (item) => <div className="whitespace-nowrap px-1">{item.handlingItems}</div>, width: '120px' },
+    { 
+        header: '비고', 
+        accessor: (item) => (
+            <div className="whitespace-normal text-left px-1 leading-snug py-1 min-w-[100px]">
+                {item.memo}
+            </div>
+        ),
+        width: '120px'
+    },
   ];
 
   if (view === 'excel') {
