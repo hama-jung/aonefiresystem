@@ -162,11 +162,12 @@ export const StoreManagement: React.FC = () => {
 
   const handleMarketSelect = (market: Market) => {
     if (view === 'form') {
+      // [수정] 현장 선택 시 현장의 주소를 상가 주소 필드로 복사하던 로직(address: formData.address || market.address) 제거
+      // 기획 요청에 따라 신규 등록 시 주소 필드는 항상 비어 있어야 함
       setFormData({ 
         ...formData, 
         marketId: market.id, 
         marketName: market.name,
-        address: formData.address || market.address, 
       });
     } else if (view === 'excel') {
       setExcelMarket(market);
