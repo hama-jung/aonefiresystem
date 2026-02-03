@@ -230,11 +230,32 @@ export const StoreManagement: React.FC = () => {
   // Columns
   const columns: Column<Store>[] = [
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
-    { header: '시장명', accessor: 'marketName' },
-    { header: '상가명', accessor: 'name' },
-    { header: '점주명', accessor: 'managerName', width: '100px' },
-    { header: '연락처', accessor: (s) => formatPhoneNumber(s.managerPhone || ''), width: '120px' },
-    { header: '주소', accessor: (s) => `${s.address || ''} ${s.addressDetail || ''}`, width: '250px' },
+    { 
+        header: '시장명', 
+        accessor: (s) => <div className="truncate whitespace-nowrap" title={s.marketName}>{s.marketName}</div> 
+    },
+    { 
+        header: '상가명', 
+        accessor: (s) => <div className="truncate whitespace-nowrap" title={s.name}>{s.name}</div> 
+    },
+    { 
+        header: '점주명', 
+        accessor: (s) => <div className="truncate whitespace-nowrap" title={s.managerName}>{s.managerName}</div>,
+        width: '100px' 
+    },
+    { 
+        header: '연락처', 
+        accessor: (s) => <div className="truncate whitespace-nowrap">{formatPhoneNumber(s.managerPhone || '')}</div>,
+        width: '120px' 
+    },
+    { 
+        header: '주소', 
+        accessor: (s) => {
+            const fullAddr = `${s.address || ''} ${s.addressDetail || ''}`.trim();
+            return <div className="truncate whitespace-nowrap" title={fullAddr}>{fullAddr}</div>;
+        },
+        width: '250px' 
+    },
     { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' },
   ];
 
@@ -353,7 +374,6 @@ export const StoreManagement: React.FC = () => {
                        <Button type="button" variant="secondary" onClick={() => setIsReceiverModalOpen(true)}>찾기</Button>
                     </div>
                   </FormRow>
-                  {/* From user error report snippet - Including these fields */}
                   <FormRow label="중계기 ID (2자리)">
                      <InputGroup value={formData.repeaterId || ''} onChange={(e) => setFormData({...formData, repeaterId: e.target.value})} maxLength={2} placeholder="예: 01" />
                   </FormRow>
