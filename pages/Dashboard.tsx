@@ -89,7 +89,8 @@ const MapSection: React.FC<{
   focusLocation: { lat: number, lng: number } | null;
   onMarketSelect: (market: Market) => void;
   viewRegion: string; // [New Prop] 현재 선택된 행정구역 문자열
-}> = ({ markets, focusLocation, onMarketSelect, viewRegion }) => {
+  selectedMarketId: number | null; // [New Prop] 선택된 마커 ID
+}> = ({ markets, focusLocation, onMarketSelect, viewRegion, selectedMarketId }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
@@ -141,6 +142,7 @@ const MapSection: React.FC<{
         if (isNaN(lat) || isNaN(lng)) return;
 
         const position = new window.kakao.maps.LatLng(lat, lng);
+        const isSelected = market.id === selectedMarketId;
         
         // --- Icon Logic (Requested Shapes) ---
         let iconName = 'store'; // Normal: Store
@@ -157,13 +159,22 @@ const MapSection: React.FC<{
 
         const content = document.createElement('div');
         // group class ensures children (tooltip) only show on hover of THIS container
-        content.className = 'relative flex items-center justify-center group cursor-pointer z-10 hover:z-50';
+        // Added logic: if selected, bring to front (z-50), otherwise normal z-10
+        content.className = `relative flex items-center justify-center group cursor-pointer ${isSelected ? 'z-50' : 'z-10 hover:z-50'}`;
         content.onclick = () => onMarketSelect(market);
         
         // [MODIFIED] 
-        // 1. Marker Size: w-12(48px) -> w-10(40px) (approx 80%)
-        // 2. Icon Size: text-2xl(24px) -> text-lg(18px)
-        // 3. Tooltip: bottom-14 -> bottom-12 (closer due to smaller marker), text-xs -> text-[10px] (-2pt)
+        // 1. Marker Size: w-10 (40px)
+        // 2. Icon Size: text-lg
+        // 3. Tooltip Visibility: 
+        //    - Default: opacity-0 invisible
+        //    - Hover: group-hover:opacity-100 group-hover:visible
+        //    - Selected: Always opacity-100 visible
+        
+        const tooltipVisibilityClass = isSelected 
+            ? "opacity-100 visible" 
+            : "opacity-0 invisible group-hover:opacity-100 group-hover:visible";
+
         content.innerHTML = `
             ${isFire ? `
                 <div class="absolute -inset-6 bg-red-500 rounded-full animate-ping opacity-60"></div>
@@ -175,7 +186,7 @@ const MapSection: React.FC<{
             } transition-transform group-hover:scale-110">
                <span class="material-icons ${isFire ? 'text-white' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-lg">${iconName}</span>
             </div>
-            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-slate-800/95 border border-slate-600 rounded text-white text-[10px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-slate-800/95 border border-slate-600 rounded text-white text-[10px] ${tooltipVisibilityClass} transition-all duration-200 pointer-events-none shadow-lg z-20">
                <div class="font-bold text-center">${market.name}</div>
                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800/95"></div>
             </div>
@@ -192,7 +203,7 @@ const MapSection: React.FC<{
     });
 
     setOverlays(newOverlays);
-  }, [mapInstance, markets]);
+  }, [mapInstance, markets, selectedMarketId]); // Added selectedMarketId dependency
 
   // 4. Handle View Region Change (Auto Zoom/Pan)
   useEffect(() => {
@@ -625,6 +636,7 @@ export const Dashboard: React.FC = () => {
               focusLocation={focusLocation}
               onMarketSelect={(m) => setSelectedMarket(m)}
               viewRegion={viewRegionString}
+              selectedMarketId={selectedMarket?.id || null}
            />
 
            {/* Bottom Status Overlay (Floating) */}
