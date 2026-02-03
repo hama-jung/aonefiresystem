@@ -58,7 +58,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           (f.marketName === market.name || f.marketId === market.id)
       );
 
-      const mergedDetectors = detData.map(d => {
+      // [수정] '미사용' 상태인 기기는 필터링하여 제외함
+      const mergedDetectors = detData
+        .filter(d => d.status !== '미사용')
+        .map(d => {
           const isFire = activeFires.some(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
               f.receiverMac === d.receiverMac && 
@@ -78,7 +81,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           let status = '정상';
           if (isFire) status = '화재';
           else if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          else if (d.status === '미사용') status = '미사용';
 
           const storeInfo = storesData.find(s => 
             s.receiverMac === d.receiverMac && 
@@ -99,7 +101,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           };
       });
 
-      const mergedReceivers = rcvData.map(r => {
+      const mergedReceivers = rcvData
+        .filter(r => r.status !== '미사용')
+        .map(r => {
           const fault = faultLogs.find(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
               f.deviceType === '수신기' && f.receiverMac === r.macAddress
@@ -114,7 +118,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           };
       });
 
-      const mergedRepeaters = rptData.map(r => {
+      const mergedRepeaters = rptData
+        .filter(r => r.status !== '미사용')
+        .map(r => {
           const fault = faultLogs.find(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
               f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId
@@ -166,7 +172,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       setZoomLevel(1);
   }, [currentMapIndex]);
 
-  // [수정] 기기 상태별 합계 계산 로직 추가
   const statusCounts = {
     normal: 0,
     fire: 0,
@@ -421,7 +426,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 <div className="w-80 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20 overflow-hidden">
                     <div className="p-3 border-b border-slate-700 font-bold text-white bg-slate-900/50">관제 현황</div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 p-4">
-                        {/* [수정] 기기 상태별 요약 숫자로 데이터 표시 영역 변경 */}
                         <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
                                 <div className="text-green-400 font-bold mb-1">정상</div>
@@ -442,7 +446,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            {/* [수정] CCTV 대수를 제목 옆으로 이동 */}
                             <h3 className="text-sm font-bold text-white flex items-center gap-2"><Video size={16} /> 현장 동영상 ({stats.cctv}대)</h3>
                             <div className="bg-black aspect-video rounded border border-slate-600 relative flex items-center justify-center overflow-hidden">
                                 {cctvList.length > 0 ? (
