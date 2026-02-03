@@ -567,31 +567,28 @@ export const DashboardAPI = {
       const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러').neq('errorCode', '04');
       const { count: commCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('errorCode', '04');
       
-      // 1. Fire Events (Fire History Table)
-      // Get detailed columns including market name, store name/detector info
+      // [MODIFIED] Limit 제거: show all data
+      // 1. Fire Events
       const { data: fH } = await supabase
           .from('fire_history')
           .select('*, markets(name)')
           .in('falseAlarmStatus', ['화재', '등록'])
-          .order('registeredAt', { ascending: false })
-          .limit(20);
+          .order('registeredAt', { ascending: false });
 
-      // 2. Fault Events (Device Status Table - exclude Comm Error 04)
+      // 2. Fault Events
       const { data: dS } = await supabase
           .from('device_status')
           .select('*, markets(name)')
           .eq('deviceStatus', '에러')
           .neq('errorCode', '04')
-          .order('registeredAt', { ascending: false })
-          .limit(20);
+          .order('registeredAt', { ascending: false });
 
-      // 3. Comm Error Events (Device Status Table - Error Code 04)
+      // 3. Comm Error Events
       const { data: cE } = await supabase
           .from('device_status')
           .select('*, markets(name)')
           .eq('errorCode', '04')
-          .order('registeredAt', { ascending: false })
-          .limit(20);
+          .order('registeredAt', { ascending: false });
 
       const normalizedMkts = normalizeData(mkts || []);
       const normalizedFH = normalizeData(fH || []);
@@ -626,6 +623,7 @@ export const DashboardAPI = {
             time: e.registeredAt
         })),
         mapData: normalizedMkts.map((m: any) => ({ 
+            ...m, // [MODIFIED] Pass full market object for VisualMapConsole compatibility
             id: m.id, 
             name: m.name, 
             x: m.latitude,  

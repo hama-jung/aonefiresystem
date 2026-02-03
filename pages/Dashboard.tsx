@@ -24,7 +24,7 @@ const ListPagination: React.FC<{
     if (totalPages <= 1) return null;
 
     return (
-        <div className="flex justify-center items-center gap-1.5 py-2 mt-auto">
+        <div className="flex justify-center items-center gap-1.5 py-2 mt-auto border-t border-slate-700/50">
             <button 
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
@@ -228,9 +228,10 @@ export const Dashboard: React.FC = () => {
 
   const handleLogClick = (marketId: number) => {
       if (!data || !data.mapData) return;
-      const target = data.mapData.find((m: any) => m.id === marketId);
-      if (target && target.x && target.y) {
-          setFocusLocation({ lat: parseFloat(target.x), lng: parseFloat(target.y) });
+      const targetMarket = data.mapData.find((m: any) => m.id === marketId);
+      if (targetMarket) {
+          // Open Control Page (VisualMapConsole)
+          setSelectedMarket(targetMarket);
       }
   };
 
@@ -341,7 +342,7 @@ export const Dashboard: React.FC = () => {
           <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
              
              {/* Fire History List */}
-             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col shrink-0">
                 <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
                    <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
                       <AlertTriangle size={16} /> 최근 화재 발생현황
@@ -350,19 +351,19 @@ export const Dashboard: React.FC = () => {
                       <ArrowRight size={16} />
                    </button>
                 </div>
-                <div className="flex-1 p-0 flex flex-col">
+                <div className="p-0 flex flex-col">
                    {currentFireEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
+                      <div className="flex items-center justify-center text-slate-500 text-sm py-4">내역이 없습니다.</div>
                    ) : (
                       currentFireEvents.map((log: any) => (
                          <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
                             <div className="flex items-center gap-3 overflow-hidden">
-                               <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0">화재</span>
+                               <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0 animate-pulse">화재</span>
                                <span className="text-sm text-slate-200 font-medium truncate">
                                    {log.marketName} <span className="text-slate-400 font-normal">{log.detail}</span>
                                </span>
                             </div>
-                            <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                            <span className="text-xs text-slate-500 flex-shrink-0">
                                 {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
                             </span>
                          </div>
@@ -373,7 +374,7 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Fault History List */}
-             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col shrink-0">
                 <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
                    <div className="flex items-center gap-2 text-orange-400 font-bold text-sm">
                       <AlertCircle size={16} /> 최근 고장 발생현황
@@ -382,9 +383,9 @@ export const Dashboard: React.FC = () => {
                       <ArrowRight size={16} />
                    </button>
                 </div>
-                <div className="flex-1 p-0 flex flex-col">
+                <div className="p-0 flex flex-col">
                    {currentFaultEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
+                      <div className="flex items-center justify-center text-slate-500 text-sm py-4">내역이 없습니다.</div>
                    ) : (
                       currentFaultEvents.map((log: any) => (
                          <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
@@ -394,7 +395,7 @@ export const Dashboard: React.FC = () => {
                                    {log.marketName} <span className="text-slate-400 font-normal">{log.device} 고장</span>
                                </span>
                             </div>
-                            <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                            <span className="text-xs text-slate-500 flex-shrink-0">
                                 {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
                             </span>
                          </div>
@@ -405,7 +406,7 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Comm Error List */}
-             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col shrink-0">
                 <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
                    <div className="flex items-center gap-2 text-slate-300 font-bold text-sm">
                       <WifiOff size={16} /> 수신기 통신 이상 내역
@@ -414,12 +415,12 @@ export const Dashboard: React.FC = () => {
                       <ArrowRight size={16} />
                    </button>
                 </div>
-                <div className="flex-1 p-0 flex flex-col">
+                <div className="p-0 flex flex-col">
                    {currentCommEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
+                      <div className="flex items-center justify-center text-slate-500 text-sm py-4">내역이 없습니다.</div>
                    ) : (
                       currentCommEvents.map((log: any) => (
-                         <div key={log.id} className="px-4 py-3 border-b border-slate-700/50 flex justify-between items-center last:border-0">
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
                             <div className="flex items-center gap-3 overflow-hidden">
                                <span className="text-sm text-slate-200 font-bold truncate">
                                    {log.marketName} <span className="text-slate-400 font-normal">({log.marketName})</span>
@@ -427,7 +428,7 @@ export const Dashboard: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className="text-[10px] bg-amber-900/30 text-amber-500 border border-amber-800/50 px-1 rounded">R:{log.receiverMac}</span>
-                                <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                                <span className="text-xs text-slate-500 flex-shrink-0">
                                     {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
                                 </span>
                             </div>
