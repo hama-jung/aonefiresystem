@@ -13,6 +13,31 @@ declare global {
   }
 }
 
+// --- Helper: Region Alias Mapping ---
+// DB에는 '서울', '경기' 등으로 저장되어 있고, 필터는 '서울특별시', '경기도'인 경우를 매칭하기 위함
+const getSidoAliases = (sido: string): string[] => {
+  const map: Record<string, string[]> = {
+    "서울특별시": ["서울", "서울특별시"],
+    "부산광역시": ["부산", "부산광역시"],
+    "대구광역시": ["대구", "대구광역시"],
+    "인천광역시": ["인천", "인천광역시"],
+    "광주광역시": ["광주", "광주광역시"],
+    "대전광역시": ["대전", "대전광역시"],
+    "울산광역시": ["울산", "울산광역시"],
+    "세종특별자치시": ["세종", "세종시", "세종특별자치시"],
+    "경기도": ["경기", "경기도"],
+    "강원특별자치도": ["강원", "강원도", "강원특별자치도"],
+    "충청북도": ["충북", "충청북도"],
+    "충청남도": ["충남", "충청남도"],
+    "전북특별자치도": ["전북", "전라북도", "전북특별자치도"],
+    "전라남도": ["전남", "전라남도"],
+    "경상북도": ["경북", "경상북도"],
+    "경상남도": ["경남", "경상남도"],
+    "제주특별자치도": ["제주", "제주도", "제주특별자치도"]
+  };
+  return map[sido] || [sido];
+};
+
 // --- Helper: Pagination Control ---
 const ListPagination: React.FC<{ 
     total: number, 
@@ -310,7 +335,11 @@ export const Dashboard: React.FC = () => {
   const filteredMapData = processedMapData.filter((m: any) => {
       const addr = m.address || '';
       // 주소 데이터가 비어있을 경우를 대비해 안전하게 처리
-      const matchSido = mapSido ? addr.includes(mapSido) : true;
+      
+      // [Modified] Sido Alias Matching (e.g. 서울특별시 <-> 서울)
+      const sidoAliases = mapSido ? getSidoAliases(mapSido) : [];
+      const matchSido = mapSido ? sidoAliases.some(alias => addr.includes(alias)) : true;
+
       const matchSigun = mapSigun ? addr.includes(mapSigun) : true;
       const matchName = mapKeyword ? m.name.includes(mapKeyword) : true;
       
