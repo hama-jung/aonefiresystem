@@ -9,7 +9,7 @@ import {
   MarketSearchModal, ReceiverSearchModal, UI_STYLES, StatusBadge, Column, 
   handlePhoneKeyDown, formatPhoneNumber 
 } from '../components/CommonUI';
-import { Search, Upload, Paperclip, X, Download } from 'lucide-react';
+import { Search, Upload, Paperclip, X, Download, Plus } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
@@ -452,16 +452,19 @@ export const StoreManagement: React.FC = () => {
                             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-500"></span> 정보 수정</span>
                         </div>
                      </div>
-                     <DataTable columns={excelColumns} data={excelData.slice(0, 50)} />
+                     {/* [수정] 항목명(th) 1줄 고정을 위해 Tailwind arbitrary variant ([&_th]:whitespace-nowrap) 적용 */}
+                     <div className="[&_th]:whitespace-nowrap">
+                        <DataTable columns={excelColumns} data={excelData.slice(0, 50)} />
+                     </div>
                      {excelData.length > 50 && <p className="text-center text-slate-500 text-sm mt-3 italic">... 상위 50건만 표시됩니다.</p>}
                  </div>
              )}
 
              <div className="flex justify-center gap-3 mt-8 pb-10">
-                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || loading} className="w-40 h-11 text-base shadow-lg">
+                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || loading} className="w-32">
                     {loading ? '처리 중...' : '일괄 등록/수정'}
                 </Button>
-                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32 h-11 text-base">취소</Button>
+                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
              <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
           </>
@@ -576,7 +579,8 @@ export const StoreManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{stores.length}</span> 건 (페이지 {currentPage})</span>
          <div className="flex gap-2">
-            <Button variant="primary" onClick={handleRegister}>개별 등록</Button>
+            {/* [수정] 버튼명을 '신규 등록'으로 변경하고 플러스 아이콘 추가 */}
+            <Button variant="primary" onClick={handleRegister} icon={<Plus size={16} />}>신규 등록</Button>
             <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 등록수정</Button>
             <Button variant="success" onClick={handleExcelList} icon={<Download size={16} />}>엑셀 다운로드</Button>
          </div>
