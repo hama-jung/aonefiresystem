@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Modal, UI_STYLES } from './CommonUI';
 import { Market, Detector, Receiver, Repeater, Store } from '../types';
 import { DetectorAPI, ReceiverAPI, RepeaterAPI, FireHistoryAPI, DeviceStatusAPI, StoreAPI } from '../services/api';
-import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3, User, Phone, MapPin, Globe, Clock, ShieldAlert } from 'lucide-react';
+import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3, User, Phone, MapPin, Globe, Clock, ShieldAlert, Thermometer } from 'lucide-react';
 
 interface VisualMapConsoleProps {
   market: Market;
@@ -22,9 +22,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
 
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  const [detectors, setDetectors] = useState<(Omit<Detector, 'status'> & { status: string, storeInfo?: Store })[]>([]);
-  const [receivers, setReceivers] = useState<(Omit<Receiver, 'status'> & { status: string })[]>([]);
-  const [repeaters, setRepeaters] = useState<(Omit<Repeater, 'status'> & { status: string })[]>([]);
+  const [detectors, setDetectors] = useState<(Omit<Detector, 'status'> & { status: string, isFire?: boolean, isFault?: boolean, faultType?: string, storeInfo?: Store })[]>([]);
+  const [receivers, setReceivers] = useState<(Omit<Receiver, 'status'> & { status: string, isFault?: boolean, faultType?: string })[]>([]);
+  const [repeaters, setRepeaters] = useState<(Omit<Repeater, 'status'> & { status: string, isFault?: boolean, faultType?: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [cctvList, setCctvList] = useState<{name: string, url: string}[]>([]);
@@ -80,21 +80,38 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             s.detectorId === d.detectorId
           );
 
-          return { ...d, status, storeInfo };
+          return { 
+              ...d, 
+              status, 
+              isFire, 
+              isFault: !!fault, 
+              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined,
+              storeInfo 
+          };
       });
 
       const mergedReceivers = rcvData.map(r => {
           const fault = faultLogs.find(f => f.deviceType === '수신기' && f.receiverMac === r.macAddress);
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { ...r, status };
+          return { 
+              ...r, 
+              status, 
+              isFault: !!fault,
+              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
+          };
       });
 
       const mergedRepeaters = rptData.map(r => {
           const fault = faultLogs.find(f => f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId);
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { ...r, status };
+          return { 
+              ...r, 
+              status, 
+              isFault: !!fault,
+              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
+          };
       });
 
       setDetectors(mergedDetectors);
@@ -217,15 +234,14 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const handleNavigateToEdit = () => {
     if (!selectedAlertDevice || !selectedAlertDevice.storeInfo) return;
     if (confirm('해당 기기의 상세 정보 수정 페이지로 이동하시겠습니까?\n(현재의 지도 관제 화면이 닫힙니다.)')) {
-        // [MODIFIED] Passing state to StoreManagement for auto-opening the edit form
         navigate('/stores', { state: { editId: selectedAlertDevice.storeInfo.id } });
         onClose();
     }
   };
 
   const renderIcon = (item: any, type: 'detector'|'receiver'|'repeater') => {
-    const isFire = item.status === '화재';
-    const isError = item.status === '고장';
+    const isFire = item.isFire || item.status === '화재';
+    const isError = item.isFault || item.status === '고장';
     const isCommError = item.status === '통신이상';
     
     const baseClass = "relative w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white border-2 border-white transition-transform group-hover:scale-125 z-10";
@@ -262,15 +278,25 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
         {(isError || isCommError) && <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-50"></div>}
         
+        {/* [MODIFIED] Enhanced 'Heat' mode icon visualization */}
         {type === 'detector' && item.mode === '열' && (
-            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-white drop-shadow-md z-20">
-                 <span className="material-icons text-sm" style={{ fontSize: '16px' }}>thermostat</span>
+            <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-orange-700 shadow-md z-30 animate-bounce">
+                 <Thermometer size={14} strokeWidth={3} />
             </div>
         )}
 
         <div className={`${baseClass} ${bgColor}`}>
             <span className="material-icons text-sm">{iconName}</span>
         </div>
+
+        {/* [NEW] Constant Text Label for Device Position (기기위치) */}
+        {type === 'detector' && (
+            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                <span className="text-[12px] font-black text-white whitespace-nowrap drop-shadow-[0_2px_2px_rgba(0,0,0,1)] bg-black/30 px-1 rounded">
+                    {item.storeInfo?.name || `감지기 ${item.detectorId}`}
+                </span>
+            </div>
+        )}
 
         <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 flex flex-col items-center">
             <span className="font-bold">
@@ -503,30 +529,46 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             <Modal isOpen={actionModalOpen} onClose={() => setActionModalOpen(false)} title="기기 상세 정보 및 제어" width="max-w-md">
                 <div className="flex flex-col gap-4">
                     
-                    {/* [NEW] 최상단 상태 요약 패널 */}
+                    {/* [MODIFIED] Multi-status support in top summary panel */}
                     <div className={`py-4 px-6 rounded-xl text-center shadow-lg border-b-4 ${
-                        selectedAlertDevice.status === '화재' ? 'bg-red-600/20 border-red-500' : 
+                        selectedAlertDevice.isFire ? 'bg-red-600/20 border-red-500' : 
                         selectedAlertDevice.status === '고장' ? 'bg-amber-600/20 border-amber-500' :
                         selectedAlertDevice.status === '통신이상' ? 'bg-slate-700/50 border-slate-500' : 
                         'bg-green-600/20 border-green-500'
                     }`}>
-                        <div className={`text-3xl font-black mb-1 flex items-center justify-center gap-2 ${
-                            selectedAlertDevice.status === '화재' ? 'text-red-500 animate-pulse' : 
-                            selectedAlertDevice.status === '고장' ? 'text-amber-500' :
-                            selectedAlertDevice.status === '통신이상' ? 'text-slate-300' : 
-                            'text-green-500'
-                        }`}>
-                            <span className="material-icons text-4xl">
-                                {selectedAlertDevice.status === '화재' ? 'local_fire_department' : 
-                                 selectedAlertDevice.status === '고장' ? 'warning_amber' :
-                                 selectedAlertDevice.status === '통신이상' ? 'wifi_off' : 'check_circle'}
-                            </span>
-                            {selectedAlertDevice.status}
+                        <div className="flex flex-col gap-2">
+                            {/* Fire Status (Highest Priority) */}
+                            {selectedAlertDevice.isFire && (
+                                <div className="text-3xl font-black text-red-500 animate-pulse flex items-center justify-center gap-2">
+                                    <span className="material-icons text-4xl">local_fire_department</span>
+                                    화재 발생
+                                </div>
+                            )}
+                            
+                            {/* Fault / Error Status */}
+                            {selectedAlertDevice.isFault && (
+                                <div className={`text-2xl font-black flex items-center justify-center gap-2 ${
+                                    selectedAlertDevice.faultType === '통신이상' ? 'text-slate-300' : 'text-amber-500'
+                                }`}>
+                                    <span className="material-icons text-3xl">
+                                        {selectedAlertDevice.faultType === '통신이상' ? 'wifi_off' : 'warning_amber'}
+                                    </span>
+                                    {selectedAlertDevice.faultType} 발생
+                                </div>
+                            )}
+
+                            {/* Normal Status (only if no fire and no fault) */}
+                            {!selectedAlertDevice.isFire && !selectedAlertDevice.isFault && (
+                                <div className="text-3xl font-black text-green-500 flex items-center justify-center gap-2">
+                                    <span className="material-icons text-4xl">check_circle</span>
+                                    정상 작동
+                                </div>
+                            )}
                         </div>
-                        <p className="text-xs text-slate-400 font-medium">현재 기기의 실시간 상태입니다.</p>
+                        <p className="text-xs text-slate-400 font-medium mt-2">현재 기기의 실시간 상태입니다.</p>
                     </div>
 
-                    {/* [NEW] 기기정보 섹션 (IDs) */}
+                    {/* 기기정보 섹션 (IDs) */}
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
                         <div className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
                             <ShieldAlert size={16} className="text-blue-400" /> 기기정보
@@ -551,13 +593,12 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         </div>
                     </div>
 
-                    {/* [NEW] 등록정보 섹션 (현장 상세) */}
+                    {/* 등록정보 섹션 (현장 상세) */}
                     <div className="bg-slate-800/80 p-4 rounded-lg text-sm text-slate-300 border border-slate-700 flex flex-col gap-3">
                         <div className="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
                             <Info size={16} className="text-blue-400" /> 등록정보
                         </div>
                         
-                        {/* 타입별 상세 등록 정보 */}
                         {selectedAlertDevice.type === 'detector' ? (
                             <>
                                 <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
@@ -602,7 +643,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                 </div>
                             </div>
                         ) : (
-                            // 중계기
                             <div className="flex flex-col gap-1.5">
                                 <div className="text-xs text-slate-500">설치위치 설명</div>
                                 <div className="p-3 bg-slate-900/40 rounded border border-slate-700 min-h-[60px] text-slate-200">
@@ -612,7 +652,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         )}
                     </div>
 
-                    {/* [NEW] 하단 버튼 영역 */}
                     <div className="flex flex-col gap-2 mt-2">
                         <div className="grid grid-cols-2 gap-2">
                             {selectedAlertDevice.status === '화재' || selectedAlertDevice.status === '고장' ? (
@@ -623,7 +662,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                             <Button variant="secondary" onClick={() => setActionModalOpen(false)} className="h-12 border-slate-600 hover:bg-slate-700">닫기</Button>
                         </div>
 
-                        {/* 화재감지기만 정보 수정 버튼 노출 */}
                         {selectedAlertDevice.type === 'detector' && (
                             <button 
                                 onClick={handleNavigateToEdit}
