@@ -80,7 +80,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             s.detectorId === d.detectorId
           );
 
-          // [MODIFIED] Data Sync: Prioritize mode from storeInfo (Device Management) over base detector data
           const currentMode = storeInfo?.mode || d.mode || '복합';
 
           return { 
@@ -90,7 +89,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
               isFault: !!fault, 
               faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined,
               storeInfo,
-              mode: currentMode // Override mode with synced data
+              mode: currentMode
           };
       });
 
@@ -260,7 +259,8 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         bgColor = "bg-amber-500 animate-pulse";
         iconName = "warning_amber";
     } else if (isCommError) {
-        bgColor = "bg-slate-500 animate-pulse";
+        // [MODIFIED] Changed background to gray-600 to match the requested attachment visual
+        bgColor = "bg-gray-600 animate-pulse";
         iconName = "wifi_off";
     } else {
         switch(type) {
@@ -282,7 +282,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
         {(isError || isCommError) && <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-50"></div>}
         
-        {/* [MODIFIED] Removed animate-bounce from the 'Heat' mode badge */}
         {type === 'detector' && item.mode === '열' && (
             <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-orange-700 shadow-md z-30">
                  <Thermometer size={14} strokeWidth={3} />
@@ -293,7 +292,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             <span className="material-icons text-sm">{iconName}</span>
         </div>
 
-        {/* [NEW] Constant Text Label for Device Position (기기위치) */}
         {type === 'detector' && (
             <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 pointer-events-none z-20">
                 <span className="text-[12px] font-black text-white whitespace-nowrap drop-shadow-[0_2px_2px_rgba(0,0,0,1)] bg-black/30 px-1 rounded">
@@ -351,7 +349,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>정상</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse"></span>화재</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>고장</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse"></span>통신이상</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-600 animate-pulse"></span>통신이상</span>
                     <span className="w-px h-3 bg-slate-600 mx-1"></span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>수신기</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>중계기</span>
@@ -533,7 +531,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             <Modal isOpen={actionModalOpen} onClose={() => setActionModalOpen(false)} title="기기 상세 정보 및 제어" width="max-w-md">
                 <div className="flex flex-col gap-4">
                     
-                    {/* Multi-status support in top summary panel */}
                     <div className={`py-4 px-6 rounded-xl text-center shadow-lg border-b-4 ${
                         selectedAlertDevice.isFire ? 'bg-red-600/20 border-red-500' : 
                         selectedAlertDevice.status === '고장' ? 'bg-amber-600/20 border-amber-500' :
@@ -541,7 +538,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         'bg-green-600/20 border-green-500'
                     }`}>
                         <div className="flex flex-col gap-2">
-                            {/* Fire Status (Highest Priority) */}
                             {selectedAlertDevice.isFire && (
                                 <div className="text-3xl font-black text-red-500 animate-pulse flex items-center justify-center gap-2">
                                     <span className="material-icons text-4xl">local_fire_department</span>
@@ -549,7 +545,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                 </div>
                             )}
                             
-                            {/* Fault / Error Status */}
                             {selectedAlertDevice.isFault && (
                                 <div className={`text-2xl font-black flex items-center justify-center gap-2 ${
                                     selectedAlertDevice.faultType === '통신이상' ? 'text-slate-300' : 'text-amber-500'
@@ -561,7 +556,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                 </div>
                             )}
 
-                            {/* Normal Status (only if no fire and no fault) */}
                             {!selectedAlertDevice.isFire && !selectedAlertDevice.isFault && (
                                 <div className="text-3xl font-black text-green-500 flex items-center justify-center gap-2">
                                     <span className="material-icons text-4xl">check_circle</span>
@@ -572,7 +566,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         <p className="text-xs text-slate-400 font-medium mt-2">현재 기기의 실시간 상태입니다.</p>
                     </div>
 
-                    {/* 기기정보 섹션 (IDs) */}
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
                         <div className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
                             <ShieldAlert size={16} className="text-blue-400" /> 기기정보
@@ -597,7 +590,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         </div>
                     </div>
 
-                    {/* 등록정보 섹션 (현장 상세) */}
                     <div className="bg-slate-800/80 p-4 rounded-lg text-sm text-slate-300 border border-slate-700 flex flex-col gap-3">
                         <div className="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
                             <Info size={16} className="text-blue-400" /> 등록정보
