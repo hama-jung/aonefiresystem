@@ -362,7 +362,7 @@ export const StoreManagement: React.FC = () => {
     { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' },
   ];
 
-  // 엑셀 미리보기 컬럼 (구분 추가)
+  // [수정] 엑셀 미리보기 컬럼: 모든 항목 포함 및 레이아웃 최적화
   const excelColumns: Column<ExcelStoreItem>[] = [
     { 
         header: '구분', 
@@ -380,9 +380,20 @@ export const StoreManagement: React.FC = () => {
     { header: '수신기MAC', accessor: 'receiverMac', width: '90px' },
     { header: '중계기ID', accessor: 'repeaterId', width: '80px' },
     { header: '감지기번호', accessor: 'detectorId', width: '90px' },
-    { header: '기기위치', accessor: 'name' },
-    { header: '대표자', accessor: 'managerName', width: '100px' },
-    { header: '연락처', accessor: 'managerPhone', width: '130px' },
+    { header: '기기위치', accessor: (item) => <div className="whitespace-nowrap">{item.name}</div>, width: '150px' },
+    { header: '대표자', accessor: (item) => <div className="whitespace-nowrap">{item.managerName}</div>, width: '100px' },
+    { header: '연락처', accessor: (item) => <div className="whitespace-nowrap">{item.managerPhone}</div>, width: '130px' },
+    { header: '감지모드', accessor: (item) => <div className="whitespace-nowrap">{item.mode}</div>, width: '80px' },
+    { 
+        header: '주소', 
+        accessor: (item) => (
+            <div className="text-left whitespace-normal leading-tight min-w-[200px]">
+                {`${item.address || ''} ${item.addressDetail || ''}`.trim()}
+            </div>
+        )
+    },
+    { header: '취급품목', accessor: (item) => <div className="whitespace-nowrap">{item.handlingItems}</div>, width: '120px' },
+    { header: '비고', accessor: (item) => <div className="whitespace-nowrap">{item.memo}</div>, width: '100px' },
   ];
 
   if (view === 'excel') {
@@ -438,7 +449,7 @@ export const StoreManagement: React.FC = () => {
 
              <div className="flex justify-center gap-3 mt-8 pb-10">
                 <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || loading} className="w-40 h-11 text-base shadow-lg">
-                    {loading ? '처리 중...' : '일괄 등록/수정 실행'}
+                    {loading ? '처리 중...' : '일괄 등록/수정'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32 h-11 text-base">취소</Button>
              </div>
