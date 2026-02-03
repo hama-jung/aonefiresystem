@@ -186,7 +186,7 @@ export const StoreManagement: React.FC = () => {
         detectorId: row['감지기번호'] ? String(row['감지기번호']).padStart(2,'0') : '',
         mode: row['모드'] || '복합',
         name: row['기기위치'] || '',
-        managerName: row['대표자'] || '',
+        managerName: row['대표자'] || '', // '대표자'로 정확히 매핑
         managerPhone: row['연락처'] || '',
         address: row['주소'] || '',
         addressDetail: row['상세주소'] || '',
@@ -216,9 +216,17 @@ export const StoreManagement: React.FC = () => {
 
   const handleSampleDownload = () => {
       const sample = [{
-          '수신기MAC': '', '중계기ID': '', '감지기번호': '', '모드': '복합',
-          '기기위치': '샘플위치', '대표자': '홍길동', '연락처': '010-1234-5678', 
-          '주소': '서울시...', '상세주소': '101호', '취급품목': '의류', '비고': ''
+          '수신기MAC': '', 
+          '중계기ID': '', 
+          '감지기번호': '', // '감지기ID'에서 '감지기번호'로 수정
+          '모드': '복합',
+          '기기위치': '샘플위치', 
+          '대표자': '홍길동', 
+          '연락처': '010-1234-5678', 
+          '주소': '서울시...', 
+          '상세주소': '101호', 
+          '취급품목': '의류', 
+          '비고': ''
       }];
       exportToExcel(sample, '기기_일괄등록_샘플');
   };
@@ -228,7 +236,7 @@ export const StoreManagement: React.FC = () => {
         'No': i + 1,
         '소속 현장': s.marketName,
         '기기위치': s.name,
-        '대표자': s.managerName,
+        '대표자': s.managerName, // '대표자명'에서 '대표자'로 수정하여 업로드 양식과 일치시킴
         '연락처': s.managerPhone,
         '주소': `${s.address || ''} ${s.addressDetail || ''}`,
         '상태': s.status
@@ -277,7 +285,7 @@ export const StoreManagement: React.FC = () => {
   if (view === 'excel') {
       return (
           <>
-             <PageHeader title="기기 엑셀 일괄 등록" />
+             <PageHeader title="기기 관리" />
              <div className="bg-slate-800 p-8 rounded-lg border border-slate-700 shadow-sm w-full mb-6">
                  <div className="flex flex-col gap-8">
                     {/* Row 1: 소속 현장 선택 */}
@@ -291,7 +299,7 @@ export const StoreManagement: React.FC = () => {
                        </div>
                     </FormRow>
 
-                    {/* Row 2: 엑셀 파일 선택 (이미지 레이아웃 준수) */}
+                    {/* Row 2: 엑셀 파일 선택 */}
                     <FormRow label="엑셀 파일 선택" required>
                        <div className="flex flex-col gap-2">
                            <div className="flex items-center gap-2">
@@ -314,7 +322,7 @@ export const StoreManagement: React.FC = () => {
                  </div>
              </div>
 
-             {/* Preview Table (All 11 columns as requested) */}
+             {/* Preview Table */}
              {excelData.length > 0 && (
                  <div className="mb-6">
                      <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
