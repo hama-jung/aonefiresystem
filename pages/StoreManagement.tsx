@@ -158,7 +158,7 @@ export const StoreManagement: React.FC = () => {
     setIsReceiverModalOpen(false);
   };
 
-  // Excel Logic
+  // --- Excel Logic (Restored Simple Method & Correct Terminology) ---
   const handleExcelRegister = () => {
     setExcelData([]);
     setExcelMarket(null);
@@ -168,12 +168,8 @@ export const StoreManagement: React.FC = () => {
   const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!excelMarket) {
-        alert('먼저 소속 현장을 선택해주세요.');
-        e.target.value = '';
-        return;
-    }
 
+    // 명칭 원복 방지: 기획자님이 정해주신 명칭만 사용하도록 매핑 규칙 고정
     const reader = new FileReader();
     reader.onload = (evt) => {
       const bstr = evt.target?.result;
@@ -184,11 +180,11 @@ export const StoreManagement: React.FC = () => {
 
       const parsedData: Store[] = data.map((row: any) => ({
         id: 0,
-        marketId: excelMarket!.id,
-        marketName: excelMarket!.name,
-        name: row['기기위치'] || row['상가명'] || '',
-        managerName: row['대표자명'] || row['점주명'] || '',
-        managerPhone: row['연락처'] || row['점주연락처'] || '',
+        marketId: excelMarket?.id || 0,
+        marketName: excelMarket?.name || '',
+        name: row['기기위치'] || '',
+        managerName: row['대표자명'] || '',
+        managerPhone: row['연락처'] || '',
         address: row['주소'] || '',
         addressDetail: row['상세주소'] || '',
         handlingItems: row['취급품목'] || '',
@@ -205,9 +201,12 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleExcelSave = async () => {
-    if (excelData.length === 0) return;
+    if (!excelMarket) { alert('소속 현장을 먼저 선택해주세요.'); return; }
+    if (excelData.length === 0) { alert('업로드할 데이터가 없습니다.'); return; }
+    
     try {
-        await StoreAPI.saveBulk(excelData);
+        const finalData = excelData.map(d => ({ ...d, marketId: excelMarket.id, marketName: excelMarket.name }));
+        await StoreAPI.saveBulk(finalData);
         alert('일괄 등록되었습니다.');
         setView('list');
         fetchStores();
@@ -311,7 +310,7 @@ export const StoreManagement: React.FC = () => {
                  </div>
              )}
              <div className="flex justify-center gap-3 mt-8">
-                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0} className="w-32">일괄 등록</Button>
+                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || !excelMarket} className="w-32">일괄 등록</Button>
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
              <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
@@ -356,7 +355,7 @@ export const StoreManagement: React.FC = () => {
                   <FormRow label="취급품목">
                      <InputGroup value={formData.handlingItems || ''} onChange={(e) => setFormData({...formData, handlingItems: e.target.value})} />
                   </FormRow>
-                  <FormRow label="상가 이미지" className="col-span-1 md:col-span-2">
+                  <FormRow label="이미지" className="col-span-1 md:col-span-2">
                      <div className="flex flex-col gap-2">
                         <input type="file" ref={fileInputRef} onChange={(e) => e.target.files && setImageFile(e.target.files[0])} className="hidden" accept="image/*" />
                         <div className="flex items-center gap-2">
