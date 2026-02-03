@@ -15,8 +15,6 @@ function normalizeData(data: any[]): any[] {
   if (!data || !Array.isArray(data)) return [];
   return data.map(item => {
     const newItem = { ...item };
-    // Legacy support logic removed as per instruction to abandon market_id
-    // Just ensure marketId exists if returned
     return newItem;
   });
 }
@@ -225,10 +223,8 @@ export const MarketAPI = {
 };
 
 export const StoreAPI = {
-  // [MODIFIED] getList Fallback에서도 marketId만 사용
   getList: async (params?: any) => {
     try {
-        // Attempt 1: Standard Join
         let selectStmt = '*, markets(name)';
         if (params?.marketName) selectStmt = '*, markets!inner(name)';
         
@@ -248,13 +244,9 @@ export const StoreAPI = {
         })) as Store[];
 
     } catch (joinError) {
-        console.warn("StoreAPI.getList join failed, trying fallback...", joinError);
-        
-        // Attempt 2: Manual Join (marketId only)
+        // Fallback Logic...
         try {
-            // 2-1. 상가 목록 조회
             let query = supabase.from('stores').select('*').order('id', { ascending: false });
-            // [FIX] marketId만 사용 (market_id 제거)
             if (params?.marketId) {
                 query = query.eq('marketId', params.marketId);
             }
@@ -264,35 +256,125 @@ export const StoreAPI = {
             const { data: stores, error: storeError } = await query;
             if (storeError) throw storeError;
 
-            // 2-2. 전체 시장 목록 조회
             const { data: markets } = await supabase.from('markets').select('id, name');
             const marketMap = new Map((markets || []).map((m: any) => [m.id, m.name]));
 
-            // 2-3. 병합
             const normalizedStores = normalizeData(stores || []);
             let result = normalizedStores.map((s: any) => ({
                 ...s,
                 marketName: marketMap.get(s.marketId) || '-'
             }));
 
-            // 2-4. 시장명 필터링
             if (params?.marketName) {
                 result = result.filter(s => s.marketName.includes(params.marketName));
             }
-            
             return result as Store[];
-
         } catch (fallbackError) {
-            console.error("StoreAPI.getList fallback failed", fallbackError);
             return [];
         }
     }
   },
   
-  // [MODIFIED] save: market_id 주입 로직 제거 (marketId만 사용)
+  // [MODIFIED] 상가 저장 시, 기기현황(수신기, 중계기, 감지기) 데이터도 자동 생성 및 연결
   save: async (store: Store) => {
-      // payload 그대로 전송 (types.ts의 Store 인터페이스는 이미 marketId를 가짐)
-      return supabaseSaver('stores', store, STORE_COLS);
+      // 1. 상가 정보 저장
+      const savedStore = await supabaseSaver<Store>('stores', store, STORE_COLS);
+
+      // 2. 기기 자동 연동 로직
+      // marketId와 MAC주소가 있어야 연동 가능
+      if (savedStore && savedStore.marketId && savedStore.receiverMac) {
+          const { marketId, receiverMac, repeaterId, detectorId, mode } = savedStore;
+
+          try {
+              // (1) R형 수신기 자동 등록 (없으면 생성)
+              const { data: existRcv } = await supabase.from('receivers')
+                  .select('id')
+                  .eq('marketId', marketId)
+                  .eq('macAddress', receiverMac)
+                  .maybeSingle();
+              
+              if (!existRcv) {
+                  await supabase.from('receivers').insert({
+                      marketId: marketId,
+                      macAddress: receiverMac,
+                      status: '사용',
+                      transmissionInterval: '01시간'
+                  });
+              }
+
+              // (2) 중계기 자동 등록 (없으면 생성)
+              if (repeaterId) {
+                  const { data: existRpt } = await supabase.from('repeaters')
+                      .select('id')
+                      .eq('marketId', marketId)
+                      .eq('receiverMac', receiverMac)
+                      .eq('repeaterId', repeaterId)
+                      .maybeSingle();
+                  
+                  if (!existRpt) {
+                      await supabase.from('repeaters').insert({
+                          marketId: marketId,
+                          receiverMac: receiverMac,
+                          repeaterId: repeaterId,
+                          status: '사용',
+                          alarmStatus: '사용'
+                      });
+                  }
+              }
+
+              // (3) 화재감지기 자동 등록 및 상가 연결
+              if (repeaterId && detectorId) {
+                  let targetDetectorId = 0;
+
+                  // 감지기 존재 여부 확인
+                  const { data: existDet } = await supabase.from('detectors')
+                      .select('id')
+                      .eq('marketId', marketId)
+                      .eq('receiverMac', receiverMac)
+                      .eq('repeaterId', repeaterId)
+                      .eq('detectorId', detectorId)
+                      .maybeSingle();
+
+                  if (existDet) {
+                      targetDetectorId = existDet.id;
+                  } else {
+                      // 없으면 새로 생성
+                      const { data: newDet } = await supabase.from('detectors').insert({
+                          marketId: marketId,
+                          receiverMac: receiverMac,
+                          repeaterId: repeaterId,
+                          detectorId: detectorId,
+                          mode: mode || '복합',
+                          status: '사용'
+                      }).select('id').single();
+                      
+                      if (newDet) targetDetectorId = newDet.id;
+                  }
+
+                  // 감지기-상가 매핑 테이블(detector_stores) 연결
+                  if (targetDetectorId > 0) {
+                      // 이미 연결되어 있는지 확인
+                      const { data: existLink } = await supabase.from('detector_stores')
+                          .select('id')
+                          .eq('detectorId', targetDetectorId)
+                          .eq('storeId', savedStore.id)
+                          .maybeSingle();
+                      
+                      if (!existLink) {
+                          await supabase.from('detector_stores').insert({
+                              detectorId: targetDetectorId,
+                              storeId: savedStore.id
+                          });
+                      }
+                  }
+              }
+          } catch (autoLinkError) {
+              console.warn("기기 자동 연동 중 오류 발생 (데이터는 저장됨):", autoLinkError);
+              // 자동 연동 실패가 상가 저장 실패로 이어지지 않도록 예외 처리
+          }
+      }
+
+      return savedStore;
   },
   
   delete: async (id: number) => { await supabase.from('stores').delete().eq('id', id); return true; },
@@ -302,7 +384,6 @@ export const StoreAPI = {
     if (error) throw error;
     return supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl;
   },
-  // [MODIFIED] saveBulk: market_id 매핑 제거
   saveBulk: async (stores: Store[]) => {
     const payloads = stores.map(s => mapToWhitelist(s, STORE_COLS));
     const { error } = await supabase.from('stores').insert(payloads);
