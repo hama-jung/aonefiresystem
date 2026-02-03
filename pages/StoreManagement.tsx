@@ -104,8 +104,8 @@ export const StoreManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId) { alert('시장을 선택해주세요.'); return; }
-    if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
+    if (!formData.marketId) { alert('현장을 선택해주세요.'); return; }
+    if (!formData.name) { alert('기기위치를 입력해주세요.'); return; }
 
     try {
       let uploadedUrl = formData.storeImage;
@@ -158,7 +158,7 @@ export const StoreManagement: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!excelMarket) {
-        alert('먼저 소속 시장을 선택해주세요.');
+        alert('먼저 소속 현장을 선택해주세요.');
         e.target.value = '';
         return;
     }
@@ -171,13 +171,14 @@ export const StoreManagement: React.FC = () => {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
+      // 엑셀 파싱 시 변경된 컬럼명 반영
       const parsedData: Store[] = data.map((row: any) => ({
         id: 0,
         marketId: excelMarket!.id,
         marketName: excelMarket!.name,
-        name: row['상가명'] || '',
-        managerName: row['점주명'] || '',
-        managerPhone: row['점주연락처'] || '',
+        name: row['기기위치'] || row['상가명'] || '', // 호환성 유지
+        managerName: row['대표자명'] || row['점주명'] || '',
+        managerPhone: row['연락처'] || row['점주연락처'] || '',
         address: row['주소'] || '',
         addressDetail: row['상세주소'] || '',
         handlingItems: row['취급품목'] || '',
@@ -206,42 +207,43 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleSampleDownload = () => {
+      // 엑셀 샘플 헤더 변경
       const sample = [{
-          '상가명': '샘플상가', '점주명': '홍길동', '점주연락처': '010-1234-5678', 
+          '기기위치': '샘플위치', '대표자명': '홍길동', '연락처': '010-1234-5678', 
           '주소': '서울시...', '상세주소': '101호', '취급품목': '의류', 
           '수신기MAC': '', '중계기ID': '', '감지기ID': '', '감지모드': '복합', '비고': ''
       }];
-      exportToExcel(sample, '상가_일괄등록_샘플');
+      exportToExcel(sample, '기기_일괄등록_샘플');
   };
 
   const handleExcelList = () => {
     const data = stores.map((s, i) => ({
         'No': i + 1,
-        '시장명': s.marketName,
-        '상가명': s.name,
-        '점주명': s.managerName,
+        '소속 현장': s.marketName,
+        '기기위치': s.name,
+        '대표자명': s.managerName,
         '연락처': s.managerPhone,
         '주소': `${s.address || ''} ${s.addressDetail || ''}`,
         '상태': s.status
     }));
-    exportToExcel(data, '상가목록');
+    exportToExcel(data, '기기목록');
   };
 
   // Columns
   const columns: Column<Store>[] = [
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { 
-        header: '시장명', 
+        header: '소속 현장', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.marketName}>{s.marketName}</div>,
         width: '140px'
     },
     { 
-        header: '상가명', 
+        header: '기기위치', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.name}>{s.name}</div>,
         width: '160px'
     },
     { 
-        header: '점주명', 
+        header: '대표자명', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.managerName}>{s.managerName}</div>,
         width: '100px' 
     },
@@ -268,12 +270,12 @@ export const StoreManagement: React.FC = () => {
   if (view === 'excel') {
       return (
           <>
-             <PageHeader title="상가 엑셀 일괄 등록" />
+             <PageHeader title="기기 엑셀 일괄 등록" />
              <FormSection title="엑셀 파일 업로드">
-                 <FormRow label="소속 시장 선택" required>
+                 <FormRow label="소속 현장 선택" required>
                     <div className="flex gap-2 w-full">
                        <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
-                          <input type="text" value={excelMarket?.name || ''} placeholder="시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
+                          <input type="text" value={excelMarket?.name || ''} placeholder="현장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
                           <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
                        </div>
                        <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
@@ -282,7 +284,7 @@ export const StoreManagement: React.FC = () => {
                  <FormRow label="엑셀 파일" required>
                     <div className="flex flex-col gap-2">
                         <InputGroup type="file" ref={excelFileInputRef} accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
-                        <p className="text-xs text-slate-400">* 상가명, 점주명, 연락처 등의 컬럼이 필요합니다.</p>
+                        <p className="text-xs text-slate-400">* 기기위치, 대표자명, 연락처 등의 컬럼이 필요합니다.</p>
                     </div>
                  </FormRow>
                  <FormRow label="샘플 양식">
@@ -293,7 +295,7 @@ export const StoreManagement: React.FC = () => {
                  <div className="mb-6">
                      <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
                      <DataTable 
-                        columns={[{header:'상가명', accessor:'name'}, {header:'점주명', accessor:'managerName'}, {header:'주소', accessor:'address'}]} 
+                        columns={[{header:'기기위치', accessor:'name'}, {header:'대표자명', accessor:'managerName'}, {header:'주소', accessor:'address'}]} 
                         data={excelData.slice(0, 10)} 
                      />
                      {excelData.length > 10 && <p className="text-center text-slate-500 text-sm mt-2">...외 {excelData.length - 10}건</p>}
@@ -311,25 +313,25 @@ export const StoreManagement: React.FC = () => {
   if (view === 'form') {
       return (
           <>
-            <PageHeader title={selectedStore ? "상가 수정" : "상가 등록"} />
+            <PageHeader title={selectedStore ? "기기 수정" : "기기 등록"} />
             <form onSubmit={handleSave}>
                <FormSection title="기본 정보">
-                  <FormRow label="소속 시장" required>
+                  <FormRow label="소속 현장" required>
                     <div className="flex gap-2 w-full">
                        <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
-                          <input type="text" value={formData.marketName || ''} placeholder="시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
+                          <input type="text" value={formData.marketName || ''} placeholder="현장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
                           <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
                        </div>
                        <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
                     </div>
                   </FormRow>
-                  <FormRow label="상가명" required>
+                  <FormRow label="기기위치" required>
                      <InputGroup value={formData.name || ''} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                   </FormRow>
-                  <FormRow label="점주명">
+                  <FormRow label="대표자명">
                      <InputGroup value={formData.managerName || ''} onChange={(e) => setFormData({...formData, managerName: e.target.value})} />
                   </FormRow>
-                  <FormRow label="점주 연락처">
+                  <FormRow label="연락처">
                      <InputGroup value={formData.managerPhone || ''} onChange={(e) => setFormData({...formData, managerPhone: e.target.value})} onKeyDown={handlePhoneKeyDown} maxLength={13} />
                   </FormRow>
                   <div className="col-span-1 md:col-span-2">
@@ -406,10 +408,10 @@ export const StoreManagement: React.FC = () => {
 
   return (
     <>
-      <PageHeader title="상가 관리" />
+      <PageHeader title="기기 관리" />
       <SearchFilterBar onSearch={handleSearch} onReset={handleReset} isFiltered={isFiltered}>
-         <InputGroup label="시장명" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
-         <InputGroup label="상가명" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
+         <InputGroup label="소속 현장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+         <InputGroup label="기기위치" value={searchStore} onChange={(e) => setSearchStore(e.target.value)} />
          <InputGroup label="주소" value={searchAddress} onChange={(e) => setSearchAddress(e.target.value)} />
       </SearchFilterBar>
 
