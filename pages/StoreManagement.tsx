@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { StoreAPI, MarketAPI } from '../services/api';
@@ -13,6 +14,11 @@ import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
 const ITEMS_PER_PAGE = 10;
+
+// 엑셀 미리보기용 확장 인터페이스
+interface ExcelStoreItem extends Store {
+    _status: '신규' | '수정';
+}
 
 export const StoreManagement: React.FC = () => {
   const location = useLocation();
@@ -40,7 +46,7 @@ export const StoreManagement: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Excel
-  const [excelData, setExcelData] = useState<Store[]>([]);
+  const [excelData, setExcelData] = useState<ExcelStoreItem[]>([]);
   const [excelMarket, setExcelMarket] = useState<Market | null>(null);
   const excelFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -165,36 +171,104 @@ export const StoreManagement: React.FC = () => {
     setView('excel');
   };
 
-  const handleExcelFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
+    if (!excelMarket) {
+        alert('먼저 설치 현장을 선택해주세요.');
+        if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+        return;
+    }
 
-      const parsedData: Store[] = data.map((row: any) => ({
-        id: 0,
-        marketId: excelMarket?.id || 0,
-        marketName: excelMarket?.name || '',
-        receiverMac: row['수신기MAC'] || '',
-        repeaterId: row['중계기ID'] ? String(row['중계기ID']).padStart(2,'0') : '',
-        detectorId: row['감지기번호'] ? String(row['감지기번호']).padStart(2,'0') : '',
-        mode: row['모드'] || '복합',
-        name: row['기기위치'] || '',
-        managerName: row['대표자'] || '', // '대표자'로 정확히 매핑
-        managerPhone: row['연락처'] || '',
-        address: row['주소'] || '',
-        addressDetail: row['상세주소'] || '',
-        handlingItems: row['취급품목'] || '',
-        memo: row['비고'] || '',
-        status: '사용'
-      }));
-      setExcelData(parsedData);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (data.length === 0) {
+            alert('엑셀 파일에 데이터가 없습니다.');
+            return;
+        }
+
+        // 1. 기존 DB 데이터 조회 (Upsert 판단용)
+        const existingStores = await StoreAPI.getList({ marketId: excelMarket.id });
+        const dbMap = new Map<string, Store>();
+        existingStores.forEach(s => {
+            const key = `${s.receiverMac}-${s.repeaterId}-${s.detectorId}`;
+            dbMap.set(key, s);
+        });
+
+        // 2. 파일 내 중복 체크용 Map
+        const fileDuplicateMap = new Map<string, number>();
+
+        const parsedData: ExcelStoreItem[] = [];
+        const errors: string[] = [];
+
+        for (let i = 0; i < data.length; i++) {
+            const row: any = data[i];
+            const rowNum = i + 2; // Header (1) + Index (0-based) = Excel Row Number
+
+            const mac = row['수신기MAC'] ? String(row['수신기MAC']).trim() : '';
+            const rptId = row['중계기ID'] ? String(row['중계기ID']).padStart(2, '0') : '';
+            const detId = row['감지기번호'] ? String(row['감지기번호']).padStart(2, '0') : '';
+
+            if (!mac || !rptId || !detId) {
+                errors.push(`${rowNum}행: 필수 식별 정보(MAC, 중계기, 감지기)가 누락되었습니다.`);
+                continue;
+            }
+
+            const key = `${mac}-${rptId}-${detId}`;
+
+            // [자체 중복 검증]
+            if (fileDuplicateMap.has(key)) {
+                const firstOccur = fileDuplicateMap.get(key);
+                alert(`${firstOccur}행과 ${rowNum}행의 기기 정보가 중복되었습니다. 파일을 확인해 주세요.`);
+                setExcelData([]);
+                if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+                return;
+            }
+            fileDuplicateMap.set(key, rowNum);
+
+            // [DB 매칭 - Upsert 판단]
+            const matchedStore = dbMap.get(key);
+
+            parsedData.push({
+                id: matchedStore ? matchedStore.id : 0, // 매칭되면 기존 ID, 아니면 0(신규)
+                marketId: excelMarket!.id,
+                marketName: excelMarket!.name,
+                receiverMac: mac,
+                repeaterId: rptId,
+                detectorId: detId,
+                mode: row['모드'] || '복합',
+                name: row['기기위치'] || '',
+                managerName: row['대표자'] || '',
+                managerPhone: row['연락처'] || '',
+                address: row['주소'] || excelMarket!.address,
+                addressDetail: row['상세주소'] || '',
+                handlingItems: row['취급품목'] || '',
+                memo: row['비고'] || '',
+                status: '사용',
+                _status: matchedStore ? '수정' : '신규'
+            });
+        }
+
+        if (errors.length > 0) {
+            alert(`엑셀 내용에 오류가 있습니다:\n\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '\n...' : ''}`);
+            setExcelData([]);
+            if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+            return;
+        }
+
+        setExcelData(parsedData);
+      } catch (err) {
+        console.error(err);
+        alert('파일을 처리하는 중 오류가 발생했습니다.');
+      }
     };
     reader.readAsBinaryString(file);
   };
@@ -203,24 +277,35 @@ export const StoreManagement: React.FC = () => {
     if (!excelMarket) { alert('소속 현장을 먼저 선택해주세요.'); return; }
     if (excelData.length === 0) { alert('업로드할 데이터가 없습니다.'); return; }
     
+    setLoading(true);
+    let insertCount = 0;
+    let updateCount = 0;
+
     try {
-        const finalData = excelData.map(d => ({ ...d, marketId: excelMarket.id, marketName: excelMarket.name }));
-        await StoreAPI.saveBulk(finalData);
-        alert('일괄 등록되었습니다.');
+        for (const item of excelData) {
+            const { _status, ...payload } = item;
+            await StoreAPI.save(payload as Store);
+            if (_status === '신규') insertCount++;
+            else updateCount++;
+        }
+        
+        alert(`처리가 완료되었습니다.\n(신규 등록: ${insertCount}건 / 정보 수정: ${updateCount}건)`);
         setView('list');
         fetchStores();
     } catch(e: any) {
-        alert('일괄 등록 실패: ' + e.message);
+        alert('처리 중 오류 발생: ' + e.message);
+    } finally {
+        setLoading(false);
     }
   };
 
   const handleSampleDownload = () => {
       const sample = [{
-          '수신기MAC': '', 
-          '중계기ID': '', 
-          '감지기번호': '', // '감지기ID'에서 '감지기번호'로 수정
+          '수신기MAC': 'A1B2', 
+          '중계기ID': '01', 
+          '감지기번호': '01', 
           '모드': '복합',
-          '기기위치': '샘플위치', 
+          '기기위치': '가동 101호', 
           '대표자': '홍길동', 
           '연락처': '010-1234-5678', 
           '주소': '서울시...', 
@@ -228,7 +313,7 @@ export const StoreManagement: React.FC = () => {
           '취급품목': '의류', 
           '비고': ''
       }];
-      exportToExcel(sample, '기기_일괄등록_샘플');
+      exportToExcel(sample, '기기_일괄등록_양식');
   };
 
   const handleExcelList = () => {
@@ -236,7 +321,7 @@ export const StoreManagement: React.FC = () => {
         'No': i + 1,
         '소속 현장': s.marketName,
         '기기위치': s.name,
-        '대표자': s.managerName, // '대표자명'에서 '대표자'로 수정하여 업로드 양식과 일치시킴
+        '대표자': s.managerName,
         '연락처': s.managerPhone,
         '주소': `${s.address || ''} ${s.addressDetail || ''}`,
         '상태': s.status
@@ -244,7 +329,7 @@ export const StoreManagement: React.FC = () => {
     exportToExcel(data, '기기목록');
   };
 
-  // Columns
+  // --- UI Columns ---
   const columns: Column<Store>[] = [
     { header: 'No', accessor: (_, idx) => idx + 1, width: '60px' },
     { 
@@ -277,10 +362,28 @@ export const StoreManagement: React.FC = () => {
     { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' },
   ];
 
-  // Pagination Logic
-  const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
-  const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
-  const currentItems = stores.slice(indexOfFirstItem, indexOfLastItem);
+  // 엑셀 미리보기 컬럼 (구분 추가)
+  const excelColumns: Column<ExcelStoreItem>[] = [
+    { 
+        header: '구분', 
+        accessor: (item) => (
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                item._status === '신규' 
+                ? 'bg-blue-900/40 text-blue-400 border-blue-800' 
+                : 'bg-orange-900/40 text-orange-400 border-orange-800'
+            }`}>
+                {item._status}
+            </span>
+        ),
+        width: '60px'
+    },
+    { header: '수신기MAC', accessor: 'receiverMac', width: '90px' },
+    { header: '중계기ID', accessor: 'repeaterId', width: '80px' },
+    { header: '감지기번호', accessor: 'detectorId', width: '90px' },
+    { header: '기기위치', accessor: 'name' },
+    { header: '대표자', accessor: 'managerName', width: '100px' },
+    { header: '연락처', accessor: 'managerPhone', width: '130px' },
+  ];
 
   if (view === 'excel') {
       return (
@@ -288,7 +391,6 @@ export const StoreManagement: React.FC = () => {
              <PageHeader title="기기 관리" />
              <div className="bg-slate-800 p-8 rounded-lg border border-slate-700 shadow-sm w-full mb-6">
                  <div className="flex flex-col gap-8">
-                    {/* Row 1: 소속 현장 선택 */}
                     <FormRow label="소속 현장 선택" required>
                        <div className="flex gap-2 w-full max-w-2xl">
                           <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
@@ -299,7 +401,6 @@ export const StoreManagement: React.FC = () => {
                        </div>
                     </FormRow>
 
-                    {/* Row 2: 엑셀 파일 선택 */}
                     <FormRow label="엑셀 파일 선택" required>
                        <div className="flex flex-col gap-2">
                            <div className="flex items-center gap-2">
@@ -310,65 +411,36 @@ export const StoreManagement: React.FC = () => {
                                </span>
                            </div>
                            <p className="text-xs text-slate-400 mt-1">
-                             * 수신기MAC, 중계기ID, 감지기번호, 모드, 기기위치, 대표자, 연락처, 주소, 상세주소, 취급품목, 비고 컬럼을 포함해야 합니다.
+                             * 이미 등록된 기기 정보가 있는 경우 자동으로 <b>정보 수정</b>으로 처리됩니다.
                            </p>
                        </div>
                     </FormRow>
 
-                    {/* Row 3: 샘플 양식 */}
-                    <FormRow label="샘플 양식">
-                        <Button type="button" variant="secondary" onClick={handleSampleDownload} icon={<Download size={14} />} className="w-fit">엑셀 샘플 다운로드</Button>
+                    <FormRow label="양식 다운로드">
+                        <Button type="button" variant="secondary" onClick={handleSampleDownload} icon={<Download size={14} />} className="w-fit">엑셀 샘플 양식 다운로드</Button>
                     </FormRow>
                  </div>
              </div>
 
-             {/* Preview Table */}
              {excelData.length > 0 && (
-                 <div className="mb-6">
-                     <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
-                     <div className="overflow-x-auto rounded-lg border border-slate-700 shadow-sm">
-                         <table className="min-w-full divide-y divide-slate-700 bg-slate-800">
-                             <thead className="bg-slate-900">
-                                 <tr>
-                                     <th className={UI_STYLES.th}>수신기MAC</th>
-                                     <th className={UI_STYLES.th}>중계기ID</th>
-                                     <th className={UI_STYLES.th}>감지기번호</th>
-                                     <th className={UI_STYLES.th}>모드</th>
-                                     <th className={UI_STYLES.th}>기기위치</th>
-                                     <th className={UI_STYLES.th}>대표자</th>
-                                     <th className={UI_STYLES.th}>연락처</th>
-                                     <th className={UI_STYLES.th}>주소</th>
-                                     <th className={UI_STYLES.th}>상세주소</th>
-                                     <th className={UI_STYLES.th}>취급품목</th>
-                                     <th className={UI_STYLES.th}>비고</th>
-                                 </tr>
-                             </thead>
-                             <tbody className="divide-y divide-slate-700">
-                                 {excelData.slice(0, 20).map((row, idx) => (
-                                     <tr key={idx} className="hover:bg-slate-700/50 transition-colors">
-                                         <td className={UI_STYLES.td}>{row.receiverMac}</td>
-                                         <td className={UI_STYLES.td}>{row.repeaterId}</td>
-                                         <td className={UI_STYLES.td}>{row.detectorId}</td>
-                                         <td className={UI_STYLES.td}>{row.mode}</td>
-                                         <td className={UI_STYLES.td}>{row.name}</td>
-                                         <td className={UI_STYLES.td}>{row.managerName}</td>
-                                         <td className={UI_STYLES.td}>{row.managerPhone}</td>
-                                         <td className={UI_STYLES.td}>{row.address}</td>
-                                         <td className={UI_STYLES.td}>{row.addressDetail}</td>
-                                         <td className={UI_STYLES.td}>{row.handlingItems}</td>
-                                         <td className={UI_STYLES.td}>{row.memo}</td>
-                                     </tr>
-                                 ))}
-                             </tbody>
-                         </table>
+                 <div className="mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                     <div className="flex justify-between items-end mb-2">
+                        <h4 className="text-lg font-bold text-slate-200">업로드 데이터 미리보기 ({excelData.length}건)</h4>
+                        <div className="flex gap-4 text-xs">
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> 신규 등록</span>
+                            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-500"></span> 정보 수정</span>
+                        </div>
                      </div>
-                     {excelData.length > 20 && <p className="text-center text-slate-500 text-sm mt-3 font-medium">...외 {excelData.length - 20}건의 데이터가 더 있습니다.</p>}
+                     <DataTable columns={excelColumns} data={excelData.slice(0, 50)} />
+                     {excelData.length > 50 && <p className="text-center text-slate-500 text-sm mt-3 italic">... 상위 50건만 표시됩니다.</p>}
                  </div>
              )}
 
-             <div className="flex justify-center gap-3 mt-8">
-                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || !excelMarket} className="w-32">일괄 등록</Button>
-                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
+             <div className="flex justify-center gap-3 mt-8 pb-10">
+                <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || loading} className="w-40 h-11 text-base shadow-lg">
+                    {loading ? '처리 중...' : '일괄 등록/수정 실행'}
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32 h-11 text-base">취소</Button>
              </div>
              <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
           </>
@@ -483,8 +555,8 @@ export const StoreManagement: React.FC = () => {
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{stores.length}</span> 건 (페이지 {currentPage})</span>
          <div className="flex gap-2">
-            <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
-            <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
+            <Button variant="primary" onClick={handleRegister}>개별 등록</Button>
+            <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 등록수정</Button>
             <Button variant="success" onClick={handleExcelList} icon={<Download size={16} />}>엑셀 다운로드</Button>
          </div>
       </div>
@@ -492,7 +564,7 @@ export const StoreManagement: React.FC = () => {
       {loading ? (
          <div className="text-center py-20 text-slate-500">Loading...</div>
       ) : (
-         <DataTable columns={columns} data={currentItems} onRowClick={handleEdit} />
+         <DataTable columns={columns} data={stores.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)} onRowClick={handleEdit} />
       )}
       <Pagination totalItems={stores.length} itemsPerPage={ITEMS_PER_PAGE} currentPage={currentPage} onPageChange={setCurrentPage} />
     </>
