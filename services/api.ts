@@ -189,36 +189,81 @@ export const MarketAPI = {
 };
 
 export const StoreAPI = {
+  // [MODIFIED] getList에 Fallback 로직 추가 (Join 실패 시 개별 조회)
   getList: async (params?: any) => {
-    // 시장명을 필터링하기 위해 !inner 조인을 사용할지 결정
-    // marketName 검색어가 있으면 inner join으로 검색된 시장만 포함
-    let selectStmt = '*, markets(name)';
-    if (params?.marketName) {
-        selectStmt = '*, markets!inner(name)';
-    }
+    try {
+        // Attempt 1: Standard Join (성공 시 가장 빠름)
+        let selectStmt = '*, markets(name)';
+        if (params?.marketName) selectStmt = '*, markets!inner(name)';
+        
+        let query = supabase.from('stores').select(selectStmt).order('id', { ascending: false });
+        
+        if (params?.marketId) query = query.eq('marketId', params.marketId);
+        if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
+        if (params?.address) query = query.ilike('address', `%${params.address}%`);
+        // Joined Table filtering handled by selectStmt
+        
+        const { data, error } = await query;
+        if (error) throw error; // 에러 발생 시 Fallback으로 이동
 
-    let query = supabase.from('stores').select(selectStmt).order('id', { ascending: false });
-    
-    if (params?.marketId) query = query.eq('marketId', params.marketId);
-    if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
-    if (params?.address) query = query.ilike('address', `%${params.address}%`);
-    
-    // Joined Table filtering
-    if (params?.marketName) query = query.ilike('markets.name', `%${params.marketName}%`);
-    
-    const { data, error } = await query;
-    if (error) {
-        console.error("StoreAPI.getList error", error);
-        return [];
+        const normalizedData = normalizeData(data || []);
+        return normalizedData.map((s: any) => ({ 
+            ...s,
+            marketName: s.markets?.name || '-' 
+        })) as Store[];
+
+    } catch (joinError) {
+        console.warn("StoreAPI.getList join failed, trying fallback...", joinError);
+        
+        // Attempt 2: Manual Join (상가 조회 + 시장 조회 후 병합)
+        try {
+            // 2-1. 상가 목록 조회
+            let query = supabase.from('stores').select('*').order('id', { ascending: false });
+            // marketId 필터 (snake_case 호환 고려)
+            if (params?.marketId) {
+                query = query.or(`marketId.eq.${params.marketId},market_id.eq.${params.marketId}`);
+            }
+            if (params?.storeName) query = query.ilike('name', `%${params.storeName}%`);
+            if (params?.address) query = query.ilike('address', `%${params.address}%`);
+            
+            const { data: stores, error: storeError } = await query;
+            if (storeError) throw storeError;
+
+            // 2-2. 전체 시장 목록 조회 (이름 매핑용)
+            const { data: markets } = await supabase.from('markets').select('id, name');
+            const marketMap = new Map((markets || []).map((m: any) => [m.id, m.name]));
+
+            // 2-3. 병합
+            const normalizedStores = normalizeData(stores || []);
+            let result = normalizedStores.map((s: any) => ({
+                ...s,
+                marketName: marketMap.get(s.marketId) || '-'
+            }));
+
+            // 2-4. 시장명 필터링 (클라이언트 처리)
+            if (params?.marketName) {
+                result = result.filter(s => s.marketName.includes(params.marketName));
+            }
+            
+            return result as Store[];
+
+        } catch (fallbackError) {
+            console.error("StoreAPI.getList fallback failed", fallbackError);
+            return []; // 최후의 경우 빈 배열
+        }
     }
-    
-    const normalizedData = normalizeData(data || []);
-    return normalizedData.map((s: any) => ({ 
-        ...s,
-        marketName: s.markets?.name || '-' 
-    })) as Store[];
   },
-  save: async (store: Store) => supabaseSaver('stores', store, STORE_COLS),
+  
+  // [MODIFIED] save 시 market_id 필드 호환성 추가
+  save: async (store: Store) => {
+      const payload = { ...store };
+      // DB 컬럼이 snake_case일 가능성을 대비하여 market_id 주입
+      if (payload.marketId && !(payload as any).market_id) {
+          (payload as any).market_id = payload.marketId;
+      }
+      return supabaseSaver('stores', payload, [...STORE_COLS, 'market_id']);
+  },
+  
   delete: async (id: number) => { await supabase.from('stores').delete().eq('id', id); return true; },
   uploadStoreImage: async (file: File) => {
     const fileName = generateSafeFileName('str', file.name);
@@ -227,7 +272,11 @@ export const StoreAPI = {
     return supabase.storage.from('store-images').getPublicUrl(fileName).data.publicUrl;
   },
   saveBulk: async (stores: Store[]) => {
-    const payloads = stores.map(s => mapToWhitelist(s, STORE_COLS));
+    const payloads = stores.map(s => {
+        const p = mapToWhitelist(s, STORE_COLS);
+        if (s.marketId) p.market_id = s.marketId; // Bulk insert 호환성
+        return p;
+    });
     const { error } = await supabase.from('stores').insert(payloads);
     if (error) throw error;
     return true;
