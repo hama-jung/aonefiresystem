@@ -233,17 +233,17 @@ export const StoreManagement: React.FC = () => {
     { 
         header: '시장명', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.marketName}>{s.marketName}</div>,
-        width: '140px'
+        width: '160px'
     },
     { 
         header: '상가명', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.name}>{s.name}</div>,
-        width: '160px'
+        width: '180px'
     },
     { 
         header: '점주명', 
         accessor: (s) => <div className="truncate whitespace-nowrap" title={s.managerName}>{s.managerName}</div>,
-        width: '100px' 
+        width: '120px' 
     },
     { 
         header: '연락처', 
@@ -256,6 +256,7 @@ export const StoreManagement: React.FC = () => {
             const fullAddr = `${s.address || ''} ${s.addressDetail || ''}`.trim();
             return <div className="truncate whitespace-nowrap" title={fullAddr}>{fullAddr}</div>;
         }
+        // 주소는 width 미지정으로 남은 공간 모두 사용
     },
     { header: '상태', accessor: (s) => <StatusBadge status={s.status} />, width: '80px' },
   ];
