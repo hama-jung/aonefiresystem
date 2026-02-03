@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Modal, UI_STYLES } from './CommonUI';
 import { Market, Detector, Receiver, Repeater, Store } from '../types';
 import { DetectorAPI, ReceiverAPI, RepeaterAPI, FireHistoryAPI, DeviceStatusAPI, StoreAPI } from '../services/api';
-import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3 } from 'lucide-react';
+import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3, User, Phone, MapPin } from 'lucide-react';
 
 interface VisualMapConsoleProps {
   market: Market;
@@ -49,7 +49,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const loadDevices = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Base Devices & Stores
+      // 1. Fetch Base Devices & Stores (기기관리 데이터 포함)
       const [detData, rcvData, rptData, storesData] = await Promise.all([
         DetectorAPI.getList({ marketName: market.name }),
         ReceiverAPI.getList({ marketName: market.name }),
@@ -67,7 +67,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
 
       const activeFires = fireLogs.filter(f => ['화재', '등록'].includes(f.falseAlarmStatus));
 
-      // 3. Merge Status & Store Info - Detectors
+      // 3. Merge Status & Link Store Info by ID matching - Detectors
       const mergedDetectors = detData.map(d => {
           // Check Fire
           const isFire = activeFires.some(f => 
@@ -89,9 +89,13 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           else if (isFault) status = '고장';
           else if (d.status === '미사용') status = '미사용';
 
-          // Link Store Details for Sidebar/Modal
-          const linkedStoreId = d.stores && d.stores.length > 0 ? d.stores[0].id : null;
-          const storeInfo = linkedStoreId ? storesData.find(s => s.id === linkedStoreId) : undefined;
+          // [MODIFIED] Link Store Details by matching IDs (MAC, RptID, DetID) as requested
+          // 기기관리(Store) 테이블에서 이 감지기의 ID 조합과 일치하는 상가를 찾습니다.
+          const storeInfo = storesData.find(s => 
+            s.receiverMac === d.receiverMac && 
+            s.repeaterId === d.repeaterId && 
+            s.detectorId === d.detectorId
+          );
 
           return { ...d, status, storeInfo };
       });
@@ -254,7 +258,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         bgColor = "bg-orange-600 animate-pulse";
         iconName = "local_fire_department"; 
     } else if (isError) {
-        // [MODIFIED] Added animate-pulse to fault markers
         bgColor = "bg-amber-500 animate-pulse";
         iconName = "warning_amber";
     } else {
@@ -432,17 +435,38 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                 {fireDevices.length === 0 ? (
                                     <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs gap-2"><CheckCircle size={24} className="text-green-500/50" /><span>현재 화재 신호가 없습니다.</span></div>
                                 ) : (
-                                    <ul className="space-y-2">
+                                    <ul className="space-y-3">
                                         {fireDevices.map((d: any, idx) => (
-                                            <li key={`${d.id}-${idx}`} className="bg-red-900/20 border border-red-500/30 p-2 rounded flex flex-col gap-1 animate-pulse cursor-pointer hover:bg-red-900/40" onClick={() => handleDeviceClick(d, d.detectorId ? 'detector' : (d.repeaterId ? 'repeater' : 'receiver'))}>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-sm font-bold text-red-200">{d.storeInfo?.name || '위치 미지정'}</span>
-                                                    <span className="bg-red-600 text-white text-[10px] px-1 rounded font-bold">화재</span>
+                                            <li key={`${d.id}-${idx}`} className="bg-slate-800 border border-red-500/30 p-3 rounded flex flex-col gap-2 cursor-pointer hover:bg-red-900/10 transition-colors" onClick={() => handleDeviceClick(d, d.detectorId ? 'detector' : (d.repeaterId ? 'repeater' : 'receiver'))}>
+                                                <div className="flex justify-between items-start">
+                                                    <span className="text-[15px] font-black text-white leading-tight">
+                                                        {d.storeInfo?.name || (d.detectorId ? `기기위치 미등록 (감지기 ${d.detectorId})` : '위치 정보 없음')}
+                                                    </span>
+                                                    <span className={`flex-shrink-0 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter ${d.status === '화재' ? 'opacity-100' : 'bg-orange-500'}`}>
+                                                        {d.status}
+                                                    </span>
                                                 </div>
-                                                <div className="text-[11px] text-red-400/80 leading-tight">
-                                                    <p>{d.storeInfo?.address || '주소 정보 없음'}</p>
-                                                    <p>{d.storeInfo?.managerName || '성함 미상'} ({d.storeInfo?.managerPhone || '연락처 미상'})</p>
-                                                    <p className="mt-1 opacity-60">감지기 No.{d.detectorId} (중계기 {d.repeaterId})</p>
+                                                
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-start gap-1.5 text-[11px]">
+                                                        <MapPin size={12} className="text-slate-500 mt-0.5" />
+                                                        <span className="text-slate-300 leading-normal">{d.storeInfo?.address ? `${d.storeInfo.address} ${d.storeInfo.addressDetail || ''}` : '주소 정보가 등록되지 않았습니다.'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-[11px]">
+                                                        <div className="flex items-center gap-1">
+                                                            <User size={12} className="text-slate-500" />
+                                                            <span className="text-slate-200 font-medium">{d.storeInfo?.managerName || '대표자 미등록'}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <Phone size={12} className="text-slate-500" />
+                                                            <span className="text-blue-400 font-bold">{d.storeInfo?.managerPhone || '연락처 미등록'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-1 pt-1.5 border-t border-slate-700/50 flex justify-between items-center text-[10px] text-slate-500">
+                                                    <span>수신기: {d.receiverMac} | 중계기: {d.repeaterId}</span>
+                                                    <span>번호: {d.detectorId || '-'}</span>
                                                 </div>
                                             </li>
                                         ))}
@@ -528,7 +552,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         {selectedAlertDevice.storeInfo && (
                             <>
                                 <div className="pt-2 mt-2 border-t border-slate-700 font-bold text-slate-200">설치 위치 상세</div>
-                                <p className="flex flex-col gap-0.5"><span className="text-xs text-slate-500">주소:</span> <span className="text-slate-300">{selectedAlertDevice.storeInfo.address} {selectedAlertDevice.storeInfo.addressDetail}</span></p>
+                                <p className="flex flex-col gap-0.5"><span className="text-xs text-slate-500">주소:</span> <span className="text-slate-300">{selectedAlertDevice.storeInfo.address} {selectedAlertDevice.storeInfo.addressDetail || ''}</span></p>
                                 <p className="flex justify-between mt-1"><span>대표자:</span> <span className="text-slate-300">{selectedAlertDevice.storeInfo.managerName}</span></p>
                                 <p className="flex justify-between"><span>연락처:</span> <span className="text-blue-400 font-bold underline cursor-pointer">{selectedAlertDevice.storeInfo.managerPhone}</span></p>
                             </>
@@ -545,7 +569,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         <Button variant="secondary" onClick={() => setActionModalOpen(false)} className="h-11">닫기</Button>
                     </div>
 
-                    {/* [NEW] 정보 수정 이동 버튼 */}
                     <div className="mt-2">
                         <button 
                             onClick={handleNavigateToEdit}
