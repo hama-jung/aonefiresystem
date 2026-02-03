@@ -580,23 +580,28 @@ export const DataReceptionAPI = {
 export const DashboardAPI = {
   getData: async () => {
     try {
-      // [MODIFIED] Only fetch Active Markets
-      const { data: mkts } = await supabase.from('markets').select('*').eq('usageStatus', '사용');
-      const activeMarketIds = (mkts || []).map((m: any) => m.id);
+      // 1. Fetch Active Markets and Common Codes in parallel
+      const [mktsRes, codesRes] = await Promise.all([
+          supabase.from('markets').select('*').eq('usageStatus', '사용'),
+          supabase.from('common_codes').select('*')
+      ]);
 
-      const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
-      const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러').neq('errorCode', '04');
-      const { count: commCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('errorCode', '04');
+      const mkts = mktsRes.data || [];
+      const codes = codesRes.data || [];
       
-      // [MODIFIED] Limit 제거: show all data
-      // 1. Fire Events
+      // Create Error Code Map (code -> name)
+      const errorMap = new Map<string, string>();
+      codes.forEach((c: any) => errorMap.set(c.code, c.name));
+
+      // 2. Fetch All Events (joined with markets)
+      // Note: We fetch all and then filter by usageStatus in JS to ensure consistency
+      // as Supabase join filtering can be complex with OR conditions or multiple tables.
       const { data: fH } = await supabase
           .from('fire_history')
           .select('*, markets(name, usageStatus)')
           .in('falseAlarmStatus', ['화재', '등록'])
           .order('registeredAt', { ascending: false });
 
-      // 2. Fault Events
       const { data: dS } = await supabase
           .from('device_status')
           .select('*, markets(name, usageStatus)')
@@ -604,18 +609,15 @@ export const DashboardAPI = {
           .neq('errorCode', '04')
           .order('registeredAt', { ascending: false });
 
-      // 3. Comm Error Events
       const { data: cE } = await supabase
           .from('device_status')
           .select('*, markets(name, usageStatus)')
           .eq('errorCode', '04')
           .order('registeredAt', { ascending: false });
 
-      const normalizedMkts = normalizeData(mkts || []);
+      const normalizedMkts = normalizeData(mkts);
       
-      // [MODIFIED] Filter lists by usageStatus (via join or existing market list)
-      // Since we already filtered 'mkts', we can filter events based on marketId/marketName if consistent,
-      // or check the joined 'markets.usageStatus'.
+      // 3. Filter by Active Markets ('사용')
       const activeFH = (fH || []).filter((e: any) => e.markets?.usageStatus === '사용');
       const activeDS = (dS || []).filter((e: any) => e.markets?.usageStatus === '사용');
       const activeCE = (cE || []).filter((e: any) => e.markets?.usageStatus === '사용');
@@ -624,11 +626,17 @@ export const DashboardAPI = {
       const normalizedDS = normalizeData(activeDS);
       const normalizedCE = normalizeData(activeCE);
 
+      // 4. Calculate Stats from Filtered Data (Correct Count)
+      // This ensures stats match the list exactly.
+      const fireCount = activeFH.length;
+      const faultCount = activeDS.length;
+      const commCount = activeCE.length;
+
       return {
         stats: [
-          { label: '화재발생', value: fireCount || 0, type: 'fire' },
-          { label: '고장발생', value: faultCount || 0, type: 'fault' },
-          { label: '통신 이상', value: commCount || 0, type: 'error' },
+          { label: '화재발생', value: fireCount, type: 'fire' },
+          { label: '고장발생', value: faultCount, type: 'fault' },
+          { label: '통신 이상', value: commCount, type: 'error' },
         ],
         fireEvents: normalizedFH.map((e: any) => ({
             id: e.id,
@@ -641,7 +649,10 @@ export const DashboardAPI = {
             id: e.id,
             marketId: e.marketId,
             marketName: e.markets?.name || e.marketName,
-            device: `${e.deviceType} ${e.deviceId}번`,
+            deviceType: e.deviceType,
+            deviceId: e.deviceId,
+            errorCode: e.errorCode,
+            errorName: errorMap.get(e.errorCode) || e.errorCode, // Map error code to name
             time: e.registeredAt
         })),
         commEvents: normalizedCE.map((e: any) => ({
@@ -652,7 +663,7 @@ export const DashboardAPI = {
             time: e.registeredAt
         })),
         mapData: normalizedMkts.map((m: any) => ({ 
-            ...m, // [MODIFIED] Pass full market object for VisualMapConsole compatibility
+            ...m, 
             id: m.id, 
             name: m.name, 
             x: m.latitude,  
@@ -663,7 +674,10 @@ export const DashboardAPI = {
             mapImages: m.mapImages
         }))
       };
-    } catch (e) { return { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] }; }
+    } catch (e) { 
+        console.error("Dashboard Data Fetch Error:", e);
+        return { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] }; 
+    }
   }
 };
 

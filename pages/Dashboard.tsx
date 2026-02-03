@@ -565,9 +565,9 @@ export const Dashboard: React.FC = () => {
                       currentFaultEvents.map((log: any) => (
                          <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
                             <div className="flex items-center gap-3 overflow-hidden">
-                               <span className="bg-[#F57C00] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0">고장</span>
+                               <span className="bg-[#F57C00] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0">{log.errorName || '에러'}</span>
                                <span className="text-sm text-slate-200 font-medium truncate">
-                                   {log.marketName} <span className="text-slate-400 font-normal">{log.device} 고장</span>
+                                   {log.marketName} <span className="text-slate-400 font-normal">{log.deviceType} {log.deviceId}번</span>
                                </span>
                             </div>
                             <span className="text-xs text-slate-500 flex-shrink-0">
@@ -598,7 +598,7 @@ export const Dashboard: React.FC = () => {
                          <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
                             <div className="flex items-center gap-3 overflow-hidden">
                                <span className="text-sm text-slate-200 font-bold truncate">
-                                   {log.marketName} <span className="text-slate-400 font-normal">({log.marketName})</span>
+                                   {log.marketName} <span className="text-slate-400 font-normal">({log.receiverMac})</span>
                                </span>
                             </div>
                             <div className="flex items-center gap-3">
