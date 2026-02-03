@@ -296,33 +296,28 @@ export const AddressSearchModal: React.FC<AddressSearchModalProps> = ({ isOpen, 
              addr += ' (' + extraAddr + ')';
           }
 
+          const handleSuccess = (coords: {lat: string, lng: string} | undefined) => {
+             onComplete({
+                address: addr,
+                zonecode: data.zonecode,
+                buildingName: data.buildingName,
+                coordinates: coords
+             });
+          };
+
           // 주소 좌표 변환 (Kakao Map Geocoder)
           if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
              const geocoder = new window.kakao.maps.services.Geocoder();
              geocoder.addressSearch(addr, function(result: any, status: any) {
                  if (status === window.kakao.maps.services.Status.OK) {
-                     onComplete({
-                        address: addr,
-                        zonecode: data.zonecode,
-                        buildingName: data.buildingName,
-                        coordinates: { lat: result[0].y, lng: result[0].x }
-                     });
+                     handleSuccess({ lat: result[0].y, lng: result[0].x });
                  } else {
-                     onComplete({
-                        address: addr,
-                        zonecode: data.zonecode,
-                        buildingName: data.buildingName
-                     });
+                     handleSuccess(undefined);
                  }
              });
           } else {
-             onComplete({
-                address: addr,
-                zonecode: data.zonecode,
-                buildingName: data.buildingName
-             });
+             handleSuccess(undefined);
           }
-          onClose();
         },
         width: '100%',
         height: '100%',
@@ -475,10 +470,15 @@ export const DataTable = <T extends { id: number | string }>({ columns, data, on
     <div className="overflow-hidden rounded-lg border border-slate-700 shadow-sm bg-slate-800">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-700">
+          <colgroup>
+            {columns.map((col, idx) => (
+              <col key={idx} style={{ width: col.width }} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
               {columns.map((col, idx) => (
-                <th key={idx} scope="col" className={UI_STYLES.th} style={{ width: col.width }}>
+                <th key={idx} scope="col" className={UI_STYLES.th}>
                   {col.header}
                 </th>
               ))}
