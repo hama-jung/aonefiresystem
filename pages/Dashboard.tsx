@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/CommonUI';
-import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight, AlertCircle, Radio } from 'lucide-react';
+import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight, AlertCircle, Radio, RotateCcw } from 'lucide-react';
 import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
@@ -189,9 +189,6 @@ export const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Filters State (Global)
-  // const [keyword, setKeyword] = useState(''); // Removed, used in map filter now
-
   // Pagination States
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
@@ -257,6 +254,17 @@ export const Dashboard: React.FC = () => {
           const m = data.mapData.find((item: any) => item.id === marketId);
           if (m) setSelectedMarket(m);
       }
+  };
+
+  // [Added] Reset Filter Function
+  const handleResetMapFilter = () => {
+      setMapSido('');
+      setMapSigun('');
+      setMapKeyword('');
+      setMapSigunguList([]);
+      // Resetting focusLocation is optional, keeping map view as is usually better UX, or we can zoom out.
+      // But clearing selection is good.
+      // setSelectedMarket(null); // Optional: if we want to close the modal
   };
 
   if (loading && !data) {
@@ -451,12 +459,12 @@ export const Dashboard: React.FC = () => {
         <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a] relative">
            
            {/* Top Filter Overlay (Floating) */}
-           <div className="absolute top-4 left-4 right-4 z-20 flex gap-2">
-               <div className="flex gap-2 bg-slate-800/90 p-1 rounded-md border border-slate-600 shadow-xl flex-wrap">
+           <div className="absolute top-4 left-4 right-4 z-20 flex justify-center pointer-events-none">
+               <div className="flex gap-2 bg-slate-800/90 p-2 rounded-md border border-slate-600 shadow-xl items-center pointer-events-auto">
                    <select 
                        value={mapSido} 
                        onChange={(e) => setMapSido(e.target.value)} 
-                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[100px]"
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[110px]"
                    >
                        <option value="">시/도 선택</option>
                        {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
@@ -464,16 +472,17 @@ export const Dashboard: React.FC = () => {
                    <select 
                        value={mapSigun} 
                        onChange={(e) => setMapSigun(e.target.value)} 
-                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[100px]"
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[110px]"
                    >
                        <option value="">시/군/구 선택</option>
                        {mapSigunguList.map(s => <option key={s} value={s}>{s}</option>)}
                    </select>
                    <select 
                        onChange={handleMapMarketSelect}
-                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[120px]"
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[150px] max-w-[200px]"
+                       value=""
                    >
-                       <option value="">현장 목록 선택</option>
+                       <option value="">현장 목록 ({filteredMapData.length})</option>
                        {filteredMapData.map((m: any) => (
                            <option key={m.id} value={m.id}>{m.name}</option>
                        ))}
@@ -484,10 +493,17 @@ export const Dashboard: React.FC = () => {
                            placeholder="현장명 검색" 
                            value={mapKeyword}
                            onChange={(e) => setMapKeyword(e.target.value)}
-                           className="bg-slate-700 text-white text-xs border border-slate-600 rounded pl-2 pr-7 py-1.5 focus:outline-none focus:border-blue-500 w-32"
+                           className="bg-slate-700 text-white text-xs border border-slate-600 rounded pl-2 pr-7 py-1.5 focus:outline-none focus:border-blue-500 w-80"
                        />
                        <Search size={12} className="absolute right-2 top-2 text-slate-400" />
                    </div>
+                   <button 
+                        onClick={handleResetMapFilter} 
+                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-md border border-blue-500"
+                   >
+                        <RotateCcw size={14} />
+                        전체보기
+                   </button>
                </div>
            </div>
 
