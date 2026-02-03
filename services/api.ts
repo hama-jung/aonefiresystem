@@ -405,7 +405,42 @@ export const RepeaterAPI = {
 };
 
 export const DetectorAPI = {
-  getList: async (params?: any) => getDeviceListWithMarket<Detector>('detectors', params),
+  getList: async (params?: any) => {
+    try {
+      // 감지기-상가 관계 및 실제 상가 정보를 조인하여 가져옵니다.
+      let query = supabase
+        .from('detectors')
+        .select('*, markets(name), detector_stores(stores(id, name))')
+        .order('id', { ascending: false });
+
+      if (params) {
+        Object.keys(params).forEach(key => {
+          if (!params[key] || params[key] === 'all') return;
+          if (['marketName', 'startDate', 'endDate'].includes(key)) return;
+          query = query.eq(key, params[key]);
+        });
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const normalizedData = normalizeData(data || []);
+      let result = normalizedData.map((item: any) => ({
+        ...item,
+        marketName: item.markets?.name || '-',
+        // detector_stores를 순회하며 실제 상가 객체 배열로 변환
+        stores: item.detector_stores?.map((ds: any) => ds.stores).filter(Boolean) || []
+      }));
+
+      if (params?.marketName) {
+        result = result.filter((item: any) => item.marketName.includes(params.marketName));
+      }
+      return result as Detector[];
+    } catch (e) {
+      console.warn("DetectorAPI.getList 조인 실패, 기본 조인으로 대체합니다.", e);
+      return getDeviceListWithMarket<Detector>('detectors', params);
+    }
+  },
   save: async (detector: Detector) => {
     const { stores, ...rest } = detector;
     const saved = await supabaseSaver('detectors', rest as any, [...DEVICE_BASE_COLS, 'detectorId', 'mode', 'cctvUrl', 'smsList']);

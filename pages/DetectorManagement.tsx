@@ -254,10 +254,10 @@ export const DetectorManagement: React.FC = () => {
                    <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
                 </FormRow>
 
-                <FormRow label="설치 상가(점포 추가)" className="col-span-1">
+                <FormRow label="기기위치 (점포 연결)" className="col-span-1">
                   <div className="flex flex-col gap-2 w-full">
                      <div className="flex justify-end">
-                        <Button type="button" variant="secondary" onClick={openStoreModal} icon={<Search size={14} />} className="text-xs h-7 px-2">상가 검색</Button>
+                        <Button type="button" variant="secondary" onClick={openStoreModal} icon={<Search size={14} />} className="text-xs h-7 px-2">기기관리 검색</Button>
                      </div>
                      <div className="bg-slate-900 border border-slate-600 rounded p-2 h-32 overflow-y-auto custom-scrollbar">
                         {selectedStores.map((store) => (
@@ -349,7 +349,7 @@ export const DetectorManagement: React.FC = () => {
                     { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
                     { header: '감지기 ID', accessor: 'detectorId', width: '100px' },
                     { header: '소속 현장', accessor: 'marketName' },
-                    { header: '설치상가', accessor: (item) => item.stores?.[0]?.name || '-' },
+                    { header: '기기위치', accessor: (item) => item.stores?.[0]?.name || '-' },
                     { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
                 ]}
                 data={detectors.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
@@ -359,11 +359,14 @@ export const DetectorManagement: React.FC = () => {
           </>
       )}
       <ReceiverSearchModal isOpen={isReceiverModalOpen} onClose={() => setIsReceiverModalOpen(false)} onSelect={handleReceiverSelect} />
-      <Modal isOpen={isStoreModalOpen} onClose={() => setIsStoreModalOpen(false)} title="상가 리스트" width="max-w-4xl">
+      <Modal isOpen={isStoreModalOpen} onClose={() => setIsStoreModalOpen(false)} title="기기관리 리스트" width="max-w-4xl">
            <div className="p-4">
                {storeList.map(s => (
                    <div key={s.id} className="flex justify-between p-2 border-b border-slate-700">
-                       <span>{s.name}</span>
+                       <div className="flex flex-col">
+                           <span className="font-bold">{s.name}</span>
+                           <span className="text-xs text-slate-400">{s.receiverMac}-{s.repeaterId}-{s.detectorId}</span>
+                       </div>
                        <Button onClick={() => handleStoreSelect(s)} className="h-6 text-xs px-2">선택</Button>
                    </div>
                ))}
