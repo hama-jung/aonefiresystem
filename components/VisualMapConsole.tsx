@@ -80,13 +80,17 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             s.detectorId === d.detectorId
           );
 
+          // [MODIFIED] Data Sync: Prioritize mode from storeInfo (Device Management) over base detector data
+          const currentMode = storeInfo?.mode || d.mode || '복합';
+
           return { 
               ...d, 
               status, 
               isFire, 
               isFault: !!fault, 
               faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined,
-              storeInfo 
+              storeInfo,
+              mode: currentMode // Override mode with synced data
           };
       });
 
@@ -278,9 +282,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
         {(isError || isCommError) && <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-50"></div>}
         
-        {/* [MODIFIED] Enhanced 'Heat' mode icon visualization */}
+        {/* [MODIFIED] Removed animate-bounce from the 'Heat' mode badge */}
         {type === 'detector' && item.mode === '열' && (
-            <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-orange-700 shadow-md z-30 animate-bounce">
+            <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-orange-700 shadow-md z-30">
                  <Thermometer size={14} strokeWidth={3} />
             </div>
         )}
@@ -529,7 +533,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             <Modal isOpen={actionModalOpen} onClose={() => setActionModalOpen(false)} title="기기 상세 정보 및 제어" width="max-w-md">
                 <div className="flex flex-col gap-4">
                     
-                    {/* [MODIFIED] Multi-status support in top summary panel */}
+                    {/* Multi-status support in top summary panel */}
                     <div className={`py-4 px-6 rounded-xl text-center shadow-lg border-b-4 ${
                         selectedAlertDevice.isFire ? 'bg-red-600/20 border-red-500' : 
                         selectedAlertDevice.status === '고장' ? 'bg-amber-600/20 border-amber-500' :
