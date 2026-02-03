@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';
@@ -112,7 +113,7 @@ export const DetectorManagement: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!excelMarket) {
-        alert('먼저 설치 시장을 선택해주세요.');
+        alert('먼저 소속 현장을 선택해주세요.');
         e.target.value = '';
         return;
     }
@@ -230,7 +231,7 @@ export const DetectorManagement: React.FC = () => {
                     </div>
                     <Button type="button" variant="secondary" onClick={() => setIsReceiverModalOpen(true)}>검색</Button>
                   </div>
-                  {formData.marketName && <p className="text-xs text-blue-400 mt-1">소속 시장: {formData.marketName}</p>}
+                  {formData.marketName && <p className="text-xs text-blue-400 mt-1">소속 현장: {formData.marketName}</p>}
                 </FormRow>
                 
                 <FormRow label="중계기 ID">
@@ -283,10 +284,10 @@ export const DetectorManagement: React.FC = () => {
                     엑셀 파일 업로드
                  </h3>
                  <div className="grid grid-cols-1 gap-6">
-                    <FormRow label="설치 시장 선택" required>
+                    <FormRow label="소속 현장 선택" required>
                        <div className="flex gap-2 w-full">
                           <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
-                             <input type="text" value={excelMarket?.name || ''} placeholder="등록할 시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
+                             <input type="text" value={excelMarket?.name || ''} placeholder="등록할 현장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
                              <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
                           </div>
                           <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
@@ -332,7 +333,7 @@ export const DetectorManagement: React.FC = () => {
           // List View
           <>
              <SearchFilterBar onSearch={() => fetchDetectors({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchDetectors({});}}>
-                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+                <InputGroup label="소속 현장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
              </SearchFilterBar>
              <div className="flex justify-between items-center mb-2">
                <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{detectors.length}</span> 건</span>
@@ -347,7 +348,7 @@ export const DetectorManagement: React.FC = () => {
                     { header: '수신기 MAC', accessor: 'receiverMac', width: '120px' },
                     { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
                     { header: '감지기 ID', accessor: 'detectorId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
+                    { header: '소속 현장', accessor: 'marketName' },
                     { header: '설치상가', accessor: (item) => item.stores?.[0]?.name || '-' },
                     { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
                 ]}

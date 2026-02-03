@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
@@ -50,7 +51,7 @@ export const ReceiverManagement: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.marketId) { alert('설치 시장을 선택해주세요.'); return; } // market_id -> marketId
+    if (!formData.marketId) { alert('소속 현장을 선택해주세요.'); return; } // market_id -> marketId
     if (!formData.macAddress) { alert('MAC ADDRESS를 입력해주세요.'); return; }
 
     // [New Logic] 중복 검사
@@ -96,7 +97,7 @@ export const ReceiverManagement: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!excelMarket) {
-        alert('먼저 설치 시장을 선택해주세요.');
+        alert('먼저 소속 현장을 선택해주세요.');
         e.target.value = '';
         return;
     }
@@ -198,13 +199,13 @@ export const ReceiverManagement: React.FC = () => {
       {view === 'form' ? (
           <form onSubmit={handleSave}>
              <FormSection title={selectedReceiver ? "수신기 수정" : "수신기 등록"}>
-                <FormRow label="설치 시장" required className="col-span-1 md:col-span-2">
-                  <div className="flex gap-2 w-full">
+                <FormRow label="소속 현장" required className="col-span-1 md:col-span-2">
+                  <div className="flex gap-2 w-full max-w-md">
                     <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
                       <input 
                         type="text"
                         value={selectedMarketForForm?.name || ''} 
-                        placeholder="시장을 선택하세요" 
+                        placeholder="현장을 선택하세요" 
                         readOnly 
                         className={`${UI_STYLES.input} cursor-pointer hover:bg-slate-700/50 pr-8`}
                       />
@@ -246,10 +247,10 @@ export const ReceiverManagement: React.FC = () => {
                     엑셀 파일 업로드
                  </h3>
                  <div className="grid grid-cols-1 gap-6">
-                    <FormRow label="설치 시장 선택" required>
+                    <FormRow label="소속 현장 선택" required>
                        <div className="flex gap-2 w-full">
                           <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
-                             <input type="text" value={excelMarket?.name || ''} placeholder="등록할 시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
+                             <input type="text" value={excelMarket?.name || ''} placeholder="등록할 현장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
                              <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
                           </div>
                           <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
@@ -294,7 +295,7 @@ export const ReceiverManagement: React.FC = () => {
       ) : (
           <>
              <SearchFilterBar onSearch={() => {setIsFiltered(true); fetchReceivers();}} onReset={() => {setSearchMarket(''); setSearchMac(''); setIsFiltered(false); fetchReceivers({});}} isFiltered={isFiltered}>
-                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+                <InputGroup label="소속 현장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
                 <InputGroup label="MAC주소" value={searchMac} onChange={(e) => setSearchMac(e.target.value)} />
              </SearchFilterBar>
              
@@ -310,7 +311,7 @@ export const ReceiverManagement: React.FC = () => {
                 columns={[
                     { header: 'No', accessor: (_, idx) => idx + 1, width: '80px' },
                     { header: 'MAC주소', accessor: 'macAddress', width: '200px' },
-                    { header: '설치시장', accessor: 'marketName' },
+                    { header: '소속 현장', accessor: 'marketName' },
                     { header: 'IP주소', accessor: 'ip', width: '200px' },
                     { header: '전화번호', accessor: (r) => formatPhoneNumber(r.emergencyPhone) || '-', width: '200px' },
                     { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '120px' },

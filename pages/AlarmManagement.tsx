@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { AlarmAPI } from '../services/api';
 import { Alarm, Receiver } from '../types';
@@ -65,7 +66,7 @@ export const AlarmManagement: React.FC = () => {
                     </div>
                     <Button type="button" variant="secondary" onClick={() => setIsReceiverModalOpen(true)}>검색</Button>
                   </div>
-                  {formData.marketName && <p className="text-xs text-blue-400 mt-1">소속 시장: {formData.marketName}</p>}
+                  {formData.marketName && <p className="text-xs text-blue-400 mt-1">소속 현장: {formData.marketName}</p>}
                 </FormRow>
                 <FormRow label="중계기 ID">
                   <SelectGroup options={ID_OPTIONS} value={formData.repeaterId || '01'} onChange={(e) => setFormData({...formData, repeaterId: e.target.value})} />
@@ -85,7 +86,7 @@ export const AlarmManagement: React.FC = () => {
       ) : (
           <>
              <SearchFilterBar onSearch={() => fetchAlarms({marketName: searchMarket})} onReset={() => {setSearchMarket(''); fetchAlarms({});}}>
-                <InputGroup label="설치시장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
+                <InputGroup label="소속 현장" value={searchMarket} onChange={(e) => setSearchMarket(e.target.value)} />
              </SearchFilterBar>
              <DataTable 
                 columns={[
@@ -93,7 +94,7 @@ export const AlarmManagement: React.FC = () => {
                     { header: '수신기 MAC', accessor: 'receiverMac', width: '150px' },
                     { header: '중계기 ID', accessor: 'repeaterId', width: '100px' },
                     { header: '경종 ID', accessor: 'alarmId', width: '100px' },
-                    { header: '설치시장', accessor: 'marketName' },
+                    { header: '소속 현장', accessor: 'marketName' },
                     { header: '사용여부', accessor: (item) => <StatusBadge status={item.status} />, width: '100px' },
                 ]}
                 data={alarms.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)}
