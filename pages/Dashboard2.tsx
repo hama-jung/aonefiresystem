@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader } from '../components/CommonUI';
+import { PageHeader, Pagination, ITEMS_PER_PAGE } from '../components/CommonUI';
 import { AlertTriangle, WifiOff, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight, AlertCircle, RotateCcw, Map as MapIcon } from 'lucide-react';
 import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
@@ -31,7 +31,7 @@ const getSidoAliases = (sido: string): string[] => {
   return map[sido] || [sido];
 };
 
-// --- Helper: Pagination Control ---
+// --- Helper: Pagination Control (Local for Left Panel) ---
 const ListPagination: React.FC<{ 
     total: number, 
     limit: number, 
@@ -93,13 +93,16 @@ export const Dashboard2: React.FC = () => {
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
   const [commPage, setCommPage] = useState(1);
-  const ITEMS_LIMIT = 4;
+  const ITEMS_LIMIT_LEFT = 4;
 
   // Map/List Filter States (Right Panel)
   const [mapSido, setMapSido] = useState('');
   const [mapSigun, setMapSigun] = useState('');
   const [mapKeyword, setMapKeyword] = useState('');
   const [mapSigunguList, setMapSigunguList] = useState<string[]>([]);
+  
+  // [New] Market List Pagination State (Right Panel)
+  const [marketPage, setMarketPage] = useState(1);
 
   const navigate = useNavigate();
 
@@ -162,6 +165,11 @@ export const Dashboard2: React.FC = () => {
       }
   }, [mapSido]);
 
+  // Reset pagination when filters change
+  useEffect(() => {
+      setMarketPage(1);
+  }, [mapSido, mapSigun, mapKeyword]);
+
   const handleLogClick = (marketId: number) => {
       if (!data || !data.mapData) return;
       const targetMarket = data.mapData.find((m: any) => m.id === marketId);
@@ -176,6 +184,7 @@ export const Dashboard2: React.FC = () => {
       setMapSigun('');
       setMapKeyword('');
       setMapSigunguList([]);
+      setMarketPage(1);
   };
 
   if (loading && !data) {
@@ -188,9 +197,9 @@ export const Dashboard2: React.FC = () => {
 
   const { stats, fireEvents, faultEvents, commEvents, mapData } = data || { stats: [], fireEvents: [], faultEvents: [], commEvents: [], mapData: [] };
 
-  const currentFireEvents = fireEvents.slice((firePage - 1) * ITEMS_LIMIT, firePage * ITEMS_LIMIT);
-  const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
-  const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
+  const currentFireEvents = fireEvents.slice((firePage - 1) * ITEMS_LIMIT_LEFT, firePage * ITEMS_LIMIT_LEFT);
+  const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT_LEFT, faultPage * ITEMS_LIMIT_LEFT);
+  const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT_LEFT, commPage * ITEMS_LIMIT_LEFT);
 
   // [Step 1] 실시간 상태 동기화
   const activeFireMarketIds = new Set(fireEvents.map((e: any) => e.marketId));
@@ -220,6 +229,11 @@ export const Dashboard2: React.FC = () => {
   });
 
   const isFilterActive = !!(mapSido || mapSigun || mapKeyword);
+
+  // [Step 3] Pagination Logic for Right Panel List
+  const indexOfLastMarket = marketPage * ITEMS_PER_PAGE;
+  const indexOfFirstMarket = indexOfLastMarket - ITEMS_PER_PAGE;
+  const currentMarkets = filteredMapData.slice(indexOfFirstMarket, indexOfLastMarket);
 
   // Header Right Content
   const refreshControlUI = (
@@ -326,7 +340,7 @@ export const Dashboard2: React.FC = () => {
                       ))
                    )}
                 </div>
-                <ListPagination total={fireEvents.length} limit={ITEMS_LIMIT} page={firePage} setPage={setFirePage} />
+                <ListPagination total={fireEvents.length} limit={ITEMS_LIMIT_LEFT} page={firePage} setPage={setFirePage} />
              </div>
 
              {/* Fault History List */}
@@ -358,7 +372,7 @@ export const Dashboard2: React.FC = () => {
                       ))
                    )}
                 </div>
-                <ListPagination total={faultEvents.length} limit={ITEMS_LIMIT} page={faultPage} setPage={setFaultPage} />
+                <ListPagination total={faultEvents.length} limit={ITEMS_LIMIT_LEFT} page={faultPage} setPage={setFaultPage} />
              </div>
 
              {/* Comm Error List */}
@@ -392,7 +406,7 @@ export const Dashboard2: React.FC = () => {
                       ))
                    )}
                 </div>
-                <ListPagination total={commEvents.length} limit={ITEMS_LIMIT} page={commPage} setPage={setCommPage} />
+                <ListPagination total={commEvents.length} limit={ITEMS_LIMIT_LEFT} page={commPage} setPage={setCommPage} />
              </div>
 
           </div>
@@ -435,7 +449,7 @@ export const Dashboard2: React.FC = () => {
                         className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap"
                     >
                         <RotateCcw size={16} />
-                        초기화
+                        전체보기
                     </button>
                )}
            </div>
@@ -453,20 +467,23 @@ export const Dashboard2: React.FC = () => {
                        </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-700/30">
-                       {filteredMapData.length === 0 ? (
+                       {currentMarkets.length === 0 ? (
                            <tr>
                                <td colSpan={5} className="px-4 py-10 text-center text-slate-500 text-sm">
                                    검색된 현장이 없습니다.
                                </td>
                            </tr>
                        ) : (
-                           filteredMapData.map((market: any, index: number) => {
+                           currentMarkets.map((market: any, index: number) => {
                                const isFire = market.status === 'Fire' || market.status === '화재';
                                const isError = market.status === 'Error' || market.status === '고장' || market.status === '에러';
                                
+                               // Calculate global index for No
+                               const globalIndex = (marketPage - 1) * ITEMS_PER_PAGE + index + 1;
+
                                return (
                                    <tr key={market.id} className="hover:bg-slate-800/50 transition-colors group">
-                                       <td className="px-4 py-3 text-center text-slate-500 text-sm">{index + 1}</td>
+                                       <td className="px-4 py-3 text-center text-slate-500 text-sm">{globalIndex}</td>
                                        <td className="px-4 py-3 text-slate-200 text-sm font-bold">
                                            {market.name}
                                        </td>
@@ -499,10 +516,17 @@ export const Dashboard2: React.FC = () => {
                </table>
            </div>
 
-           {/* Bottom Status Bar */}
-           <div className="p-3 border-t border-slate-700 bg-slate-800/80 flex justify-between items-center text-xs text-slate-400">
-               <span>총 <strong>{filteredMapData.length}</strong>개 현장</span>
-               <span>* 목록을 클릭하여 상세 관제를 할 수 있습니다.</span>
+           {/* Bottom Status Bar with Pagination */}
+           <div className="flex flex-col bg-slate-800/80 border-t border-slate-700">
+               <Pagination 
+                   totalItems={filteredMapData.length} 
+                   itemsPerPage={ITEMS_PER_PAGE} 
+                   currentPage={marketPage} 
+                   onPageChange={setMarketPage} 
+               />
+               <div className="p-2 text-center text-xs text-slate-500 border-t border-slate-700/50">
+                   * 목록을 클릭하여 상세 관제를 할 수 있습니다.
+               </div>
            </div>
         </div>
 
