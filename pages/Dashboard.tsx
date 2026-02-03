@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/CommonUI';
-import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Search, ChevronLeft, ChevronRight, AlertCircle, Radio } from 'lucide-react';
 import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
@@ -24,11 +24,11 @@ const ListPagination: React.FC<{
     if (totalPages <= 1) return null;
 
     return (
-        <div className="flex justify-center items-center gap-2 py-2 border-t border-slate-700/50 mt-auto">
+        <div className="flex justify-center items-center gap-1.5 py-2 mt-auto">
             <button 
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="p-1 hover:bg-slate-700 rounded disabled:opacity-30 text-slate-400"
+                className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400"
             >
                 <ChevronLeft size={14} />
             </button>
@@ -37,8 +37,10 @@ const ListPagination: React.FC<{
                     <button
                         key={p}
                         onClick={() => setPage(p)}
-                        className={`w-5 h-5 flex items-center justify-center text-[10px] rounded ${
-                            page === p ? 'bg-blue-600 text-white font-bold' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                        className={`w-6 h-6 flex items-center justify-center text-xs rounded border ${
+                            page === p 
+                            ? 'bg-blue-600 border-blue-500 text-white font-bold' 
+                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'
                         }`}
                     >
                         {p}
@@ -48,7 +50,7 @@ const ListPagination: React.FC<{
             <button 
                 onClick={() => setPage(Math.min(totalPages, page + 1))}
                 disabled={page === totalPages}
-                className="p-1 hover:bg-slate-700 rounded disabled:opacity-30 text-slate-400"
+                className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 border border-slate-700 hover:bg-slate-700 disabled:opacity-30 text-slate-400"
             >
                 <ChevronRight size={14} />
             </button>
@@ -186,7 +188,7 @@ export const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Filters State (Moved to Dashboard root)
+  // Filters State
   const [selectedSido, setSelectedSido] = useState('');
   const [keyword, setKeyword] = useState('');
 
@@ -194,7 +196,7 @@ export const Dashboard: React.FC = () => {
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
   const [commPage, setCommPage] = useState(1);
-  const ITEMS_LIMIT = 4;
+  const ITEMS_LIMIT = 4; // As per visual spacing
 
   const navigate = useNavigate();
 
@@ -256,7 +258,6 @@ export const Dashboard: React.FC = () => {
   // Header Right Content (Filters + Timer)
   const refreshControlUI = (
     <div className="flex items-center gap-3">
-        {/* Filters moved here for visibility */}
         <div className="flex items-center gap-2 mr-4">
             <select 
                 value={selectedSido}
@@ -294,72 +295,76 @@ export const Dashboard: React.FC = () => {
     <div className="flex flex-col h-full text-slate-200">
       <PageHeader title="대시보드" rightContent={refreshControlUI} />
 
-      {/* Main Layout: Fixed Height Calculation */}
+      {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] min-h-[600px]">
         
         {/* [Left Panel] 40% Width Fixed */}
         <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-hidden">
           
-          {/* 1. Status Cards */}
+          {/* 1. Status Cards (Solid Block Design) */}
           <div className="grid grid-cols-3 gap-3 flex-shrink-0">
              {/* Fire */}
-             <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-lg p-4 shadow-lg border border-red-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
-                <div className="absolute -right-4 -top-4 text-red-500/30 group-hover:text-red-500/40 transition-colors">
-                   <AlertTriangle size={64} />
+             <div className="bg-[#D32F2F] rounded-lg p-4 shadow-lg flex items-center justify-between group h-20">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                        <AlertTriangle size={20} className="text-white" />
+                    </div>
+                    <div className="text-white font-bold text-sm leading-tight">화재발생</div>
                 </div>
-                <div className="text-red-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
-                   <AlertTriangle size={12}/> 화재발생
-                </div>
-                <div className="text-4xl font-black text-white z-10">{stats[0]?.value || 0}</div>
+                <div className="text-4xl font-black text-white">{stats[0]?.value || 0}</div>
              </div>
 
              {/* Fault */}
-             <div className="bg-gradient-to-br from-orange-500 to-orange-700 rounded-lg p-4 shadow-lg border border-orange-400/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
-                <div className="absolute -right-4 -top-4 text-orange-400/30 group-hover:text-orange-400/40 transition-colors">
-                   <BatteryWarning size={64} />
+             <div className="bg-[#F57C00] rounded-lg p-4 shadow-lg flex items-center justify-between group h-20">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                        <AlertCircle size={20} className="text-white" />
+                    </div>
+                    <div className="text-white font-bold text-sm leading-tight">고장발생</div>
                 </div>
-                <div className="text-orange-100 text-xs font-bold mb-1 z-10 flex items-center gap-1">
-                   <BatteryWarning size={12}/> 고장발생
-                </div>
-                <div className="text-4xl font-black text-white z-10">{stats[1]?.value || 0}</div>
+                <div className="text-4xl font-black text-white">{stats[1]?.value || 0}</div>
              </div>
 
              {/* Comm */}
-             <div className="bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg p-4 shadow-lg border border-slate-500/50 flex flex-col items-center justify-center relative overflow-hidden group h-28">
-                <div className="absolute -right-4 -top-4 text-slate-400/30 group-hover:text-slate-400/40 transition-colors">
-                   <WifiOff size={64} />
+             <div className="bg-[#475569] rounded-lg p-4 shadow-lg flex items-center justify-between group h-20">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                        <WifiOff size={20} className="text-white" />
+                    </div>
+                    <div className="text-white font-bold text-sm leading-tight">통신 이상</div>
                 </div>
-                <div className="text-slate-200 text-xs font-bold mb-1 z-10 flex items-center gap-1">
-                   <WifiOff size={12}/> 통신이상
-                </div>
-                <div className="text-4xl font-black text-white z-10">{stats[2]?.value || 0}</div>
+                <div className="text-4xl font-black text-white">{stats[2]?.value || 0}</div>
              </div>
           </div>
 
-          {/* 2. Log Lists (Scrollable Area) */}
+          {/* 2. Log Lists (Attached Image 2 Design) */}
           <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
              
              {/* Fire History List */}
-             <div className="bg-slate-800 border border-red-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
-                <div className="bg-red-950/50 px-4 py-2.5 border-b border-red-900/50 flex justify-between items-center flex-shrink-0">
-                   <div className="flex items-center gap-2 text-red-200 font-bold text-sm">
-                      <AlertTriangle size={16} className="text-red-500 animate-pulse" /> 최근 화재 발생현황
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
+                   <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                      <AlertTriangle size={16} /> 최근 화재 발생현황
                    </div>
-                   <button onClick={() => navigate('/fire-history')} className="text-xs text-red-400 hover:text-white flex items-center gap-1">
-                      더보기 <ArrowRight size={12} />
+                   <button onClick={() => navigate('/fire-history')} className="text-slate-500 hover:text-white transition-colors">
+                      <ArrowRight size={16} />
                    </button>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                <div className="flex-1 p-0 flex flex-col">
                    {currentFireEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
                    ) : (
                       currentFireEvents.map((log: any) => (
-                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-red-500/50 cursor-pointer transition-colors flex justify-between items-center group">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse flex-shrink-0"></span>
-                               <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                               <span className="bg-[#D32F2F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0">화재</span>
+                               <span className="text-sm text-slate-200 font-medium truncate">
+                                   {log.marketName} <span className="text-slate-400 font-normal">{log.detail}</span>
+                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 flex-shrink-0">{new Date(log.time).toLocaleTimeString()}</span>
+                            <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                                {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
+                            </span>
                          </div>
                       ))
                    )}
@@ -368,26 +373,30 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Fault History List */}
-             <div className="bg-slate-800 border border-orange-900/50 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
-                <div className="bg-orange-950/50 px-4 py-2.5 border-b border-orange-900/50 flex justify-between items-center flex-shrink-0">
-                   <div className="flex items-center gap-2 text-orange-200 font-bold text-sm">
-                      <BatteryWarning size={16} className="text-orange-500" /> 최근 고장 발생현황
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
+                   <div className="flex items-center gap-2 text-orange-400 font-bold text-sm">
+                      <AlertCircle size={16} /> 최근 고장 발생현황
                    </div>
-                   <button onClick={() => navigate('/device-status')} className="text-xs text-orange-400 hover:text-white flex items-center gap-1">
-                      더보기 <ArrowRight size={12} />
+                   <button onClick={() => navigate('/device-status')} className="text-slate-500 hover:text-white transition-colors">
+                      <ArrowRight size={16} />
                    </button>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                <div className="flex-1 p-0 flex flex-col">
                    {currentFaultEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
                    ) : (
                       currentFaultEvents.map((log: any) => (
-                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 hover:border-orange-500/50 cursor-pointer transition-colors flex justify-between items-center group">
-                            <div className="flex items-center gap-2 overflow-hidden">
-                               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></span>
-                               <span className="text-xs text-slate-300 group-hover:text-white truncate">{log.msg}</span>
+                         <div key={log.id} onClick={() => handleLogClick(log.marketId)} className="px-4 py-3 border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer flex justify-between items-center last:border-0">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                               <span className="bg-[#F57C00] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm flex-shrink-0">고장</span>
+                               <span className="text-sm text-slate-200 font-medium truncate">
+                                   {log.marketName} <span className="text-slate-400 font-normal">{log.device} 고장</span>
+                               </span>
                             </div>
-                            <span className="text-[10px] text-slate-500 flex-shrink-0">{new Date(log.time).toLocaleTimeString()}</span>
+                            <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                                {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
+                            </span>
                          </div>
                       ))
                    )}
@@ -396,20 +405,32 @@ export const Dashboard: React.FC = () => {
              </div>
 
              {/* Comm Error List */}
-             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
-                <div className="bg-slate-700/50 px-4 py-2.5 border-b border-slate-600 flex justify-between items-center flex-shrink-0">
+             <div className="bg-[#1e293b] border border-slate-700 rounded-lg shadow-sm flex flex-col flex-1 min-h-[200px]">
+                <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700 flex justify-between items-center">
                    <div className="flex items-center gap-2 text-slate-300 font-bold text-sm">
-                      <WifiOff size={16} className="text-slate-400" /> 수신기 통신 이상 내역
+                      <WifiOff size={16} /> 수신기 통신 이상 내역
                    </div>
+                   <button onClick={() => navigate('/device-status')} className="text-slate-500 hover:text-white transition-colors">
+                      <ArrowRight size={16} />
+                   </button>
                 </div>
-                <div className="flex-1 p-2 flex flex-col gap-1.5">
+                <div className="flex-1 p-0 flex flex-col">
                    {currentCommEvents.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-slate-500 text-xs">내역이 없습니다.</div>
+                      <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-8">내역이 없습니다.</div>
                    ) : (
                       currentCommEvents.map((log: any) => (
-                         <div key={log.id} className="bg-slate-900/50 px-3 py-2 rounded border border-slate-700 flex justify-between items-center">
-                            <span className="text-xs text-slate-400">{log.msg}</span>
-                            <span className="text-[10px] text-slate-600">{new Date(log.time).toLocaleTimeString()}</span>
+                         <div key={log.id} className="px-4 py-3 border-b border-slate-700/50 flex justify-between items-center last:border-0">
+                            <div className="flex items-center gap-3 overflow-hidden">
+                               <span className="text-sm text-slate-200 font-bold truncate">
+                                   {log.marketName} <span className="text-slate-400 font-normal">({log.marketName})</span>
+                               </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[10px] bg-amber-900/30 text-amber-500 border border-amber-800/50 px-1 rounded">R:{log.receiverMac}</span>
+                                <span className="text-xs text-slate-500 flex-shrink-0 font-mono">
+                                    {new Date(log.time).toISOString().replace('T', ' ').substring(0, 19)}
+                                </span>
+                            </div>
                          </div>
                       ))
                    )}

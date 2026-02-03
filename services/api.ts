@@ -564,24 +564,67 @@ export const DashboardAPI = {
     try {
       const { data: mkts } = await supabase.from('markets').select('*');
       const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
-      const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러');
+      const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러').neq('errorCode', '04');
+      const { count: commCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('errorCode', '04');
       
-      const { data: fH } = await supabase.from('fire_history').select('*, markets(name)').order('registeredAt', { ascending: false }).limit(5);
-      const { data: dS } = await supabase.from('device_status').select('*, markets(name)').eq('deviceStatus', '에러').order('registeredAt', { ascending: false }).limit(5);
+      // 1. Fire Events (Fire History Table)
+      // Get detailed columns including market name, store name/detector info
+      const { data: fH } = await supabase
+          .from('fire_history')
+          .select('*, markets(name)')
+          .in('falseAlarmStatus', ['화재', '등록'])
+          .order('registeredAt', { ascending: false })
+          .limit(20);
+
+      // 2. Fault Events (Device Status Table - exclude Comm Error 04)
+      const { data: dS } = await supabase
+          .from('device_status')
+          .select('*, markets(name)')
+          .eq('deviceStatus', '에러')
+          .neq('errorCode', '04')
+          .order('registeredAt', { ascending: false })
+          .limit(20);
+
+      // 3. Comm Error Events (Device Status Table - Error Code 04)
+      const { data: cE } = await supabase
+          .from('device_status')
+          .select('*, markets(name)')
+          .eq('errorCode', '04')
+          .order('registeredAt', { ascending: false })
+          .limit(20);
 
       const normalizedMkts = normalizeData(mkts || []);
       const normalizedFH = normalizeData(fH || []);
       const normalizedDS = normalizeData(dS || []);
+      const normalizedCE = normalizeData(cE || []);
 
       return {
         stats: [
-          { label: '최근 화재 발생', value: fireCount || 0, type: 'fire', color: 'bg-red-500' },
-          { label: '최근 고장 발생', value: faultCount || 0, type: 'fault', color: 'bg-orange-500' },
-          { label: '통신 이상', value: 0, type: 'error', color: 'bg-gray-500' },
+          { label: '화재발생', value: fireCount || 0, type: 'fire' },
+          { label: '고장발생', value: faultCount || 0, type: 'fault' },
+          { label: '통신 이상', value: commCount || 0, type: 'error' },
         ],
-        fireEvents: normalizedFH.map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 화재감지`, time: e.registeredAt, marketId: e.marketId })),
-        faultEvents: normalizedDS.map((e: any) => ({ id: e.id, msg: `${e.markets?.name || e.marketName || '알수없음'} 장비에러`, time: e.registeredAt, marketId: e.marketId })),
-        commEvents: [],
+        fireEvents: normalizedFH.map((e: any) => ({
+            id: e.id,
+            marketId: e.marketId,
+            marketName: e.markets?.name || e.marketName,
+            detail: e.detectorInfoChamber || e.detectorInfoTemp || `감지기 ${e.detectorId || '-'}`,
+            time: e.registeredAt
+        })),
+        faultEvents: normalizedDS.map((e: any) => ({
+            id: e.id,
+            marketId: e.marketId,
+            marketName: e.markets?.name || e.marketName,
+            device: `${e.deviceType} ${e.deviceId}번`,
+            time: e.registeredAt
+        })),
+        commEvents: normalizedCE.map((e: any) => ({
+            id: e.id,
+            marketId: e.marketId,
+            marketName: e.markets?.name || e.marketName,
+            receiverMac: e.receiverMac,
+            time: e.registeredAt
+        })),
         mapData: normalizedMkts.map((m: any) => ({ 
             id: m.id, 
             name: m.name, 
