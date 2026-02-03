@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom'; // [NEW] Import for state detection
 import { StoreAPI, MarketAPI } from '../services/api';
 import { Store, Market, Receiver } from '../types';
 import { 
@@ -14,6 +15,7 @@ import * as XLSX from 'xlsx';
 const ITEMS_PER_PAGE = 10;
 
 export const StoreManagement: React.FC = () => {
+  const location = useLocation(); // [NEW] Get navigation state
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -63,6 +65,18 @@ export const StoreManagement: React.FC = () => {
   useEffect(() => {
     fetchStores();
   }, []);
+
+  // [NEW] Effect to handle auto-edit from VisualMapConsole
+  useEffect(() => {
+    if (stores.length > 0 && location.state?.editId) {
+        const targetStore = stores.find(s => s.id === location.state.editId);
+        if (targetStore) {
+            handleEdit(targetStore);
+            // Clear state to prevent re-opening on manual refresh or back
+            window.history.replaceState({}, document.title);
+        }
+    }
+  }, [stores, location.state]);
 
   // Handlers
   const handleSearch = () => { setIsFiltered(true); fetchStores(); };
