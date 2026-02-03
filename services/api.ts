@@ -88,9 +88,10 @@ async function supabaseReader<T>(table: string, params?: Record<string, any>, se
   } catch (e) { return []; }
 }
 
+// [MODIFIED] getDeviceListWithMarket 함수 개선 (Fallback 로직 추가)
 async function getDeviceListWithMarket<T>(table: string, params: any) {
     try {
-      // marketId 관계를 통해 시장명 가져오기
+      // Attempt 1: Standard Join (성공 시 가장 빠름)
       let query = supabase.from(table).select('*, markets(name)').order('id', { ascending: false });
       
       if (params) {
@@ -104,7 +105,7 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
       }
       
       const { data, error } = await query;
-      if (error) return [];
+      if (error) throw error; // 에러 발생 시 Fallback으로 이동
       
       const normalizedData = normalizeData(data || []);
       
@@ -117,7 +118,48 @@ async function getDeviceListWithMarket<T>(table: string, params: any) {
           result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
       return result as T[];
-    } catch(e) { return []; }
+
+    } catch(joinError) {
+      console.warn(`getDeviceListWithMarket (${table}) join failed, trying fallback...`, joinError);
+
+      // Attempt 2: Manual Join (기기 목록 + 시장 목록 별도 조회 후 병합)
+      try {
+          // 2-1. 기기 목록 조회
+          let query = supabase.from(table).select('*').order('id', { ascending: false });
+          if (params) {
+              Object.keys(params).forEach(key => {
+                  if (!params[key] || params[key] === 'all') return;
+                  if (['marketName', 'startDate', 'endDate'].includes(key)) return;
+                  if (key === 'receiverMac') query = query.ilike(key, `%${params[key]}%`);
+                  else query = query.eq(key, params[key]);
+              });
+          }
+          const { data: devices, error: devError } = await query;
+          if (devError) throw devError;
+
+          // 2-2. 전체 시장 목록 조회 (이름 매핑용)
+          const { data: markets } = await supabase.from('markets').select('id, name');
+          const marketMap = new Map((markets || []).map((m: any) => [m.id, m.name]));
+
+          // 2-3. 병합
+          const normalizedDevices = normalizeData(devices || []);
+          let result = normalizedDevices.map((d: any) => ({
+              ...d,
+              marketName: marketMap.get(d.marketId) || '-'
+          }));
+
+          // 2-4. 시장명 필터링
+          if (params?.marketName) {
+              result = result.filter((item: any) => item.marketName.includes(params.marketName));
+          }
+
+          return result as T[];
+
+      } catch (fallbackError) {
+          console.error(`getDeviceListWithMarket (${table}) fallback failed`, fallbackError);
+          return [];
+      }
+    }
 }
 
 // --- API Services ---
