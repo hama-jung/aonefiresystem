@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Search, Plus, FileSpreadsheet, Trash2, Edit, Save, X, Home, RotateCcw } from 'lucide-react';
 import { MarketAPI, ReceiverAPI } from '../services/api';
@@ -657,7 +658,7 @@ export const MarketSearchModal: React.FC<{
   };
 
   const columns: Column<Market>[] = [
-    { header: '시장명', accessor: 'name' },
+    { header: '현장명', accessor: 'name' },
     { header: '주소', accessor: 'address' },
     { header: '담당자', accessor: 'managerName' },
     { header: '선택', accessor: (item) => (
@@ -668,9 +669,9 @@ export const MarketSearchModal: React.FC<{
   const currentItems = list.slice((page - 1) * 5, page * 5);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="시장 찾기" width="max-w-3xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="현장 찾기" width="max-w-3xl">
        <SearchFilterBar onSearch={() => handleSearch(keyword)}>
-          <InputGroup label="시장명" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="시장명 검색" />
+          <InputGroup label="현장명" value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="현장명 검색" />
        </SearchFilterBar>
        <DataTable columns={columns} data={currentItems} />
        <Pagination totalItems={list.length} itemsPerPage={5} currentPage={page} onPageChange={setPage} />
