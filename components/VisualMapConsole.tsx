@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Modal, UI_STYLES } from './CommonUI';
 import { Market, Detector, Receiver, Repeater } from '../types';
-import { DetectorAPI, ReceiverAPI, RepeaterAPI } from '../services/api';
+import { DetectorAPI, ReceiverAPI, RepeaterAPI, FireHistoryAPI, DeviceStatusAPI } from '../services/api';
 import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw } from 'lucide-react';
 
 interface VisualMapConsoleProps {
@@ -22,10 +22,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   // Zoom State
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  // Device Lists
-  const [detectors, setDetectors] = useState<Detector[]>([]);
-  const [receivers, setReceivers] = useState<Receiver[]>([]);
-  const [repeaters, setRepeaters] = useState<Repeater[]>([]);
+  // Device Lists - [FIX] Allow dynamic status string beyond '사용' | '미사용'
+  const [detectors, setDetectors] = useState<(Detector & { status: string })[]>([]);
+  const [receivers, setReceivers] = useState<(Receiver & { status: string })[]>([]);
+  const [repeaters, setRepeaters] = useState<(Repeater & { status: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   // CCTV State
@@ -46,21 +46,76 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const loadDevices = async () => {
     setLoading(true);
     try {
+      // 1. Fetch Base Devices
       const [detData, rcvData, rptData] = await Promise.all([
         DetectorAPI.getList({ marketName: market.name }),
         ReceiverAPI.getList({ marketName: market.name }),
         RepeaterAPI.getList({ marketName: market.name })
       ]);
-      setDetectors(detData);
-      setReceivers(rcvData);
-      setRepeaters(rptData);
 
-      // Check for Fire Status
-      const hasFire = [...detData, ...rcvData, ...rptData].some(d => ((d.status as string) === '화재' || (d.status as string) === 'Fire'));
+      // 2. Fetch Active Events (Fire History & Device Status) for Real-time Monitoring
+      const [fireLogs, faultLogs] = await Promise.all([
+          FireHistoryAPI.getList({ marketName: market.name }), // Get all history for market
+          DeviceStatusAPI.getList({ marketName: market.name, status: 'unprocessed' }) // Get active faults
+      ]);
+
+      // Filter active fires (화재, 등록)
+      const activeFires = fireLogs.filter(f => ['화재', '등록'].includes(f.falseAlarmStatus));
+
+      // 3. Merge Status - Detectors
+      const mergedDetectors = detData.map(d => {
+          // Check Fire
+          const isFire = activeFires.some(f => 
+              f.receiverMac === d.receiverMac && 
+              f.repeaterId === d.repeaterId && 
+              // Loose match for detector info (e.g. "01(Store)" starts with "01")
+              ((f.detectorInfoChamber && f.detectorInfoChamber.startsWith(d.detectorId)) || 
+               (f.detectorInfoTemp && f.detectorInfoTemp.startsWith(d.detectorId)))
+          );
+          // Check Fault
+          const isFault = faultLogs.some(f => 
+              f.deviceType === '감지기' && 
+              f.receiverMac === d.receiverMac && 
+              f.repeaterId === d.repeaterId && 
+              f.deviceId === d.detectorId
+          );
+
+          let status = '정상';
+          if (isFire) status = '화재';
+          else if (isFault) status = '고장';
+          else if (d.status === '미사용') status = '미사용'; // Keep explicit inactive
+
+          return { ...d, status };
+      });
+
+      // 4. Merge Status - Receivers
+      const mergedReceivers = rcvData.map(r => {
+          const isFault = faultLogs.some(f => f.deviceType === '수신기' && f.receiverMac === r.macAddress);
+          let status = '정상';
+          if (isFault) status = '고장';
+          
+          return { ...r, status };
+      });
+
+      // 5. Merge Status - Repeaters
+      const mergedRepeaters = rptData.map(r => {
+          const isFault = faultLogs.some(f => f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId);
+          let status = '정상';
+          if (isFault) status = '고장';
+
+          return { ...r, status };
+      });
+
+      setDetectors(mergedDetectors);
+      setReceivers(mergedReceivers);
+      setRepeaters(mergedRepeaters);
+
+      // Check for Fire Status (for Modal)
+      const hasFire = mergedDetectors.some(d => d.status === '화재');
       setShowFireModal(hasFire);
 
       // Extract CCTV URLs from detectors
-      const cctvs = detData
+      const cctvs = mergedDetectors
         .filter(d => d.cctvUrl && d.cctvUrl.trim() !== '')
         .map(d => ({
             name: d.stores && d.stores.length > 0 ? d.stores[0].name : `${d.detectorId}번 감지기`,
@@ -112,8 +167,8 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       if (confirm(`현재 화재 상태인 기기 ${fireDevices.length}건을 모두 '정상'으로 복구하시겠습니까?\n(현장의 기기에 복구 신호를 전송합니다.)`)) {
           // Mock Update: Actual implementation would call an API
           // For demo, we just update local state instantly
-          const updatedDetectors = detectors.map(d => (d.status as string) === '화재' ? { ...d, status: '사용' } : d);
-          setDetectors(updatedDetectors as Detector[]);
+          const updatedDetectors = detectors.map(d => (d.status as string) === '화재' ? { ...d, status: '정상' } : d);
+          setDetectors(updatedDetectors); // [FIX] Removed incorrect cast
           
           alert('복구 신호 전송 및 처리가 완료되었습니다.');
           setShowFireModal(false); // Dismiss modal immediately
