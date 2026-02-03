@@ -58,17 +58,76 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           (f.marketName === market.name || f.marketId === market.id)
       );
 
-      // [수정 로직 적용] 1. 기기 자체 상태가 '미사용'이면 제외 / 2. 연결된 상가 상태가 '미사용'이면 제외
-      const mergedDetectors = detData
-        .filter(d => d.status !== '미사용') // 기기 자체 상태 체크
-        .map(d => {
+      // --- 중복 제거 및 데이터 병합 로직 ---
+
+      // 1. 수신기 중복 제거 (MAC 기준)
+      const rcvMap = new Map<string, any>();
+      rcvData.filter(r => r.status !== '미사용').forEach(r => {
+          const existing = rcvMap.get(r.macAddress);
+          // 이미 배치된(x_pos가 있는) 데이터가 있다면 그것을 우선으로 유지
+          if (!existing || (!existing.x_pos && r.x_pos)) {
+              rcvMap.set(r.macAddress, r);
+          }
+      });
+
+      const mergedReceivers = Array.from(rcvMap.values()).map(r => {
+          const fault = faultLogs.find(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
+              f.deviceType === '수신기' && f.receiverMac === r.macAddress
+          );
+          let status = '정상';
+          if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
+          return { 
+              ...r, 
+              status, 
+              isFault: !!fault,
+              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
+          };
+      });
+
+      // 2. 중계기 중복 제거 (MAC-ID 기준)
+      const rptMap = new Map<string, any>();
+      rptData.filter(r => r.status !== '미사용').forEach(r => {
+          const key = `${r.receiverMac}-${r.repeaterId}`;
+          const existing = rptMap.get(key);
+          if (!existing || (!existing.x_pos && r.x_pos)) {
+              rptMap.set(key, r);
+          }
+      });
+
+      const mergedRepeaters = Array.from(rptMap.values()).map(r => {
+          const fault = faultLogs.find(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
+              f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId
+          );
+          let status = '정상';
+          if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
+          return { 
+              ...r, 
+              status, 
+              isFault: !!fault,
+              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
+          };
+      });
+
+      // 3. 감지기 중복 제거 및 상가 정보 매칭 (MAC-RPT-DET 기준)
+      const detMap = new Map<string, any>();
+      detData.filter(d => d.status !== '미사용').forEach(d => {
+          const key = `${d.receiverMac}-${d.repeaterId}-${d.detectorId}`;
+          const existing = detMap.get(key);
+          if (!existing || (!existing.x_pos && d.x_pos)) {
+              detMap.set(key, d);
+          }
+      });
+
+      const mergedDetectors = Array.from(detMap.values()).map(d => {
           const storeInfo = storesData.find(s => 
             s.receiverMac === d.receiverMac && 
             s.repeaterId === d.repeaterId && 
             s.detectorId === d.detectorId
           );
 
-          if (storeInfo && storeInfo.status === '미사용') return null; // 연결 상가가 미사용이면 제외 대상으로 마킹
+          if (storeInfo && storeInfo.status === '미사용') return null;
 
           const isFire = activeFires.some(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
@@ -101,41 +160,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
               storeInfo,
               mode: currentMode
           };
-      }).filter(d => d !== null) as any[]; // 필터링된 결과에서 null 제거
-
-      const mergedReceivers = rcvData
-        .filter(r => r.status !== '미사용')
-        .map(r => {
-          const fault = faultLogs.find(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.deviceType === '수신기' && f.receiverMac === r.macAddress
-          );
-          let status = '정상';
-          if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { 
-              ...r, 
-              status, 
-              isFault: !!fault,
-              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
-          };
-      });
-
-      const mergedRepeaters = rptData
-        .filter(r => r.status !== '미사용')
-        .map(r => {
-          const fault = faultLogs.find(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId
-          );
-          let status = '정상';
-          if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { 
-              ...r, 
-              status, 
-              isFault: !!fault,
-              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
-          };
-      });
+      }).filter(d => d !== null) as any[];
 
       setDetectors(mergedDetectors);
       setReceivers(mergedReceivers);
