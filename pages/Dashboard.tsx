@@ -262,8 +262,9 @@ export const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Auto Open Logic Ref
-  const initialCheckDone = useRef(false);
+  // Auto Open Control States
+  const [isAutoMovePaused, setIsAutoMovePaused] = useState(false); // 자동 이동 중지 여부
+  const [hasAutoMoved, setHasAutoMoved] = useState(false); // 이미 자동 이동 했는지 여부
 
   // Pagination States
   const [firePage, setFirePage] = useState(1);
@@ -284,22 +285,6 @@ export const Dashboard: React.FC = () => {
       const result = await DashboardAPI.getData();
       setData(result);
       setLastUpdated(new Date());
-
-      // [MODIFIED] 최초 데이터 로드 시 화재 발생 건이 있다면 자동으로 관제 화면 오픈 (3초 지연)
-      if (!initialCheckDone.current && result.fireEvents && result.fireEvents.length > 0) {
-          const latestFire = result.fireEvents[0]; // 가장 최근 화재
-          if (latestFire && result.mapData) {
-              const targetMarket = result.mapData.find((m: any) => m.id === latestFire.marketId);
-              if (targetMarket) {
-                  // 3초 뒤에 모달 오픈
-                  setTimeout(() => {
-                      setSelectedMarket(targetMarket);
-                  }, 3000);
-              }
-          }
-          initialCheckDone.current = true;
-      }
-
     } catch (error) {
       console.error("Failed to fetch dashboard data", error);
     } finally {
@@ -320,6 +305,29 @@ export const Dashboard: React.FC = () => {
     }, 1000);
     return () => clearInterval(timerInterval);
   }, []);
+
+  // [MODIFIED] Auto Navigation Effect
+  // 데이터가 로드되었고, 화재가 존재하며, 자동이동이 중지되지 않았고, 아직 이동하지 않았다면 3초 뒤 이동
+  useEffect(() => {
+      let autoMoveTimer: NodeJS.Timeout;
+
+      if (data?.fireEvents && data.fireEvents.length > 0 && !isAutoMovePaused && !hasAutoMoved) {
+          autoMoveTimer = setTimeout(() => {
+              const latestFire = data.fireEvents[0];
+              if (latestFire && data.mapData) {
+                  const targetMarket = data.mapData.find((m: any) => m.id === latestFire.marketId);
+                  if (targetMarket) {
+                      setSelectedMarket(targetMarket);
+                      setHasAutoMoved(true); // 이동 완료 표시 (중복 이동 방지)
+                  }
+              }
+          }, 3000);
+      }
+
+      return () => {
+          if (autoMoveTimer) clearTimeout(autoMoveTimer);
+      };
+  }, [data, isAutoMovePaused, hasAutoMoved]);
 
   // Update Sigungu list when Sido changes
   useEffect(() => {
@@ -434,6 +442,19 @@ export const Dashboard: React.FC = () => {
   // Header Right Content (Timer Only)
   const refreshControlUI = (
     <div className="flex items-center gap-3">
+        {/* [New] Auto Navigation Pause Control */}
+        <div className="flex items-center gap-2 mr-2">
+            <label className="flex items-center gap-2 cursor-pointer text-slate-300 hover:text-white transition-colors">
+                <input 
+                    type="checkbox" 
+                    checked={isAutoMovePaused} 
+                    onChange={(e) => setIsAutoMovePaused(e.target.checked)} 
+                    className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                />
+                <span className="text-xs font-bold">화재 자동 이동 중지</span>
+            </label>
+        </div>
+
         <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
             <span className="text-slate-400">
                 기준 시각 : <span className="text-slate-200 font-bold ml-1 tracking-wide">{lastUpdated.toLocaleTimeString()}</span>
