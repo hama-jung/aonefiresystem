@@ -284,12 +284,36 @@ export const Dashboard: React.FC = () => {
   const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
   const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
 
-  // Filter Map Data based on Map Filters
-  const filteredMapData = (mapData || []).filter((m: any) => {
-      const matchSido = mapSido ? (m.address || '').includes(mapSido) : true;
-      const matchSigun = mapSigun ? (m.address || '').includes(mapSigun) : true;
+  // [Step 1] 실시간 상태 동기화: 이벤트 데이터를 기반으로 현장 상태(Status) 계산
+  // DB에 저장된 status보다 현재 발생한 이벤트(화재, 고장)가 우선하여 지도에 표시됩니다.
+  const activeFireMarketIds = new Set(fireEvents.map((e: any) => e.marketId));
+  const activeFaultMarketIds = new Set([
+      ...faultEvents.map((e: any) => e.marketId),
+      ...commEvents.map((e: any) => e.marketId)
+  ]);
+
+  const processedMapData = (mapData || []).map((m: any) => {
+      let dynamicStatus = m.status || 'Normal'; // 기본 DB 상태
+
+      // 우선순위: 화재 > 고장 > 정상
+      if (activeFireMarketIds.has(m.id)) {
+          dynamicStatus = 'Fire'; 
+      } else if (activeFaultMarketIds.has(m.id)) {
+          // 이미 화재가 아닌 경우에만 고장 처리
+          dynamicStatus = 'Error';
+      }
+      
+      return { ...m, status: dynamicStatus };
+  });
+
+  // [Step 2] 필터링 로직: 계산된 processedMapData를 기준으로 주소 및 검색어 필터링
+  const filteredMapData = processedMapData.filter((m: any) => {
+      const addr = m.address || '';
+      // 주소 데이터가 비어있을 경우를 대비해 안전하게 처리
+      const matchSido = mapSido ? addr.includes(mapSido) : true;
+      const matchSigun = mapSigun ? addr.includes(mapSigun) : true;
       const matchName = mapKeyword ? m.name.includes(mapKeyword) : true;
-      // Note: usageStatus filtering is already done in API level (getData)
+      
       return matchSido && matchSigun && matchName;
   });
 
