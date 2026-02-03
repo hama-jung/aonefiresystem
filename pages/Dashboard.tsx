@@ -370,8 +370,8 @@ export const Dashboard: React.FC = () => {
       {/* Main Layout */}
       <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-140px)] min-h-[600px]">
         
-        {/* [Left Panel] 40% Width Fixed */}
-        <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-hidden">
+        {/* [Left Panel] 50% Width (1:1 Ratio) */}
+        <div className="w-full lg:flex-1 flex flex-col gap-4 h-full overflow-hidden">
           
           {/* 1. Status Cards */}
           <div className="grid grid-cols-3 gap-3 flex-shrink-0">
@@ -513,8 +513,8 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* [Right Panel] 60% Width Fixed Map Area */}
-        <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a] relative">
+        {/* [Right Panel] 50% Width Map Area */}
+        <div className="w-full lg:flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a] relative">
            
            {/* Top Filter Overlay (Floating) */}
            <div className="absolute top-4 left-4 right-4 z-20 flex justify-center pointer-events-none">
