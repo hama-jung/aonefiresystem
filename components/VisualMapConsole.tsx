@@ -16,11 +16,12 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const navigate = useNavigate();
   const [mode, setMode] = useState<'monitoring' | 'edit'>(initialMode);
   
+  // 도면 이미지 목록 (기존 mapImage 하위 호환 포함)
   const mapImages = market.mapImages && market.mapImages.length > 0 
     ? market.mapImages 
     : (market.mapImage ? [market.mapImage] : []);
+  
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
-
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const [detectors, setDetectors] = useState<(Omit<Detector, 'status'> & { status: string, isFire?: boolean, isFault?: boolean, faultType?: string, storeInfo?: Store })[]>([]);
@@ -37,6 +38,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   const [selectedAlertDevice, setSelectedAlertDevice] = useState<any>(null);
 
   const [showFireModal, setShowFireModal] = useState(false);
+
+  // 화재 발생 시 해당 도면으로 자동 전환하기 위한 Ref
+  const isAutoPannedRef = useRef(false);
 
   const loadDevices = async () => {
     setLoading(true);
@@ -64,7 +68,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       const rcvMap = new Map<string, any>();
       rcvData.filter(r => r.status !== '미사용').forEach(r => {
           const existing = rcvMap.get(r.macAddress);
-          // 이미 배치된(x_pos가 있는) 데이터가 있다면 그것을 우선으로 유지
           if (!existing || (!existing.x_pos && r.x_pos)) {
               rcvMap.set(r.macAddress, r);
           }
@@ -165,6 +168,17 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       setDetectors(mergedDetectors);
       setReceivers(mergedReceivers);
       setRepeaters(mergedRepeaters);
+
+      // 화재 발생 도면으로 자동 전환 로직
+      if (!isAutoPannedRef.current) {
+          const fireDevice = [...mergedDetectors, ...mergedReceivers, ...mergedRepeaters]
+              .find(d => d.status === '화재' && d.x_pos !== undefined && d.map_index !== undefined);
+          
+          if (fireDevice && fireDevice.map_index !== undefined) {
+              setCurrentMapIndex(fireDevice.map_index);
+              isAutoPannedRef.current = true;
+          }
+      }
 
       const hasFire = mergedDetectors.some(d => d.status === '화재');
       const muteKey = `fire_alert_mute_${market.id}`;
@@ -267,14 +281,14 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     const y = ((e.clientY - mapRect.top) / mapRect.height) * 100;
 
     if (draggedItem.type === 'detector') {
-      setDetectors(prev => prev.map(d => d.id === draggedItem.id ? { ...d, x_pos: x, y_pos: y } : d));
-      await DetectorAPI.saveCoordinates(draggedItem.id, x, y);
+      setDetectors(prev => prev.map(d => d.id === draggedItem.id ? { ...d, x_pos: x, y_pos: y, map_index: currentMapIndex } : d));
+      await DetectorAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
     } else if (draggedItem.type === 'receiver') {
-      setReceivers(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y } : r));
-      await ReceiverAPI.saveCoordinates(draggedItem.id, x, y);
+      setReceivers(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y, map_index: currentMapIndex } : r));
+      await ReceiverAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
     } else if (draggedItem.type === 'repeater') {
-      setRepeaters(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y } : r));
-      await RepeaterAPI.saveCoordinates(draggedItem.id, x, y);
+      setRepeaters(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y, map_index: currentMapIndex } : r));
+      await RepeaterAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
     }
     setDraggedItem(null);
   };
@@ -302,6 +316,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   };
 
   const renderIcon = (item: any, type: 'detector'|'receiver'|'repeater') => {
+    // 현재 도면에 배치된 기기가 아니면 렌더링하지 않음 (기존 데이터 호환을 위해 map_index가 undefined면 0번으로 간주)
+    const itemMapIndex = item.map_index === undefined ? 0 : item.map_index;
+    if (itemMapIndex !== currentMapIndex) return null;
+
     const isFire = item.isFire || item.status === '화재';
     const isError = item.isFault || item.status === '고장';
     const isCommError = item.status === '통신이상';
@@ -440,6 +458,25 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                     </div>
                 </div>
 
+                {/* 도면 페이지네이션 추가 (숫자는 도면 전환 도구로서만 기능) */}
+                {mapImages.length > 1 && (
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
+                        {mapImages.map((_, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => handleMapChange(idx)}
+                                className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center font-black transition-all shadow-xl ${
+                                    currentMapIndex === idx 
+                                    ? 'bg-blue-600 border-white text-white scale-110' 
+                                    : 'bg-slate-800/90 border-slate-600 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                }`}
+                            >
+                                {idx + 1}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 {mapImages.length > 0 && (
                     <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30 pointer-events-none">
                         <button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto"><Plus size={20} /></button>
@@ -534,7 +571,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
 
                                                 <div className="mt-1 pt-1.5 border-t border-slate-700/50 flex justify-between items-center text-[10px] text-slate-500">
                                                     <span>수신기: {d.receiverMac} | 중계기: {d.repeaterId}</span>
-                                                    <span>번호: {d.detectorId || '-'}</span>
                                                 </div>
                                             </li>
                                         ))}
@@ -553,6 +589,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 <div className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20">
                     <div className="p-4 border-b border-slate-700 font-bold text-white flex justify-between items-center"><span>미배치 기기 목록</span><span className="text-xs font-normal text-slate-400 bg-slate-900 px-2 py-0.5 rounded">Drag & Drop</span></div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+                        <div className="bg-blue-900/20 p-2 rounded border border-blue-800 mb-2">
+                             <p className="text-[11px] text-blue-300 font-bold leading-tight">
+                                * 현재 화면에 보이는 도면에 기기가 배치됩니다.
+                             </p>
+                        </div>
                         <div>
                             <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기</div>
                             {receivers.filter(d => !d.x_pos).map(d => (

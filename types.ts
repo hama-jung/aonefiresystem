@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum Role {
@@ -93,6 +94,7 @@ export interface Receiver {
   status: '사용' | '미사용';
   x_pos?: number;
   y_pos?: number;
+  map_index?: number;
 }
 
 export interface Repeater {
@@ -107,6 +109,7 @@ export interface Repeater {
   status: '사용' | '미사용';
   x_pos?: number;
   y_pos?: number;
+  map_index?: number;
 }
 
 export interface Detector {
@@ -124,6 +127,7 @@ export interface Detector {
   memo?: string;
   x_pos?: number;
   y_pos?: number;
+  map_index?: number;
 }
 
 export interface Transmitter {
@@ -137,6 +141,7 @@ export interface Transmitter {
   memo?: string;
   x_pos?: number;
   y_pos?: number;
+  map_index?: number;
 }
 
 export interface Alarm {
@@ -150,6 +155,7 @@ export interface Alarm {
   memo?: string;
   x_pos?: number;
   y_pos?: number;
+  map_index?: number;
 }
 
 export interface Distributor {

@@ -6,7 +6,7 @@ import { User, RoleItem, Market, Distributor, Store, WorkLog, Receiver, Repeater
 const STORE_COLS = ['marketId', 'name', 'managerName', 'managerPhone', 'status', 'storeImage', 'memo', 'receiverMac', 'repeaterId', 'detectorId', 'mode', 'address', 'addressDetail', 'handlingItems', 'latitude', 'longitude'];
 const USER_COLS = ['userId', 'password', 'name', 'role', 'phone', 'email', 'department', 'administrativeArea', 'distributorId', 'marketId', 'status', 'smsReceive'];
 const MARKET_COLS = ['distributorId', 'name', 'address', 'addressDetail', 'zipCode', 'latitude', 'longitude', 'managerName', 'managerPhone', 'managerEmail', 'memo', 'enableMarketSms', 'enableStoreSms', 'enableMultiMedia', 'multiMediaType', 'usageStatus', 'enableDeviceFaultSms', 'enableCctvUrl', 'smsFire', 'smsFault', 'mapImage', 'mapImages', 'status'];
-const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos'];
+const DEVICE_BASE_COLS = ['marketId', 'receiverMac', 'repeaterId', 'status', 'memo', 'x_pos', 'y_pos', 'map_index'];
 
 // --- Helper Utilities ---
 
@@ -377,7 +377,10 @@ export const StoreAPI = {
 export const ReceiverAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Receiver>('receivers', params),
   save: async (r: Receiver) => supabaseSaver('receivers', r, [...DEVICE_BASE_COLS, 'macAddress', 'ip', 'dns', 'emergencyPhone', 'transmissionInterval', 'image']),
-  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('receivers').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+    await supabase.from('receivers').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
+    return true; 
+  },
   delete: async (id: number) => { await supabase.from('receivers').delete().eq('id', id); return true; },
   uploadImage: async (file: File) => {
     const fileName = generateSafeFileName('rcv', file.name);
@@ -389,7 +392,10 @@ export const ReceiverAPI = {
 export const RepeaterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
   save: async (r: Repeater) => supabaseSaver('repeaters', r, [...DEVICE_BASE_COLS, 'repeaterId', 'alarmStatus', 'location', 'image']),
-  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('repeaters').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+    await supabase.from('repeaters').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
+    return true; 
+  },
   delete: async (id: number) => { await supabase.from('repeaters').delete().eq('id', id); return true; },
   uploadImage: async (file: File) => {
     const fileName = generateSafeFileName('rpt', file.name);
@@ -411,7 +417,10 @@ export const DetectorAPI = {
     }
     return saved;
   },
-  saveCoordinates: async (id: number, x: number, y: number) => { await supabase.from('detectors').update({ x_pos: x, y_pos: y }).eq('id', id); return true; },
+  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+    await supabase.from('detectors').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
+    return true; 
+  },
   delete: async (id: number) => { await supabase.from('detectors').delete().eq('id', id); return true; }
 };
 
@@ -453,7 +462,7 @@ export const CommonCodeAPI = {
 export const CommonAPI = {
   getCompanyList: async (searchName?: string) => {
     const { data: dists } = await supabase.from('distributors').select('id, name, managerName, managerPhone');
-    const { data: mkts } = await supabase.from('markets').select('id, name, managerName, managerPhone');
+    const { data: mkts = [] } = await supabase.from('markets').select('id, name, managerName, managerPhone');
     const dList = (dists || []).map(d => ({ id: `D_${d.id}`, name: d.name, type: '총판', manager: d.managerName, phone: d.managerPhone }));
     const mList = (mkts || []).map(m => ({ id: `M_${m.id}`, name: m.name, type: '시장', manager: m.managerName, phone: m.managerPhone }));
     let all = [...dList, ...mList];
