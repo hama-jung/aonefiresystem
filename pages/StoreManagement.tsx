@@ -313,7 +313,7 @@ export const StoreManagement: React.FC = () => {
   if (view === 'form') {
       return (
           <>
-            <PageHeader title={selectedStore ? "기기 수정" : "기기 등록"} />
+            <PageHeader title="기기 관리" />
             <form onSubmit={handleSave}>
                <FormSection title="기본 정보">
                   <FormRow label="소속 현장" required>
@@ -346,9 +346,6 @@ export const StoreManagement: React.FC = () => {
                   </div>
                   <FormRow label="취급품목">
                      <InputGroup value={formData.handlingItems || ''} onChange={(e) => setFormData({...formData, handlingItems: e.target.value})} />
-                  </FormRow>
-                  <FormRow label="사용 여부">
-                     <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
                   </FormRow>
                   <FormRow label="상가 이미지" className="col-span-1 md:col-span-2">
                      <div className="flex flex-col gap-2">
@@ -391,6 +388,9 @@ export const StoreManagement: React.FC = () => {
                   </FormRow>
                   <FormRow label="비고" className="col-span-1 md:col-span-2">
                      <InputGroup value={formData.memo || ''} onChange={(e) => setFormData({...formData, memo: e.target.value})} />
+                  </FormRow>
+                  <FormRow label="사용 여부">
+                     <StatusRadioGroup label="" value={formData.status} onChange={(val) => setFormData({...formData, status: val as any})} />
                   </FormRow>
                </FormSection>
 
