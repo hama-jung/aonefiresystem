@@ -58,10 +58,18 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           (f.marketName === market.name || f.marketId === market.id)
       );
 
-      // [수정] '미사용' 상태인 기기는 필터링하여 제외함
+      // [수정 로직 적용] 1. 기기 자체 상태가 '미사용'이면 제외 / 2. 연결된 상가 상태가 '미사용'이면 제외
       const mergedDetectors = detData
-        .filter(d => d.status !== '미사용')
+        .filter(d => d.status !== '미사용') // 기기 자체 상태 체크
         .map(d => {
+          const storeInfo = storesData.find(s => 
+            s.receiverMac === d.receiverMac && 
+            s.repeaterId === d.repeaterId && 
+            s.detectorId === d.detectorId
+          );
+
+          if (storeInfo && storeInfo.status === '미사용') return null; // 연결 상가가 미사용이면 제외 대상으로 마킹
+
           const isFire = activeFires.some(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
               f.receiverMac === d.receiverMac && 
@@ -82,12 +90,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           if (isFire) status = '화재';
           else if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
 
-          const storeInfo = storesData.find(s => 
-            s.receiverMac === d.receiverMac && 
-            s.repeaterId === d.repeaterId && 
-            s.detectorId === d.detectorId
-          );
-
           const currentMode = storeInfo?.mode || d.mode || '복합';
 
           return { 
@@ -99,7 +101,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
               storeInfo,
               mode: currentMode
           };
-      });
+      }).filter(d => d !== null) as any[]; // 필터링된 결과에서 null 제거
 
       const mergedReceivers = rcvData
         .filter(r => r.status !== '미사용')
