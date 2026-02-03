@@ -133,11 +133,17 @@ const MapSection: React.FC<{
         content.className = 'relative flex items-center justify-center group cursor-pointer';
         content.onclick = () => onMarketSelect(market);
         
-        // [MODIFIED] Fire Icon Design Update (Red background, Blink)
+        // [MODIFIED] Fire Icon Design Update (Red background with Pulse Animation)
         content.innerHTML = `
-            ${isFire ? '<div class="absolute w-20 h-20 bg-red-500 rounded-full animate-ping opacity-60"></div>' : ''}
-            <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
-               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-2xl">${iconName}</span>
+            ${isFire ? `
+                <div class="absolute -inset-6 bg-red-500 rounded-full animate-ping opacity-60"></div>
+                <div class="absolute -inset-1 bg-red-600 rounded-full animate-pulse opacity-40"></div>
+            ` : ''}
+            <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center shadow-xl border-2 ${
+                isFire ? 'bg-red-600 border-white' : 
+                (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')
+            } transition-transform group-hover:scale-110">
+               <span class="material-icons ${isFire ? 'text-white' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-2xl">${iconName}</span>
             </div>
             <div class="absolute bottom-14 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
                <div class="font-bold text-center">${market.name}</div>
@@ -256,15 +262,12 @@ export const Dashboard: React.FC = () => {
       }
   };
 
-  // [Added] Reset Filter Function
+  // Reset Filter Function
   const handleResetMapFilter = () => {
       setMapSido('');
       setMapSigun('');
       setMapKeyword('');
       setMapSigunguList([]);
-      // Resetting focusLocation is optional, keeping map view as is usually better UX, or we can zoom out.
-      // But clearing selection is good.
-      // setSelectedMarket(null); // Optional: if we want to close the modal
   };
 
   if (loading && !data) {
@@ -289,6 +292,8 @@ export const Dashboard: React.FC = () => {
       // Note: usageStatus filtering is already done in API level (getData)
       return matchSido && matchSigun && matchName;
   });
+
+  const isFilterActive = !!(mapSido || mapSigun || mapKeyword);
 
   // Header Right Content (Timer Only)
   const refreshControlUI = (
@@ -497,13 +502,15 @@ export const Dashboard: React.FC = () => {
                        />
                        <Search size={12} className="absolute right-2 top-2 text-slate-400" />
                    </div>
-                   <button 
-                        onClick={handleResetMapFilter} 
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-md border border-blue-500"
-                   >
-                        <RotateCcw size={14} />
-                        전체보기
-                   </button>
+                   {isFilterActive && (
+                        <button 
+                            onClick={handleResetMapFilter} 
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors whitespace-nowrap shadow-md border border-blue-500"
+                        >
+                            <RotateCcw size={14} />
+                            전체보기
+                        </button>
+                   )}
                </div>
            </div>
 
