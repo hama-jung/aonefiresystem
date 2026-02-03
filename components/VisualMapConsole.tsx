@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Modal, UI_STYLES } from './CommonUI';
@@ -52,10 +53,16 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           DeviceStatusAPI.getList({ marketName: market.name, status: 'unprocessed' })
       ]);
 
-      const activeFires = fireLogs.filter(f => ['화재', '등록'].includes(f.falseAlarmStatus));
+      // [수정] 현재 현장(market.name)과 일치하는 화재 데이터만 추출 (서버 필터링이 안된 경우 대비)
+      const activeFires = fireLogs.filter(f => 
+          ['화재', '등록'].includes(f.falseAlarmStatus) && 
+          (f.marketName === market.name || f.marketId === market.id)
+      );
 
       const mergedDetectors = detData.map(d => {
+          // [수정] 기기 코드뿐만 아니라 현장 일치 조건을 강제함
           const isFire = activeFires.some(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
               f.receiverMac === d.receiverMac && 
               f.repeaterId === d.repeaterId && 
               ((f.detectorInfoChamber && f.detectorInfoChamber.startsWith(d.detectorId)) || 
@@ -63,6 +70,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           );
           
           const fault = faultLogs.find(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
               f.deviceType === '감지기' && 
               f.receiverMac === d.receiverMac && 
               f.repeaterId === d.repeaterId && 
@@ -94,7 +102,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       });
 
       const mergedReceivers = rcvData.map(r => {
-          const fault = faultLogs.find(f => f.deviceType === '수신기' && f.receiverMac === r.macAddress);
+          const fault = faultLogs.find(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
+              f.deviceType === '수신기' && f.receiverMac === r.macAddress
+          );
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
           return { 
@@ -106,7 +117,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       });
 
       const mergedRepeaters = rptData.map(r => {
-          const fault = faultLogs.find(f => f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId);
+          const fault = faultLogs.find(f => 
+              (f.marketName === market.name || f.marketId === market.id) &&
+              f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId
+          );
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
           return { 
@@ -259,7 +273,6 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         bgColor = "bg-amber-500 animate-pulse";
         iconName = "warning_amber";
     } else if (isCommError) {
-        // [MODIFIED] Changed background to gray-600 to match the requested attachment visual
         bgColor = "bg-gray-600 animate-pulse";
         iconName = "wifi_off";
     } else {
@@ -459,7 +472,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                                 
                                                 <div className="flex flex-col gap-1.5">
                                                     <div className="flex items-start gap-1.5 text-[11px]">
-                                                        <MapPin size={12} className="text-slate-500 mt-0.5" />
+                                                        <MapPin size={12} className="text-slate-500 mt-0.5 shrink-0" />
                                                         <span className="text-slate-300 leading-normal">{d.storeInfo?.address ? `${d.storeInfo.address} ${d.storeInfo.addressDetail || ''}` : '주소 정보가 등록되지 않았습니다.'}</span>
                                                     </div>
                                                     <div className="flex items-center gap-3 text-[11px]">
