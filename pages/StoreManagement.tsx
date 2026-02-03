@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom'; // [NEW] Import for state detection
+import { useLocation } from 'react-router-dom';
 import { StoreAPI, MarketAPI } from '../services/api';
 import { Store, Market, Receiver } from '../types';
 import { 
@@ -15,7 +15,7 @@ import * as XLSX from 'xlsx';
 const ITEMS_PER_PAGE = 10;
 
 export const StoreManagement: React.FC = () => {
-  const location = useLocation(); // [NEW] Get navigation state
+  const location = useLocation();
   const [view, setView] = useState<'list' | 'form' | 'excel'>('list');
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -66,13 +66,11 @@ export const StoreManagement: React.FC = () => {
     fetchStores();
   }, []);
 
-  // [NEW] Effect to handle auto-edit from VisualMapConsole
   useEffect(() => {
     if (stores.length > 0 && location.state?.editId) {
         const targetStore = stores.find(s => s.id === location.state.editId);
         if (targetStore) {
             handleEdit(targetStore);
-            // Clear state to prevent re-opening on manual refresh or back
             window.history.replaceState({}, document.title);
         }
     }
@@ -144,7 +142,6 @@ export const StoreManagement: React.FC = () => {
         ...formData, 
         marketId: market.id, 
         marketName: market.name,
-        // 주소 자동 입력 (상가 주소가 없을 때)
         address: formData.address || market.address, 
       });
     } else if (view === 'excel') {
@@ -185,12 +182,11 @@ export const StoreManagement: React.FC = () => {
       const ws = wb.Sheets[wsname];
       const data = XLSX.utils.sheet_to_json(ws);
 
-      // 엑셀 파싱 시 변경된 컬럼명 반영
       const parsedData: Store[] = data.map((row: any) => ({
         id: 0,
         marketId: excelMarket!.id,
         marketName: excelMarket!.name,
-        name: row['기기위치'] || row['상가명'] || '', // 호환성 유지
+        name: row['기기위치'] || row['상가명'] || '',
         managerName: row['대표자명'] || row['점주명'] || '',
         managerPhone: row['연락처'] || row['점주연락처'] || '',
         address: row['주소'] || '',
@@ -221,7 +217,6 @@ export const StoreManagement: React.FC = () => {
   };
 
   const handleSampleDownload = () => {
-      // 엑셀 샘플 헤더 변경
       const sample = [{
           '기기위치': '샘플위치', '대표자명': '홍길동', '연락처': '010-1234-5678', 
           '주소': '서울시...', '상세주소': '101호', '취급품목': '의류', 
@@ -297,7 +292,7 @@ export const StoreManagement: React.FC = () => {
                  </FormRow>
                  <FormRow label="엑셀 파일" required>
                     <div className="flex flex-col gap-2">
-                        <InputGroup type="file" ref={excelFileInputRef} accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
+                        <input type="file" ref={excelFileInputRef} accept=".xlsx, .xls" onChange={handleExcelFileChange} className={`${UI_STYLES.input} border-0 p-0 text-slate-300`} />
                         <p className="text-xs text-slate-400">* 기기위치, 대표자명, 연락처 등의 컬럼이 필요합니다.</p>
                     </div>
                  </FormRow>
@@ -431,7 +426,11 @@ export const StoreManagement: React.FC = () => {
 
       <div className="flex justify-between items-center mb-2">
          <span className="text-sm text-slate-400">전체 <span className="text-blue-400">{stores.length}</span> 건 (페이지 {currentPage})</span>
-         <ActionBar onRegister={handleRegister} onExcel={handleExcelList} />
+         <div className="flex gap-2">
+            <Button variant="primary" onClick={handleRegister}>신규 등록</Button>
+            <Button variant="secondary" onClick={handleExcelRegister} icon={<Upload size={16} />}>엑셀 신규 등록</Button>
+            <Button variant="success" onClick={handleExcelList} icon={<Download size={16} />}>엑셀 다운로드</Button>
+         </div>
       </div>
 
       {loading ? (
