@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
-import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber } from '../components/CommonUI';
-import { Search, Upload, Paperclip, X } from 'lucide-react';
+import { PageHeader, SearchFilterBar, InputGroup, SelectGroup, Button, DataTable, Pagination, FormSection, FormRow, StatusRadioGroup, StatusBadge, MarketSearchModal, UI_STYLES, handlePhoneKeyDown, formatPhoneNumber, Column } from '../components/CommonUI';
+import { Search, Upload, Paperclip, X, Download, FileSpreadsheet } from 'lucide-react';
 import { exportToExcel } from '../utils/excel';
 import * as XLSX from 'xlsx';
 
@@ -53,6 +53,23 @@ export const ReceiverManagement: React.FC = () => {
     if (!formData.marketId) { alert('설치 시장을 선택해주세요.'); return; } // market_id -> marketId
     if (!formData.macAddress) { alert('MAC ADDRESS를 입력해주세요.'); return; }
 
+    // [New Logic] 중복 검사
+    try {
+        const existingList = await ReceiverAPI.getList({ marketId: formData.marketId });
+        const isDuplicate = existingList.some(r => 
+            r.id !== (selectedReceiver?.id || 0) && // 자기 자신 제외
+            r.macAddress === formData.macAddress
+        );
+
+        if (isDuplicate) {
+            alert(`이미 등록된 수신기 MAC입니다.\n(MAC: ${formData.macAddress})`);
+            return;
+        }
+    } catch (e) {
+        console.error("중복 체크 실패", e);
+        // 안전을 위해 진행
+    }
+
     try {
       let uploadedUrl = formData.image;
       if (imageFile) uploadedUrl = await ReceiverAPI.uploadImage(imageFile);
@@ -85,7 +102,7 @@ export const ReceiverManagement: React.FC = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const bstr = evt.target?.result;
         const wb = XLSX.read(bstr, { type: 'binary' });
@@ -93,22 +110,86 @@ export const ReceiverManagement: React.FC = () => {
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
 
-        const parsedData: Receiver[] = data.map((row: any) => ({
-          id: 0,
-          marketId: excelMarket!.id, // market_id -> marketId
-          marketName: excelMarket!.name,
-          macAddress: row['MAC주소'] ? String(row['MAC주소']) : '',
-          ip: row['IP주소'] || '',
-          emergencyPhone: row['전화번호'] || '',
-          status: '사용'
-        }));
+        // 1. 기존 데이터 조회 (중복 체크용)
+        const existingReceivers = await ReceiverAPI.getList({ marketId: excelMarket.id });
+        const existingMacSet = new Set(existingReceivers.map(r => r.macAddress));
+        
+        const parsedData: Receiver[] = [];
+        const currentExcelMacSet = new Set<string>();
+        const errors: string[] = [];
+
+        // 2. 파싱 및 검증
+        for (let i = 0; i < data.length; i++) {
+            const row: any = data[i];
+            const rowNum = i + 2;
+            const mac = row['MAC주소'] ? String(row['MAC주소']).trim() : '';
+
+            if (!mac) {
+                errors.push(`${rowNum}행: MAC주소가 누락되었습니다.`);
+                continue;
+            }
+
+            // 엑셀 내 중복
+            if (currentExcelMacSet.has(mac)) {
+                errors.push(`${rowNum}행: 엑셀 파일 내 중복된 MAC입니다 (${mac}).`);
+            }
+            currentExcelMacSet.add(mac);
+
+            // DB 중복
+            if (existingMacSet.has(mac)) {
+                errors.push(`${rowNum}행: 이미 등록된 MAC입니다 (${mac}).`);
+            }
+
+            parsedData.push({
+                id: 0,
+                marketId: excelMarket!.id,
+                marketName: excelMarket!.name,
+                macAddress: mac,
+                ip: row['IP주소'] || '',
+                emergencyPhone: row['전화번호'] || '',
+                transmissionInterval: row['전송주기'] || '01시간',
+                status: '사용'
+            });
+        }
+
+        if (errors.length > 0) {
+            alert(`다음 오류가 발견되어 업로드를 중단합니다:\n(총 ${errors.length}건)\n\n` + errors.slice(0, 10).join('\n') + (errors.length > 10 ? `\n...외 ${errors.length - 10}건` : ''));
+            setExcelData([]);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
         setExcelData(parsedData);
+
       } catch (e) {
         console.error(e);
         alert("엑셀 파일 처리 중 오류가 발생했습니다.");
       }
     };
     reader.readAsBinaryString(file);
+  };
+
+  const handleExcelSave = async () => {
+      if (excelData.length === 0) return;
+      try {
+          // 일괄 저장 API가 없으므로 반복 호출 (안전성 우선)
+          // *주의: 실제 상용환경에서는 saveBulk API를 만들어야 함. 현재는 요청대로 프론트에서 처리.
+          for (const item of excelData) {
+              await ReceiverAPI.save(item);
+          }
+          alert('일괄 등록되었습니다.');
+          setView('list');
+          fetchReceivers();
+      } catch(e: any) {
+          alert('일괄 등록 중 오류 발생: ' + e.message);
+      }
+  };
+
+  const handleSampleDownload = () => {
+      const sample = [
+          {'MAC주소': '1A2B', 'IP주소': '192.168.0.1', '전화번호': '010-1234-5678', '전송주기': '01시간'}
+      ];
+      exportToExcel(sample, '수신기_일괄등록_샘플');
   };
 
   return (
@@ -159,21 +240,54 @@ export const ReceiverManagement: React.FC = () => {
       ) : view === 'excel' ? (
           <div>
              <PageHeader title="엑셀 일괄 등록" />
-             <FormSection title="엑셀 파일 업로드">
-                <FormRow label="설치 시장 선택" required>
-                   <div className="flex gap-2 w-full">
-                      <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
-                         <input type="text" value={excelMarket?.name || ''} placeholder="시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer`} />
-                      </div>
-                      <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
-                   </div>
-                </FormRow>
-                <FormRow label="엑셀 파일" required>
-                   <InputGroup type="file" accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
-                </FormRow>
-             </FormSection>
-             {excelData.length > 0 && <DataTable columns={[{header:'MAC', accessor:'macAddress'}, {header:'IP', accessor:'ip'}]} data={excelData.slice(0, 10)} />}
+             <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 shadow-sm w-full mb-6">
+                 <h3 className="text-lg font-bold text-slate-200 mb-5 border-b border-slate-700 pb-2 flex items-center gap-2">
+                    <span className="w-1 h-5 bg-blue-500 rounded-sm"></span>
+                    엑셀 파일 업로드
+                 </h3>
+                 <div className="grid grid-cols-1 gap-6">
+                    <FormRow label="설치 시장 선택" required>
+                       <div className="flex gap-2 w-full">
+                          <div onClick={() => setIsMarketModalOpen(true)} className="flex-1 relative cursor-pointer">
+                             <input type="text" value={excelMarket?.name || ''} placeholder="등록할 시장을 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
+                             <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
+                          </div>
+                          <Button type="button" variant="secondary" onClick={() => setIsMarketModalOpen(true)}>찾기</Button>
+                       </div>
+                    </FormRow>
+                    <FormRow label="엑셀 파일" required>
+                       <div className="flex flex-col gap-2">
+                           <InputGroup type="file" ref={fileInputRef} accept=".xlsx, .xls" onChange={handleExcelFileChange} className="border-0 p-0 text-slate-300" />
+                           <p className="text-xs text-slate-400">* MAC주소, IP주소, 전화번호, 전송주기 컬럼을 포함해야 합니다.</p>
+                       </div>
+                    </FormRow>
+                    <FormRow label="샘플 양식">
+                        <Button type="button" variant="secondary" onClick={handleSampleDownload} icon={<Download size={14} />} className="w-fit">
+                           엑셀 샘플 다운로드
+                        </Button>
+                    </FormRow>
+                 </div>
+             </div>
+
+             {/* Preview Table */}
+             {excelData.length > 0 && (
+                 <div className="mb-6">
+                     <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
+                     <DataTable 
+                        columns={[
+                            {header:'MAC', accessor:'macAddress'},
+                            {header:'IP', accessor:'ip'},
+                            {header:'전화번호', accessor:'emergencyPhone'},
+                            {header:'전송주기', accessor:'transmissionInterval'},
+                        ]} 
+                        data={excelData.slice(0, 10)} 
+                     />
+                     {excelData.length > 10 && <p className="text-center text-slate-500 text-sm mt-2">...외 {excelData.length - 10}건</p>}
+                 </div>
+             )}
+
              <div className="flex justify-center gap-3 mt-8">
+                <Button type="button" variant="primary" onClick={handleExcelSave} className="w-32" disabled={excelData.length === 0}>일괄 등록</Button>
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
           </div>
