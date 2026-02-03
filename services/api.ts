@@ -212,7 +212,25 @@ export const MarketAPI = {
       distributorName: m.distributors?.name || '-'
     })) as Market[];
   },
-  save: async (m: Market) => supabaseSaver('markets', m, MARKET_COLS),
+  save: async (m: Market) => {
+    // 1. 현장 정보 저장
+    const savedMarket = await supabaseSaver<Market>('markets', m, MARKET_COLS);
+
+    // 2. 현장 사용여부 변경 시, 소속 상가들도 일괄 업데이트 (Cascade)
+    // 현장이 '미사용'이면 상가도 '미사용', '사용'이면 '사용'으로 동기화
+    if (savedMarket.id && m.usageStatus) {
+        const { error } = await supabase
+            .from('stores')
+            .update({ status: m.usageStatus })
+            .eq('marketId', savedMarket.id);
+        
+        if (error) {
+            console.error("Failed to cascade update stores status:", error);
+        }
+    }
+    
+    return savedMarket;
+  },
   delete: async (id: number) => { await supabase.from('markets').delete().eq('id', id); return true; },
   uploadMapImage: async (file: File) => {
     const fileName = generateSafeFileName('mkt', file.name);
