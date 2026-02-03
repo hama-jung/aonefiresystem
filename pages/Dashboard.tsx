@@ -156,22 +156,26 @@ const MapSection: React.FC<{
         }
 
         const content = document.createElement('div');
-        content.className = 'relative flex items-center justify-center group cursor-pointer';
+        // group class ensures children (tooltip) only show on hover of THIS container
+        content.className = 'relative flex items-center justify-center group cursor-pointer z-10 hover:z-50';
         content.onclick = () => onMarketSelect(market);
         
-        // [MODIFIED] Fire Icon Design Update (Red background with Pulse Animation)
+        // [MODIFIED] 
+        // 1. Marker Size: w-12(48px) -> w-10(40px) (approx 80%)
+        // 2. Icon Size: text-2xl(24px) -> text-lg(18px)
+        // 3. Tooltip: bottom-14 -> bottom-12 (closer due to smaller marker), text-xs -> text-[10px] (-2pt)
         content.innerHTML = `
             ${isFire ? `
                 <div class="absolute -inset-6 bg-red-500 rounded-full animate-ping opacity-60"></div>
                 <div class="absolute -inset-1 bg-red-600 rounded-full animate-pulse opacity-40"></div>
             ` : ''}
-            <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center shadow-xl border-2 ${
+            <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-xl border-2 ${
                 isFire ? 'bg-red-600 border-white' : 
                 (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')
             } transition-transform group-hover:scale-110">
-               <span class="material-icons ${isFire ? 'text-white' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-2xl">${iconName}</span>
+               <span class="material-icons ${isFire ? 'text-white' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-lg">${iconName}</span>
             </div>
-            <div class="absolute bottom-14 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
+            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-slate-800/95 border border-slate-600 rounded text-white text-[10px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
                <div class="font-bold text-center">${market.name}</div>
                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800/95"></div>
             </div>
