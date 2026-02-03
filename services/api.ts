@@ -391,6 +391,7 @@ export const ReceiverAPI = {
 
 export const RepeaterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
+  // [FIX] Corrected parameter type from Receiver to Repeater to match the target API
   save: async (r: Repeater) => supabaseSaver('repeaters', r, [...DEVICE_BASE_COLS, 'repeaterId', 'alarmStatus', 'location', 'image']),
   saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
     await supabase.from('repeaters').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
@@ -407,12 +408,8 @@ export const RepeaterAPI = {
 export const DetectorAPI = {
   getList: async (params?: any) => {
     try {
-      // 감지기-상가 관계 및 실제 상가 정보를 조인하여 가져옵니다.
-      let query = supabase
-        .from('detectors')
-        .select('*, markets(name), detector_stores(stores(id, name))')
-        .order('id', { ascending: false });
-
+      // 1. 감지기 정보 조회
+      let query = supabase.from('detectors').select('*, markets(name)').order('id', { ascending: false });
       if (params) {
         Object.keys(params).forEach(key => {
           if (!params[key] || params[key] === 'all') return;
@@ -420,24 +417,40 @@ export const DetectorAPI = {
           query = query.eq(key, params[key]);
         });
       }
+      const { data: detectors, error: detError } = await query;
+      if (detError) throw detError;
 
-      const { data, error } = await query;
-      if (error) throw error;
+      // 2. 기기관리(상가) 정보 조회 (매칭용)
+      // 성능을 위해 해당 시장의 상가들만 가져오거나 전체를 가져옵니다.
+      const { data: stores, error: storeError } = await supabase.from('stores').select('id, name, receiverMac, repeaterId, detectorId, marketId');
+      if (storeError) throw storeError;
 
-      const normalizedData = normalizeData(data || []);
-      let result = normalizedData.map((item: any) => ({
-        ...item,
-        marketName: item.markets?.name || '-',
-        // detector_stores를 순회하며 실제 상가 객체 배열로 변환
-        stores: item.detector_stores?.map((ds: any) => ds.stores).filter(Boolean) || []
-      }));
+      // 3. 매칭용 Map 생성 (키: MAC-RPT-DET-Market)
+      const storeMap = new Map();
+      stores?.forEach(s => {
+        const key = `${s.receiverMac}-${s.repeaterId}-${s.detectorId}-${s.marketId}`;
+        storeMap.set(key, s);
+      });
+
+      const normalizedData = normalizeData(detectors || []);
+      let result = normalizedData.map((item: any) => {
+        const key = `${item.receiverMac}-${item.repeaterId}-${item.detectorId}-${item.marketId}`;
+        const matchedStore = storeMap.get(key);
+        
+        return {
+          ...item,
+          marketName: item.markets?.name || '-',
+          // 매칭된 상가가 있으면 stores 배열에 넣어서 기존 UI 호환 유지
+          stores: matchedStore ? [{ id: matchedStore.id, name: matchedStore.name }] : []
+        };
+      });
 
       if (params?.marketName) {
         result = result.filter((item: any) => item.marketName.includes(params.marketName));
       }
       return result as Detector[];
     } catch (e) {
-      console.warn("DetectorAPI.getList 조인 실패, 기본 조인으로 대체합니다.", e);
+      console.warn("DetectorAPI.getList 데이터 연동 중 오류 발생, 기본 조회로 대체합니다.", e);
       return getDeviceListWithMarket<Detector>('detectors', params);
     }
   },
