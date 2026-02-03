@@ -125,6 +125,24 @@ export const StoreManagement: React.FC = () => {
     if (!formData.marketId) { alert('현장을 선택해주세요.'); return; }
     if (!formData.name) { alert('기기위치를 입력해주세요.'); return; }
 
+    // [수정] 기기 중복 등록 방지 로직 (현장 ID, 수신기 MAC, 중계기 ID, 감지기 번호 조합 체크)
+    try {
+      const currentList = await StoreAPI.getList({ marketId: formData.marketId });
+      const isDuplicate = currentList.some(s => 
+        s.id !== (selectedStore?.id || 0) && // 현재 수정 중인 본인은 제외
+        s.receiverMac === formData.receiverMac &&
+        s.repeaterId === formData.repeaterId &&
+        s.detectorId === formData.detectorId
+      );
+
+      if (isDuplicate) {
+        alert('이미 등록된 기기가 있습니다.');
+        return;
+      }
+    } catch (err) {
+      console.error("중복 체크 중 오류 발생", err);
+    }
+
     try {
       let uploadedUrl = formData.storeImage;
       if (imageFile) uploadedUrl = await StoreAPI.uploadStoreImage(imageFile);
@@ -461,8 +479,9 @@ export const StoreManagement: React.FC = () => {
              )}
 
              <div className="flex justify-center gap-3 mt-8 pb-10">
+                {/* [수정] 버튼 문구 '일괄 등록/수정' -> '등록/수정' 변경 */}
                 <Button type="button" variant="primary" onClick={handleExcelSave} disabled={excelData.length === 0 || loading} className="w-32">
-                    {loading ? '처리 중...' : '일괄 등록/수정'}
+                    {loading ? '처리 중...' : '등록/수정'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={() => setView('list')} className="w-32">취소</Button>
              </div>
@@ -528,11 +547,18 @@ export const StoreManagement: React.FC = () => {
                <FormSection title="기기 연동 정보">
                   <FormRow label="수신기 MAC">
                     <div className="flex gap-2 w-full">
-                       <div onClick={() => setIsReceiverModalOpen(true)} className="flex-1 relative cursor-pointer">
+                       {/* [수정] 소속 현장 선택 여부 확인 로직 추가 */}
+                       <div onClick={() => {
+                           if (!formData.marketId) { alert('소속 현장을 먼저 선택하세요.'); return; }
+                           setIsReceiverModalOpen(true);
+                       }} className="flex-1 relative cursor-pointer">
                           <input type="text" value={formData.receiverMac || ''} placeholder="수신기를 선택하세요" readOnly className={`${UI_STYLES.input} cursor-pointer pr-8`} />
                           <Search className="absolute right-3 top-2.5 text-slate-400" size={16} />
                        </div>
-                       <Button type="button" variant="secondary" onClick={() => setIsReceiverModalOpen(true)}>찾기</Button>
+                       <Button type="button" variant="secondary" onClick={() => {
+                           if (!formData.marketId) { alert('소속 현장을 먼저 선택하세요.'); return; }
+                           setIsReceiverModalOpen(true);
+                       }}>찾기</Button>
                     </div>
                   </FormRow>
                   <FormRow label="중계기 ID (2자리)">
@@ -562,7 +588,12 @@ export const StoreManagement: React.FC = () => {
                </div>
             </form>
             <MarketSearchModal isOpen={isMarketModalOpen} onClose={() => setIsMarketModalOpen(false)} onSelect={handleMarketSelect} />
-            <ReceiverSearchModal isOpen={isReceiverModalOpen} onClose={() => setIsReceiverModalOpen(false)} onSelect={handleReceiverSelect} />
+            <ReceiverSearchModal 
+                isOpen={isReceiverModalOpen} 
+                onClose={() => setIsReceiverModalOpen(false)} 
+                onSelect={handleReceiverSelect} 
+                marketId={formData.marketId} // [수정] 현장 ID 전달
+            />
           </>
       );
   }

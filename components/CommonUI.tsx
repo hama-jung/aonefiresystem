@@ -683,7 +683,8 @@ export const ReceiverSearchModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSelect: (receiver: Receiver) => void;
-}> = ({ isOpen, onClose, onSelect }) => {
+  marketId?: number; // [수정] 현장 필터링을 위한 marketId prop 추가
+}> = ({ isOpen, onClose, onSelect, marketId }) => {
   const [keyword, setKeyword] = useState('');
   const [list, setList] = useState<Receiver[]>([]);
   const [page, setPage] = useState(1);
@@ -697,14 +698,30 @@ export const ReceiverSearchModal: React.FC<{
   }, [isOpen]);
 
   const handleSearch = async (kw: string) => {
-    const data = await ReceiverAPI.getList({ macAddress: kw });
-    setList(data);
+    // [수정] 수신기 검색 시 marketId 필터 적용
+    const data = await ReceiverAPI.getList({ 
+        macAddress: kw,
+        marketId: marketId 
+    });
+
+    // [수정] 중복된 수신기 MAC 제거 로직 (기획 요청: 1개 정보만 띄움)
+    const uniqueList: Receiver[] = [];
+    const macSet = new Set();
+    
+    data.forEach(item => {
+        if (!macSet.has(item.macAddress)) {
+            macSet.add(item.macAddress);
+            uniqueList.push(item);
+        }
+    });
+
+    setList(uniqueList);
     setPage(1);
   };
 
   const columns: Column<Receiver>[] = [
     { header: 'MAC', accessor: 'macAddress' },
-    { header: '시장명', accessor: 'marketName' },
+    { header: '현장명', accessor: 'marketName' }, // [수정] 시장명 -> 현장명
     { header: '선택', accessor: (item) => (
         <Button variant="primary" onClick={() => onSelect(item)} className="px-2 py-1 text-xs">선택</Button>
     ), width: '80px' }
