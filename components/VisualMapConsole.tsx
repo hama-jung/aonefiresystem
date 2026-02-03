@@ -22,10 +22,10 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   // Zoom State
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  // Device Lists - [FIX] Allow dynamic status string beyond '사용' | '미사용'
-  const [detectors, setDetectors] = useState<(Detector & { status: string })[]>([]);
-  const [receivers, setReceivers] = useState<(Receiver & { status: string })[]>([]);
-  const [repeaters, setRepeaters] = useState<(Repeater & { status: string })[]>([]);
+  // Device Lists - [FIX] Use Omit to replace status type for UI display (Original status is '사용' | '미사용')
+  const [detectors, setDetectors] = useState<(Omit<Detector, 'status'> & { status: string })[]>([]);
+  const [receivers, setReceivers] = useState<(Omit<Receiver, 'status'> & { status: string })[]>([]);
+  const [repeaters, setRepeaters] = useState<(Omit<Repeater, 'status'> & { status: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   // CCTV State
@@ -106,13 +106,23 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           return { ...r, status };
       });
 
+      // [FIX] Update state with merged data which now matches the Omit type
       setDetectors(mergedDetectors);
       setReceivers(mergedReceivers);
       setRepeaters(mergedRepeaters);
 
-      // Check for Fire Status (for Modal)
+      // Check for Fire Status (for Modal) - [MODIFIED] Check Mute Period
       const hasFire = mergedDetectors.some(d => d.status === '화재');
-      setShowFireModal(hasFire);
+      
+      const muteKey = `fire_alert_mute_${market.id}`;
+      const muteUntil = localStorage.getItem(muteKey);
+      const isMuted = muteUntil && Date.now() < parseInt(muteUntil);
+
+      if (hasFire && !isMuted) {
+          setShowFireModal(true);
+      } else {
+          setShowFireModal(false);
+      }
 
       // Extract CCTV URLs from detectors
       const cctvs = mergedDetectors
@@ -168,12 +178,21 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           // Mock Update: Actual implementation would call an API
           // For demo, we just update local state instantly
           const updatedDetectors = detectors.map(d => (d.status as string) === '화재' ? { ...d, status: '정상' } : d);
-          setDetectors(updatedDetectors); // [FIX] Removed incorrect cast
+          // [FIX] Correctly update state with updated list
+          setDetectors(updatedDetectors); 
           
           alert('복구 신호 전송 및 처리가 완료되었습니다.');
           setShowFireModal(false); // Dismiss modal immediately
           // In real app: await API calls then loadDevices();
       }
+  };
+
+  // [NEW] Handle Mute for 1 Hour
+  const handleMuteAlert = () => {
+      const muteKey = `fire_alert_mute_${market.id}`;
+      const oneHourLater = Date.now() + (60 * 60 * 1000);
+      localStorage.setItem(muteKey, oneHourLater.toString());
+      setShowFireModal(false);
   };
 
   // CCTV Navigation
@@ -339,8 +358,8 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                        현장에서 화재 신호가 감지되었습니다.<br/>
                        즉시 확인 및 조치 바랍니다.
                     </p>
-                    <Button variant="secondary" onClick={() => setShowFireModal(false)} className="bg-white/20 hover:bg-white/30 text-white border-white/50">
-                        알림 닫기 (상황판 보기)
+                    <Button variant="secondary" onClick={handleMuteAlert} className="bg-white/20 hover:bg-white/30 text-white border-white/50">
+                        1시간동안 안보기
                     </Button>
                 </div>
             </div>
