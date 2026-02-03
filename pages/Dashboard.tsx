@@ -285,13 +285,16 @@ export const Dashboard: React.FC = () => {
       setData(result);
       setLastUpdated(new Date());
 
-      // [MODIFIED] 최초 데이터 로드 시 화재 발생 건이 있다면 자동으로 관제 화면 오픈
+      // [MODIFIED] 최초 데이터 로드 시 화재 발생 건이 있다면 자동으로 관제 화면 오픈 (3초 지연)
       if (!initialCheckDone.current && result.fireEvents && result.fireEvents.length > 0) {
           const latestFire = result.fireEvents[0]; // 가장 최근 화재
           if (latestFire && result.mapData) {
               const targetMarket = result.mapData.find((m: any) => m.id === latestFire.marketId);
               if (targetMarket) {
-                  setSelectedMarket(targetMarket);
+                  // 3초 뒤에 모달 오픈
+                  setTimeout(() => {
+                      setSelectedMarket(targetMarket);
+                  }, 3000);
               }
           }
           initialCheckDone.current = true;
