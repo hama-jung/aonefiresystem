@@ -562,7 +562,10 @@ export const DataReceptionAPI = {
 export const DashboardAPI = {
   getData: async () => {
     try {
-      const { data: mkts } = await supabase.from('markets').select('*');
+      // [MODIFIED] Only fetch Active Markets
+      const { data: mkts } = await supabase.from('markets').select('*').eq('usageStatus', '사용');
+      const activeMarketIds = (mkts || []).map((m: any) => m.id);
+
       const { count: fireCount } = await supabase.from('fire_history').select('*', { count: 'exact', head: true }).in('falseAlarmStatus', ['화재', '등록']);
       const { count: faultCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('deviceStatus', '에러').neq('errorCode', '04');
       const { count: commCount } = await supabase.from('device_status').select('*', { count: 'exact', head: true }).eq('errorCode', '04');
@@ -571,14 +574,14 @@ export const DashboardAPI = {
       // 1. Fire Events
       const { data: fH } = await supabase
           .from('fire_history')
-          .select('*, markets(name)')
+          .select('*, markets(name, usageStatus)')
           .in('falseAlarmStatus', ['화재', '등록'])
           .order('registeredAt', { ascending: false });
 
       // 2. Fault Events
       const { data: dS } = await supabase
           .from('device_status')
-          .select('*, markets(name)')
+          .select('*, markets(name, usageStatus)')
           .eq('deviceStatus', '에러')
           .neq('errorCode', '04')
           .order('registeredAt', { ascending: false });
@@ -586,14 +589,22 @@ export const DashboardAPI = {
       // 3. Comm Error Events
       const { data: cE } = await supabase
           .from('device_status')
-          .select('*, markets(name)')
+          .select('*, markets(name, usageStatus)')
           .eq('errorCode', '04')
           .order('registeredAt', { ascending: false });
 
       const normalizedMkts = normalizeData(mkts || []);
-      const normalizedFH = normalizeData(fH || []);
-      const normalizedDS = normalizeData(dS || []);
-      const normalizedCE = normalizeData(cE || []);
+      
+      // [MODIFIED] Filter lists by usageStatus (via join or existing market list)
+      // Since we already filtered 'mkts', we can filter events based on marketId/marketName if consistent,
+      // or check the joined 'markets.usageStatus'.
+      const activeFH = (fH || []).filter((e: any) => e.markets?.usageStatus === '사용');
+      const activeDS = (dS || []).filter((e: any) => e.markets?.usageStatus === '사용');
+      const activeCE = (cE || []).filter((e: any) => e.markets?.usageStatus === '사용');
+
+      const normalizedFH = normalizeData(activeFH);
+      const normalizedDS = normalizeData(activeDS);
+      const normalizedCE = normalizeData(activeCE);
 
       return {
         stats: [

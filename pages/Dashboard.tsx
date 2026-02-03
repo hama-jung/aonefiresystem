@@ -5,7 +5,7 @@ import { AlertTriangle, WifiOff, Map as MapIcon, BatteryWarning, ArrowRight, Sea
 import { DashboardAPI } from '../services/api';
 import { Market } from '../types';
 import { VisualMapConsole } from '../components/VisualMapConsole';
-import { SIDO_LIST } from '../utils/addressData';
+import { SIDO_LIST, getSigungu } from '../utils/addressData';
 
 declare global {
   interface Window {
@@ -88,7 +88,7 @@ const MapSection: React.FC<{
       const container = mapRef.current;
       const options = {
         center: new window.kakao.maps.LatLng(36.5, 127.5), // Center of Korea
-        level: 13 
+        level: 14 // [MODIFIED] Zoom Level 14
       };
       const map = new window.kakao.maps.Map(container, options);
       
@@ -133,12 +133,13 @@ const MapSection: React.FC<{
         content.className = 'relative flex items-center justify-center group cursor-pointer';
         content.onclick = () => onMarketSelect(market);
         
+        // [MODIFIED] Fire Icon Design Update (Red background, Blink)
         content.innerHTML = `
             ${isFire ? '<div class="absolute w-20 h-20 bg-red-500 rounded-full animate-ping opacity-60"></div>' : ''}
-            <div class="relative z-10 w-10 h-10 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
-               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-xl">${iconName}</span>
+            <div class="relative z-10 w-12 h-12 rounded-full flex items-center justify-center shadow-xl border-2 ${isFire ? 'bg-red-600 border-white' : (status === 'Error' || status === '고장' ? 'bg-orange-500 border-white' : 'bg-white border-blue-500')} transition-transform group-hover:scale-110">
+               <span class="material-icons ${isFire ? 'text-white animate-pulse' : (status === 'Error' || status === '고장' ? 'text-white' : 'text-blue-600')} text-2xl">${iconName}</span>
             </div>
-            <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
+            <div class="absolute bottom-14 left-1/2 -translate-x-1/2 w-max px-3 py-1.5 bg-slate-800/95 border border-slate-600 rounded text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg pointer-events-none">
                <div class="font-bold text-center">${market.name}</div>
                <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800/95"></div>
             </div>
@@ -167,7 +168,7 @@ const MapSection: React.FC<{
   }, [focusLocation, mapInstance]);
 
   return (
-      <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-700 shadow-inner bg-slate-900 group">
+      <div className="relative w-full h-full rounded-xl overflow-hidden shadow-inner bg-slate-900 group">
           {!isKakaoLoaded && (
              <div className="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400 z-10">
                 <MapIcon className="animate-pulse mr-2" /> 지도 로딩 중...
@@ -188,15 +189,20 @@ export const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
-  // Filters State
-  const [selectedSido, setSelectedSido] = useState('');
-  const [keyword, setKeyword] = useState('');
+  // Filters State (Global)
+  // const [keyword, setKeyword] = useState(''); // Removed, used in map filter now
 
   // Pagination States
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
   const [commPage, setCommPage] = useState(1);
-  const ITEMS_LIMIT = 4; // As per visual spacing
+  const ITEMS_LIMIT = 4;
+
+  // [New] Map Filter States
+  const [mapSido, setMapSido] = useState('');
+  const [mapSigun, setMapSigun] = useState('');
+  const [mapKeyword, setMapKeyword] = useState('');
+  const [mapSigunguList, setMapSigunguList] = useState<string[]>([]);
 
   const navigate = useNavigate();
 
@@ -226,12 +232,30 @@ export const Dashboard: React.FC = () => {
     return () => clearInterval(timerInterval);
   }, []);
 
+  // Update Sigungu list when Sido changes
+  useEffect(() => {
+      if (mapSido) {
+          setMapSigunguList(getSigungu(mapSido));
+          setMapSigun(''); // Reset sigungu when sido changes
+      } else {
+          setMapSigunguList([]);
+          setMapSigun('');
+      }
+  }, [mapSido]);
+
   const handleLogClick = (marketId: number) => {
       if (!data || !data.mapData) return;
       const targetMarket = data.mapData.find((m: any) => m.id === marketId);
       if (targetMarket) {
-          // Open Control Page (VisualMapConsole)
           setSelectedMarket(targetMarket);
+      }
+  };
+
+  const handleMapMarketSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const marketId = Number(e.target.value);
+      if (marketId && data?.mapData) {
+          const m = data.mapData.find((item: any) => item.id === marketId);
+          if (m) setSelectedMarket(m);
       }
   };
 
@@ -249,37 +273,18 @@ export const Dashboard: React.FC = () => {
   const currentFaultEvents = faultEvents.slice((faultPage - 1) * ITEMS_LIMIT, faultPage * ITEMS_LIMIT);
   const currentCommEvents = commEvents.slice((commPage - 1) * ITEMS_LIMIT, commPage * ITEMS_LIMIT);
 
-  // Filter Map Data
+  // Filter Map Data based on Map Filters
   const filteredMapData = (mapData || []).filter((m: any) => {
-      const matchSido = selectedSido ? (m.address || '').includes(selectedSido) : true;
-      const matchName = keyword ? m.name.includes(keyword) : true;
-      return matchSido && matchName;
+      const matchSido = mapSido ? (m.address || '').includes(mapSido) : true;
+      const matchSigun = mapSigun ? (m.address || '').includes(mapSigun) : true;
+      const matchName = mapKeyword ? m.name.includes(mapKeyword) : true;
+      // Note: usageStatus filtering is already done in API level (getData)
+      return matchSido && matchSigun && matchName;
   });
 
-  // Header Right Content (Filters + Timer)
+  // Header Right Content (Timer Only)
   const refreshControlUI = (
     <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 mr-4">
-            <select 
-                value={selectedSido}
-                onChange={(e) => setSelectedSido(e.target.value)}
-                className="bg-slate-800 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
-            >
-                <option value="">전국 전체</option>
-                {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <div className="relative">
-                <input 
-                    type="text" 
-                    placeholder="현장명 검색" 
-                    value={keyword}
-                    onChange={(e) => setKeyword(e.target.value)}
-                    className="bg-slate-800 text-white text-xs border border-slate-600 rounded pl-2 pr-7 py-1.5 focus:outline-none focus:border-blue-500 w-32"
-                />
-                <Search size={12} className="absolute right-2 top-2 text-slate-400" />
-            </div>
-        </div>
-
         <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-600 rounded-md px-4 py-1.5 text-xs shadow-lg">
             <span className="text-slate-400">
                 기준 시각 : <span className="text-slate-200 font-bold ml-1 tracking-wide">{lastUpdated.toLocaleTimeString()}</span>
@@ -302,7 +307,7 @@ export const Dashboard: React.FC = () => {
         {/* [Left Panel] 40% Width Fixed */}
         <div className="w-full lg:w-[40%] flex-shrink-0 flex flex-col gap-4 h-full overflow-hidden">
           
-          {/* 1. Status Cards (Solid Block Design) */}
+          {/* 1. Status Cards */}
           <div className="grid grid-cols-3 gap-3 flex-shrink-0">
              {/* Fire */}
              <div className="bg-[#D32F2F] rounded-lg p-4 shadow-lg flex items-center justify-between group h-20">
@@ -338,7 +343,7 @@ export const Dashboard: React.FC = () => {
              </div>
           </div>
 
-          {/* 2. Log Lists (Attached Image 2 Design) */}
+          {/* 2. Log Lists */}
           <div className="flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar pr-1">
              
              {/* Fire History List */}
@@ -443,12 +448,64 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* [Right Panel] 60% Width Fixed Map Area */}
-        <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a]">
+        <div className="w-full lg:w-[60%] flex-1 flex flex-col h-full rounded-xl overflow-hidden border border-slate-700 bg-[#1a1a1a] relative">
+           
+           {/* Top Filter Overlay (Floating) */}
+           <div className="absolute top-4 left-4 right-4 z-20 flex gap-2">
+               <div className="flex gap-2 bg-slate-800/90 p-1 rounded-md border border-slate-600 shadow-xl flex-wrap">
+                   <select 
+                       value={mapSido} 
+                       onChange={(e) => setMapSido(e.target.value)} 
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[100px]"
+                   >
+                       <option value="">시/도 선택</option>
+                       {SIDO_LIST.map(s => <option key={s} value={s}>{s}</option>)}
+                   </select>
+                   <select 
+                       value={mapSigun} 
+                       onChange={(e) => setMapSigun(e.target.value)} 
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[100px]"
+                   >
+                       <option value="">시/군/구 선택</option>
+                       {mapSigunguList.map(s => <option key={s} value={s}>{s}</option>)}
+                   </select>
+                   <select 
+                       onChange={handleMapMarketSelect}
+                       className="bg-slate-700 text-white text-xs border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 min-w-[120px]"
+                   >
+                       <option value="">현장 목록 선택</option>
+                       {filteredMapData.map((m: any) => (
+                           <option key={m.id} value={m.id}>{m.name}</option>
+                       ))}
+                   </select>
+                   <div className="relative">
+                       <input 
+                           type="text" 
+                           placeholder="현장명 검색" 
+                           value={mapKeyword}
+                           onChange={(e) => setMapKeyword(e.target.value)}
+                           className="bg-slate-700 text-white text-xs border border-slate-600 rounded pl-2 pr-7 py-1.5 focus:outline-none focus:border-blue-500 w-32"
+                       />
+                       <Search size={12} className="absolute right-2 top-2 text-slate-400" />
+                   </div>
+               </div>
+           </div>
+
            <MapSection 
               markets={filteredMapData}
               focusLocation={focusLocation}
               onMarketSelect={(m) => setSelectedMarket(m)}
            />
+
+           {/* Bottom Status Overlay (Floating) */}
+           <div className="absolute bottom-8 left-4 z-20">
+               <div className="bg-slate-800/90 text-white px-4 py-2 rounded-full border border-slate-600 shadow-xl flex items-center gap-2">
+                   <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+                   <span className="text-sm font-bold tracking-wide">
+                       실시간 관제 중 <span className="text-slate-400 font-normal text-xs ml-1">({filteredMapData.length}개 현장 연동)</span>
+                   </span>
+               </div>
+           </div>
         </div>
 
       </div>
