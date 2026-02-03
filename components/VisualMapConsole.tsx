@@ -215,24 +215,17 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             case 'receiver': 
                 // 수신기: 보라색 (Purple)
                 bgColor = "bg-purple-600";
-                iconName = "dns"; // or 'router'
+                iconName = "dns"; 
                 break;
             case 'repeater': 
                 // 중계기: 하늘색 (Sky Blue / Cyan)
                 bgColor = "bg-cyan-500";
-                iconName = "router"; // or 'wifi_tethering'
+                iconName = "router"; 
                 break;
             case 'detector':
-                // 감지기
-                if (item.mode === '열') {
-                    // 열 모드: 분홍색 (Pink) + 온도계 아이콘
-                    bgColor = "bg-pink-500";
-                    iconName = "thermostat";
-                } else {
-                    // 일반(복합/연기): 초록색 (Green)
-                    bgColor = "bg-green-600";
-                    iconName = "sensors";
-                }
+                // 감지기: 정상은 항상 초록색 (열 모드 여부는 별도 뱃지로 처리)
+                bgColor = "bg-green-600";
+                iconName = "sensors";
                 break;
         }
     }
@@ -251,6 +244,13 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         {/* 화재 시 핑 효과 (주황색) */}
         {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
         
+        {/* 열 감지기 모드일 경우 상단에 온도계 아이콘 표시 (뱃지) */}
+        {type === 'detector' && item.mode === '열' && (
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 text-white drop-shadow-md z-20" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.8))' }}>
+                 <span className="material-icons text-sm" style={{ fontSize: '16px', color: '#fff' }}>thermostat</span>
+            </div>
+        )}
+
         {/* 마커 본체 */}
         <div className={`${baseClass} ${bgColor}`}>
             <span className="material-icons text-sm">{iconName}</span>
@@ -319,7 +319,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 <div className="flex gap-3 text-xs font-medium bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700 items-center">
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>정상</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse"></span>화재</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-pink-500"></span>열감지</span>
+                    <span className="flex items-center gap-1"><span className="material-icons text-sm text-white">thermostat</span>열감지</span>
                     <span className="w-px h-3 bg-slate-600 mx-1"></span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>수신기</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>중계기</span>
@@ -550,8 +550,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                         <span className="material-icons text-white text-[10px]">dns</span>
                                     </div>
                                     <div className="flex flex-col overflow-hidden">
-                                        <span className="text-sm truncate font-bold text-slate-200">MAC: {d.macAddress}</span>
-                                        <span className="text-[10px] text-slate-400">수신기</span>
+                                        <span className="text-sm font-bold text-slate-200">{d.macAddress}</span>
                                     </div>
                                 </div>
                             ))}
@@ -567,8 +566,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                         <span className="material-icons text-white text-[10px]">router</span>
                                     </div>
                                     <div className="flex flex-col overflow-hidden">
-                                        <span className="text-sm truncate font-bold text-slate-200">ID: {d.repeaterId}</span>
-                                        <span className="text-[10px] text-slate-400">[{d.receiverMac}] 중계기</span>
+                                        <span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}</span>
                                     </div>
                                 </div>
                             ))}
@@ -580,14 +578,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                             {detectors.filter(d => !d.x_pos).length === 0 && <div className="text-xs text-slate-600 pl-2">모두 배치됨</div>}
                             {detectors.filter(d => !d.x_pos).map(d => (
                                 <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'detector', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${d.mode === '열' ? 'bg-pink-500' : 'bg-green-600'}`}>
-                                        <span className="material-icons text-white text-[10px]">
-                                            {d.mode === '열' ? 'thermostat' : 'sensors'}
-                                        </span>
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-green-600`}>
+                                        <span className="material-icons text-white text-[10px]">sensors</span>
                                     </div>
                                     <div className="flex flex-col overflow-hidden">
-                                        <span className="text-sm truncate font-bold text-slate-200">ID: {d.detectorId}</span>
-                                        <span className="text-[10px] text-slate-400 truncate">{d.receiverMac}-{d.repeaterId} / {d.mode}</span>
+                                        <span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}-{d.detectorId}</span>
                                     </div>
                                 </div>
                             ))}
