@@ -203,15 +203,16 @@ const MapSection: React.FC<{
                 const isSigun = viewRegion.indexOf(' ') > -1;
                 const targetLevel = isSigun ? 8 : 10;
                 
+                // [MODIFIED] Use setCenter first to ensure correct positioning, then zoom
+                mapInstance.setCenter(coords);
                 mapInstance.setLevel(targetLevel, { animate: true });
-                mapInstance.panTo(coords);
             }
         });
     } else {
         // Reset to default (Korea center)
         const defaultCenter = new window.kakao.maps.LatLng(36.5, 127.5);
+        mapInstance.setCenter(defaultCenter);
         mapInstance.setLevel(12, { animate: true });
-        mapInstance.panTo(defaultCenter);
     }
   }, [viewRegion, mapInstance]);
 
@@ -219,8 +220,8 @@ const MapSection: React.FC<{
   useEffect(() => {
     if (mapInstance && focusLocation) {
         const moveLatLon = new window.kakao.maps.LatLng(focusLocation.lat, focusLocation.lng);
+        mapInstance.setCenter(moveLatLon);
         mapInstance.setLevel(4, { animate: true });
-        mapInstance.panTo(moveLatLon);
     }
   }, [focusLocation, mapInstance]);
 
