@@ -88,7 +88,8 @@ const MapSection: React.FC<{
   markets: any[];
   focusLocation: { lat: number, lng: number } | null;
   onMarketSelect: (market: Market) => void;
-}> = ({ markets, focusLocation, onMarketSelect }) => {
+  viewRegion: string; // [New Prop] 현재 선택된 행정구역 문자열
+}> = ({ markets, focusLocation, onMarketSelect, viewRegion }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
   const [isKakaoLoaded, setIsKakaoLoaded] = useState(false);
@@ -97,7 +98,7 @@ const MapSection: React.FC<{
   // 1. Wait for Kakao Script Load
   useEffect(() => {
     const checkKakao = setInterval(() => {
-      if (window.kakao && window.kakao.maps) {
+      if (window.kakao && window.kakao.maps && window.kakao.maps.services) {
         setIsKakaoLoaded(true);
         clearInterval(checkKakao);
       }
@@ -113,7 +114,7 @@ const MapSection: React.FC<{
       const container = mapRef.current;
       const options = {
         center: new window.kakao.maps.LatLng(36.5, 127.5), // Center of Korea
-        level: 14 // [MODIFIED] Zoom Level 14
+        level: 12 // [MODIFIED] Default Zoom Level increased from 14 to 12 (Zoom In)
       };
       const map = new window.kakao.maps.Map(container, options);
       
@@ -189,11 +190,36 @@ const MapSection: React.FC<{
     setOverlays(newOverlays);
   }, [mapInstance, markets]);
 
-  // 4. Focus Location
+  // 4. Handle View Region Change (Auto Zoom/Pan)
+  useEffect(() => {
+    if (!mapInstance || !window.kakao?.maps?.services) return;
+
+    if (viewRegion) {
+        const geocoder = new window.kakao.maps.services.Geocoder();
+        geocoder.addressSearch(viewRegion, (result: any, status: any) => {
+            if (status === window.kakao.maps.services.Status.OK) {
+                const coords = new window.kakao.maps.LatLng(result[0].y, result[0].x);
+                // Determine zoom level: Sigungu (has space) -> 8, Sido -> 10
+                const isSigun = viewRegion.indexOf(' ') > -1;
+                const targetLevel = isSigun ? 8 : 10;
+                
+                mapInstance.setLevel(targetLevel, { animate: true });
+                mapInstance.panTo(coords);
+            }
+        });
+    } else {
+        // Reset to default (Korea center)
+        const defaultCenter = new window.kakao.maps.LatLng(36.5, 127.5);
+        mapInstance.setLevel(12, { animate: true });
+        mapInstance.panTo(defaultCenter);
+    }
+  }, [viewRegion, mapInstance]);
+
+  // 5. Focus Location (Specific Market) overrides region view
   useEffect(() => {
     if (mapInstance && focusLocation) {
         const moveLatLon = new window.kakao.maps.LatLng(focusLocation.lat, focusLocation.lng);
-        mapInstance.setLevel(4);
+        mapInstance.setLevel(4, { animate: true });
         mapInstance.panTo(moveLatLon);
     }
   }, [focusLocation, mapInstance]);
@@ -265,17 +291,29 @@ export const Dashboard: React.FC = () => {
       if (mapSido) {
           setMapSigunguList(getSigungu(mapSido));
           setMapSigun(''); // Reset sigungu when sido changes
+          // Focus location is handled by MapSection via viewRegion
+          setFocusLocation(null); // Release specific market focus
       } else {
           setMapSigunguList([]);
           setMapSigun('');
+          setFocusLocation(null);
       }
   }, [mapSido]);
+
+  useEffect(() => {
+      // When Sigun changes, also release focus
+      setFocusLocation(null);
+  }, [mapSigun]);
 
   const handleLogClick = (marketId: number) => {
       if (!data || !data.mapData) return;
       const targetMarket = data.mapData.find((m: any) => m.id === marketId);
       if (targetMarket) {
           setSelectedMarket(targetMarket);
+          // Log click should also focus the map
+          if (targetMarket.x && targetMarket.y) {
+              setFocusLocation({ lat: parseFloat(targetMarket.x), lng: parseFloat(targetMarket.y) });
+          }
       }
   };
 
@@ -283,7 +321,13 @@ export const Dashboard: React.FC = () => {
       const marketId = Number(e.target.value);
       if (marketId && data?.mapData) {
           const m = data.mapData.find((item: any) => item.id === marketId);
-          if (m) setSelectedMarket(m);
+          if (m) {
+              setSelectedMarket(m);
+              // Focus map on select
+              if (m.x && m.y) {
+                  setFocusLocation({ lat: parseFloat(m.x), lng: parseFloat(m.y) });
+              }
+          }
       }
   };
 
@@ -293,6 +337,7 @@ export const Dashboard: React.FC = () => {
       setMapSigun('');
       setMapKeyword('');
       setMapSigunguList([]);
+      setFocusLocation(null); // Reset focus
   };
 
   if (loading && !data) {
@@ -347,6 +392,9 @@ export const Dashboard: React.FC = () => {
   });
 
   const isFilterActive = !!(mapSido || mapSigun || mapKeyword);
+
+  // Construct View Region String for MapSection
+  const viewRegionString = `${mapSido} ${mapSigun}`.trim();
 
   // Header Right Content (Timer Only)
   const refreshControlUI = (
@@ -571,6 +619,7 @@ export const Dashboard: React.FC = () => {
               markets={filteredMapData}
               focusLocation={focusLocation}
               onMarketSelect={(m) => setSelectedMarket(m)}
+              viewRegion={viewRegionString}
            />
 
            {/* Bottom Status Overlay (Floating) */}
