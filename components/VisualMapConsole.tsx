@@ -465,7 +465,12 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         <div>
                             <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기 (Square)</div>
                             {receivers.filter(d => !d.x_pos).length === 0 && <div className="text-xs text-slate-600 pl-2">모두 배치됨</div>}
-                            {receivers.filter(d => !d.x_pos).map(d => (
+                            {receivers
+                                .filter(d => !d.x_pos)
+                                .filter((d, index, self) => 
+                                    index === self.findIndex((t) => t.macAddress === d.macAddress)
+                                )
+                                .map(d => (
                                 <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'receiver', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2">
                                     <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
                                     <span className="text-sm">MAC: {d.macAddress}</span>
@@ -480,7 +485,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                             {repeaters.filter(d => !d.x_pos).map(d => (
                                 <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'repeater', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2">
                                     <div className="w-3 h-3 bg-green-500 rounded-md"></div>
-                                    <span className="text-sm">ID: {d.repeaterId}</span>
+                                    <span className="text-sm">[{d.receiverMac}] ID: {d.repeaterId}</span>
                                 </div>
                             ))}
                         </div>
