@@ -262,6 +262,9 @@ export const Dashboard: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [timeLeft, setTimeLeft] = useState(60);
 
+  // Auto Open Logic Ref
+  const initialCheckDone = useRef(false);
+
   // Pagination States
   const [firePage, setFirePage] = useState(1);
   const [faultPage, setFaultPage] = useState(1);
@@ -281,6 +284,19 @@ export const Dashboard: React.FC = () => {
       const result = await DashboardAPI.getData();
       setData(result);
       setLastUpdated(new Date());
+
+      // [MODIFIED] 최초 데이터 로드 시 화재 발생 건이 있다면 자동으로 관제 화면 오픈
+      if (!initialCheckDone.current && result.fireEvents && result.fireEvents.length > 0) {
+          const latestFire = result.fireEvents[0]; // 가장 최근 화재
+          if (latestFire && result.mapData) {
+              const targetMarket = result.mapData.find((m: any) => m.id === latestFire.marketId);
+              if (targetMarket) {
+                  setSelectedMarket(targetMarket);
+              }
+          }
+          initialCheckDone.current = true;
+      }
+
     } catch (error) {
       console.error("Failed to fetch dashboard data", error);
     } finally {
