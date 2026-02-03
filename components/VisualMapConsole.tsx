@@ -299,58 +299,61 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         <div className="flex-1 flex overflow-hidden relative">
             
             {/* Map Area */}
-            {/* [MODIFIED] overflow-auto로 변경하여 확대 시 스크롤 가능하게 함 */}
-            <div className="flex-1 flex flex-col relative bg-[#1a1a1a] overflow-auto flex items-center justify-center">
-                <div 
-                    className="relative transition-all duration-200 ease-in-out origin-top-left"
-                    style={{ 
-                        width: `${zoomLevel * 100}%`, 
-                        height: `${zoomLevel * 100}%`,
-                        minWidth: '100%',
-                        minHeight: '100%'
-                    }}
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                >
-                    {mapImages.length > 0 ? (
-                        <div className="relative w-full h-full">
-                            <img 
-                                src={mapImages[currentMapIndex]} 
-                                alt={`Map ${currentMapIndex + 1}`} 
-                                className="w-full h-full object-contain pointer-events-none"
-                            />
-                            {/* Render Placed Devices */}
-                            {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
-                            {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
-                            {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
-                        </div>
-                    ) : (
-                        <div className="text-center text-slate-500 absolute inset-0 flex flex-col items-center justify-center">
-                            <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
-                            <p>등록된 도면 이미지가 없습니다.</p>
-                            {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
-                        </div>
-                    )}
+            {/* [MODIFIED] Separate Scroller and Controls for better zoom behavior */}
+            <div className="flex-1 relative bg-[#1a1a1a] overflow-hidden">
+                {/* Scroller Area */}
+                <div className="absolute inset-0 overflow-auto custom-scrollbar">
+                    <div 
+                        className="relative origin-top-left transition-all duration-200 ease-in-out"
+                        style={{ 
+                            width: `${zoomLevel * 100}%`, 
+                            height: `${zoomLevel * 100}%`,
+                            minWidth: '100%',
+                            minHeight: '100%'
+                        }}
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                    >
+                        {mapImages.length > 0 ? (
+                            <div className="relative w-full h-full">
+                                <img 
+                                    src={mapImages[currentMapIndex]} 
+                                    alt={`Map ${currentMapIndex + 1}`} 
+                                    className="w-full h-full object-contain block"
+                                />
+                                {/* Render Placed Devices */}
+                                {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
+                                {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
+                                {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
+                            </div>
+                        ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+                                <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
+                                <p>등록된 도면 이미지가 없습니다.</p>
+                                {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* [New] Zoom Controls Overlay */}
+                {/* [Fixed] Zoom Controls Overlay (Outside Scroller) */}
                 {mapImages.length > 0 && (
-                    <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30">
-                        <button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors" title="확대">
+                    <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30 pointer-events-none">
+                        <button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto" title="확대">
                             <Plus size={20} />
                         </button>
-                        <button onClick={handleZoomOut} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors" title="축소">
+                        <button onClick={handleZoomOut} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto" title="축소">
                             <Minus size={20} />
                         </button>
-                        <button onClick={handleZoomReset} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors text-xs font-bold" title="100% 초기화">
+                        <button onClick={handleZoomReset} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors text-xs font-bold pointer-events-auto" title="100% 초기화">
                             1.0x
                         </button>
                     </div>
                 )}
 
-                {/* Map Pagination Footer */}
+                {/* Map Pagination Footer (Floating) */}
                 {mapImages.length > 1 && (
-                    <div className="fixed bottom-0 left-0 right-0 h-14 bg-slate-800 border-t border-slate-700 flex items-center justify-center gap-2 z-40 w-full lg:w-auto lg:left-auto" style={{ left: mode === 'monitoring' ? '0' : '0', right: mode === 'monitoring' ? '320px' : (mode === 'edit' ? '288px' : '0') }}>
+                    <div className="absolute bottom-0 left-0 right-0 h-14 bg-slate-800/90 border-t border-slate-700 flex items-center justify-center gap-2 z-40">
                         {mapImages.map((_, idx) => (
                             <button
                                 key={idx}
