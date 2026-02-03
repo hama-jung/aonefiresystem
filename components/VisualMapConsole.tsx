@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button, Modal, UI_STYLES } from './CommonUI';
 import { Market, Detector, Receiver, Repeater } from '../types';
 import { DetectorAPI, ReceiverAPI, RepeaterAPI } from '../services/api';
-import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw } from 'lucide-react';
 
 interface VisualMapConsoleProps {
   market: Market;
@@ -18,6 +18,9 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     ? market.mapImages 
     : (market.mapImage ? [market.mapImage] : []);
   const [currentMapIndex, setCurrentMapIndex] = useState(0);
+
+  // Zoom State
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   // Device Lists
   const [detectors, setDetectors] = useState<Detector[]>([]);
@@ -79,6 +82,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     return () => clearInterval(interval);
   }, [market.name]);
 
+  // Reset zoom when map changes
+  useEffect(() => {
+      setZoomLevel(1);
+  }, [currentMapIndex]);
+
   // --- Statistics Calculation ---
   const stats = {
       receiver: { total: receivers.length, placed: receivers.filter(r => r.x_pos).length },
@@ -126,6 +134,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       setCurrentMapIndex(idx);
   };
 
+  // Zoom Handlers
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 3)); // Max 3x
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1)); // Min 1x
+  const handleZoomReset = () => setZoomLevel(1);
+
   // --- Drag & Drop Logic ---
   const handleDragStart = (e: React.DragEvent, type: 'detector'|'receiver'|'repeater', id: number) => {
     if (mode !== 'edit') return;
@@ -137,6 +150,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     if (mode !== 'edit' || !draggedItem) return;
     e.preventDefault();
 
+    // Use currentTarget to get the dimensions of the zoomed container
     const mapRect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - mapRect.left) / mapRect.width) * 100;
     const y = ((e.clientY - mapRect.top) / mapRect.height) * 100;
@@ -285,9 +299,16 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         <div className="flex-1 flex overflow-hidden relative">
             
             {/* Map Area */}
-            <div className="flex-1 flex flex-col relative bg-[#1a1a1a]">
+            {/* [MODIFIED] overflow-auto로 변경하여 확대 시 스크롤 가능하게 함 */}
+            <div className="flex-1 flex flex-col relative bg-[#1a1a1a] overflow-auto flex items-center justify-center">
                 <div 
-                    className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
+                    className="relative transition-all duration-200 ease-in-out origin-top-left"
+                    style={{ 
+                        width: `${zoomLevel * 100}%`, 
+                        height: `${zoomLevel * 100}%`,
+                        minWidth: '100%',
+                        minHeight: '100%'
+                    }}
                     onDrop={handleDrop}
                     onDragOver={handleDragOver}
                 >
@@ -304,7 +325,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                             {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
                         </div>
                     ) : (
-                        <div className="text-center text-slate-500">
+                        <div className="text-center text-slate-500 absolute inset-0 flex flex-col items-center justify-center">
                             <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
                             <p>등록된 도면 이미지가 없습니다.</p>
                             {mode === 'edit' && <p className="text-sm mt-2 text-blue-400">현장 관리에서 이미지를 등록해주세요.</p>}
@@ -312,9 +333,24 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                     )}
                 </div>
 
+                {/* [New] Zoom Controls Overlay */}
+                {mapImages.length > 0 && (
+                    <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30">
+                        <button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors" title="확대">
+                            <Plus size={20} />
+                        </button>
+                        <button onClick={handleZoomOut} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors" title="축소">
+                            <Minus size={20} />
+                        </button>
+                        <button onClick={handleZoomReset} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors text-xs font-bold" title="100% 초기화">
+                            1.0x
+                        </button>
+                    </div>
+                )}
+
                 {/* Map Pagination Footer */}
                 {mapImages.length > 1 && (
-                    <div className="h-14 bg-slate-800 border-t border-slate-700 flex items-center justify-center gap-2 z-20">
+                    <div className="fixed bottom-0 left-0 right-0 h-14 bg-slate-800 border-t border-slate-700 flex items-center justify-center gap-2 z-40 w-full lg:w-auto lg:left-auto" style={{ left: mode === 'monitoring' ? '0' : '0', right: mode === 'monitoring' ? '320px' : (mode === 'edit' ? '288px' : '0') }}>
                         {mapImages.map((_, idx) => (
                             <button
                                 key={idx}
