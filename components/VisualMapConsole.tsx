@@ -53,14 +53,12 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           DeviceStatusAPI.getList({ marketName: market.name, status: 'unprocessed' })
       ]);
 
-      // [수정] 현재 현장(market.name)과 일치하는 화재 데이터만 추출 (서버 필터링이 안된 경우 대비)
       const activeFires = fireLogs.filter(f => 
           ['화재', '등록'].includes(f.falseAlarmStatus) && 
           (f.marketName === market.name || f.marketId === market.id)
       );
 
       const mergedDetectors = detData.map(d => {
-          // [수정] 기기 코드뿐만 아니라 현장 일치 조건을 강제함
           const isFire = activeFires.some(f => 
               (f.marketName === market.name || f.marketId === market.id) &&
               f.receiverMac === d.receiverMac && 
@@ -167,6 +165,21 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   useEffect(() => {
       setZoomLevel(1);
   }, [currentMapIndex]);
+
+  // [수정] 기기 상태별 합계 계산 로직 추가
+  const statusCounts = {
+    normal: 0,
+    fire: 0,
+    fault: 0,
+    commError: 0
+  };
+
+  [...receivers, ...repeaters, ...detectors].forEach(d => {
+    if (d.status === '정상') statusCounts.normal++;
+    else if (d.status === '화재') statusCounts.fire++;
+    else if (d.status === '고장') statusCounts.fault++;
+    else if (d.status === '통신이상') statusCounts.commError++;
+  });
 
   const stats = {
       receiver: { total: receivers.length, placed: receivers.filter(r => r.x_pos).length },
@@ -408,27 +421,29 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 <div className="w-80 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20 overflow-hidden">
                     <div className="p-3 border-b border-slate-700 font-bold text-white bg-slate-900/50">관제 현황</div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 p-4">
+                        {/* [수정] 기기 상태별 요약 숫자로 데이터 표시 영역 변경 */}
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600">
-                                <div className="text-slate-400 mb-1">수신기 (배치/전체)</div>
-                                <div className="text-lg font-bold text-white">{stats.receiver.placed} / <span className="text-slate-400 text-sm">{stats.receiver.total}</span></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
+                                <div className="text-green-400 font-bold mb-1">정상</div>
+                                <div className="text-xl font-black text-white">{statusCounts.normal}</div>
                             </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600">
-                                <div className="text-slate-400 mb-1">중계기 (배치/전체)</div>
-                                <div className="text-lg font-bold text-white">{stats.repeater.placed} / <span className="text-slate-400 text-sm">{stats.repeater.total}</span></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
+                                <div className="text-orange-500 font-bold mb-1">화재</div>
+                                <div className="text-xl font-black text-white">{statusCounts.fire}</div>
                             </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600">
-                                <div className="text-slate-400 mb-1">감지기 (배치/전체)</div>
-                                <div className="text-lg font-bold text-white">{stats.detector.placed} / <span className="text-slate-400 text-sm">{stats.detector.total}</span></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
+                                <div className="text-amber-500 font-bold mb-1">고장</div>
+                                <div className="text-xl font-black text-white">{statusCounts.fault}</div>
                             </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600">
-                                <div className="text-slate-400 mb-1">CCTV</div>
-                                <div className="text-lg font-bold text-blue-400">{stats.cctv} <span className="text-slate-400 text-sm">대</span></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
+                                <div className="text-gray-400 font-bold mb-1">통신이상</div>
+                                <div className="text-xl font-black text-white">{statusCounts.commError}</div>
                             </div>
                         </div>
 
                         <div className="flex flex-col gap-2">
-                            <h3 className="text-sm font-bold text-white flex items-center gap-2"><Video size={16} /> 현장 동영상</h3>
+                            {/* [수정] CCTV 대수를 제목 옆으로 이동 */}
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2"><Video size={16} /> 현장 동영상 ({stats.cctv}대)</h3>
                             <div className="bg-black aspect-video rounded border border-slate-600 relative flex items-center justify-center overflow-hidden">
                                 {cctvList.length > 0 ? (
                                     <>
