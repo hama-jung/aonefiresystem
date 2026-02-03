@@ -194,47 +194,78 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     const isFire = (item.status as string) === '화재' || (item.status as string) === 'Fire';
     const isError = (item.status as string) === '고장' || (item.status as string) === 'Error' || (item.status as string) === '에러';
     
-    // Style based on type
-    let shapeClass = "rounded-full"; // Detector: Circle
-    let label = item.detectorId || item.repeaterId || "R";
+    // 기본 스타일: 원형, 그림자, 중앙 정렬
+    const baseClass = "relative w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white border-2 border-white transition-transform group-hover:scale-125 z-10";
     
-    if (type === 'receiver') {
-        shapeClass = "rounded-sm"; // Receiver: Square
-        label = "M";
-    } else if (type === 'repeater') {
-        shapeClass = "rounded-md"; // Repeater: Rounded Square
-        label = item.repeaterId;
+    // 색상 및 아이콘 결정
+    let bgColor = "bg-gray-500";
+    let iconName = "help_outline"; // Default icon
+    
+    if (isFire) {
+        // [화재 상태]: 주황색 (Orange) - 기기 종류 무관하게 통일
+        bgColor = "bg-orange-600 animate-pulse";
+        iconName = "local_fire_department"; 
+    } else if (isError) {
+        // [고장 상태]: 기존 유지 (오렌지/노랑 계열)
+        bgColor = "bg-amber-500";
+        iconName = "warning_amber";
+    } else {
+        // [정상 상태] - 기기별 색상 적용
+        switch(type) {
+            case 'receiver': 
+                // 수신기: 보라색 (Purple)
+                bgColor = "bg-purple-600";
+                iconName = "dns"; // or 'router'
+                break;
+            case 'repeater': 
+                // 중계기: 하늘색 (Sky Blue / Cyan)
+                bgColor = "bg-cyan-500";
+                iconName = "router"; // or 'wifi_tethering'
+                break;
+            case 'detector':
+                // 감지기
+                if (item.mode === '열') {
+                    // 열 모드: 분홍색 (Pink) + 온도계 아이콘
+                    bgColor = "bg-pink-500";
+                    iconName = "thermostat";
+                } else {
+                    // 일반(복합/연기): 초록색 (Green)
+                    bgColor = "bg-green-600";
+                    iconName = "sensors";
+                }
+                break;
+        }
     }
-
-    let colorClass = "bg-green-600 border-green-400";
-    if (isFire) colorClass = "bg-red-600 border-red-400 animate-pulse";
-    else if (isError) colorClass = "bg-orange-500 border-orange-300";
 
     return (
       <div
         key={`${type}-${item.id}`}
-        className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-transform hover:scale-125
-            ${mode === 'edit' ? 'cursor-move' : ''} group z-10
+        className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer
+            ${mode === 'edit' ? 'cursor-move' : ''} group
         `}
         style={{ left: `${item.x_pos}%`, top: `${item.y_pos}%` }}
         draggable={mode === 'edit'}
         onDragStart={(e) => handleDragStart(e, type, item.id)}
         onClick={() => handleDeviceClick(item, type)}
       >
-        {isFire && <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-75"></div>}
+        {/* 화재 시 핑 효과 (주황색) */}
+        {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
         
-        <div className={`
-            relative w-8 h-8 ${shapeClass} border-2 shadow-lg flex items-center justify-center text-xs font-bold text-white
-            ${colorClass}
-        `}>
-            {label}
+        {/* 마커 본체 */}
+        <div className={`${baseClass} ${bgColor}`}>
+            <span className="material-icons text-sm">{iconName}</span>
         </div>
 
-        {/* Tooltip */}
-        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-            {type === 'detector' ? `감지기 ${item.detectorId}` : (type === 'repeater' ? `중계기 ${item.repeaterId}` : `수신기`)}
-            <br/>
-            {item.status}
+        {/* 툴팁 (ID 정보) */}
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 flex flex-col items-center">
+            <span className="font-bold">
+                {type === 'detector' ? `감지기 ${item.detectorId}` : (type === 'repeater' ? `중계기 ${item.repeaterId}` : `수신기`)}
+            </span>
+            <span className="text-[10px] text-gray-300">
+                {item.status} {item.mode ? `(${item.mode})` : ''}
+            </span>
+            {/* 화살표 */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-black/80"></div>
         </div>
       </div>
     );
@@ -284,10 +315,14 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             </div>
             
             <div className="flex items-center gap-4">
-                <div className="flex gap-4 text-xs font-medium bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>정상</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>화재</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>고장</span>
+                {/* 범례 (Legend) 업데이트 */}
+                <div className="flex gap-3 text-xs font-medium bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700 items-center">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>정상</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse"></span>화재</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-pink-500"></span>열감지</span>
+                    <span className="w-px h-3 bg-slate-600 mx-1"></span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>수신기</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>중계기</span>
                 </div>
                 <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white">
                     <X size={24} />
@@ -502,7 +537,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                     <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
                         {/* Receivers */}
                         <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기 (Square)</div>
+                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기</div>
                             {receivers.filter(d => !d.x_pos).length === 0 && <div className="text-xs text-slate-600 pl-2">모두 배치됨</div>}
                             {receivers
                                 .filter(d => !d.x_pos)
@@ -510,33 +545,50 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                                     index === self.findIndex((t) => t.macAddress === d.macAddress)
                                 )
                                 .map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'receiver', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2">
-                                    <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
-                                    <span className="text-sm">MAC: {d.macAddress}</span>
+                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'receiver', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
+                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+                                        <span className="material-icons text-white text-[10px]">dns</span>
+                                    </div>
+                                    <div className="flex flex-col overflow-hidden">
+                                        <span className="text-sm truncate font-bold text-slate-200">MAC: {d.macAddress}</span>
+                                        <span className="text-[10px] text-slate-400">수신기</span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
                         {/* Repeaters */}
                         <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">중계기 (Rounded)</div>
+                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">중계기</div>
                             {repeaters.filter(d => !d.x_pos).length === 0 && <div className="text-xs text-slate-600 pl-2">모두 배치됨</div>}
                             {repeaters.filter(d => !d.x_pos).map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'repeater', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2">
-                                    <div className="w-3 h-3 bg-green-500 rounded-md"></div>
-                                    <span className="text-sm">[{d.receiverMac}] ID: {d.repeaterId}</span>
+                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'repeater', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
+                                    <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center flex-shrink-0">
+                                        <span className="material-icons text-white text-[10px]">router</span>
+                                    </div>
+                                    <div className="flex flex-col overflow-hidden">
+                                        <span className="text-sm truncate font-bold text-slate-200">ID: {d.repeaterId}</span>
+                                        <span className="text-[10px] text-slate-400">[{d.receiverMac}] 중계기</span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
                         {/* Detectors */}
                         <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">감지기 (Circle)</div>
+                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">감지기</div>
                             {detectors.filter(d => !d.x_pos).length === 0 && <div className="text-xs text-slate-600 pl-2">모두 배치됨</div>}
                             {detectors.filter(d => !d.x_pos).map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'detector', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2">
-                                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                    <span className="text-xs truncate">{d.receiverMac}-{d.repeaterId}-{d.detectorId}</span>
+                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'detector', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${d.mode === '열' ? 'bg-pink-500' : 'bg-green-600'}`}>
+                                        <span className="material-icons text-white text-[10px]">
+                                            {d.mode === '열' ? 'thermostat' : 'sensors'}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-col overflow-hidden">
+                                        <span className="text-sm truncate font-bold text-slate-200">ID: {d.detectorId}</span>
+                                        <span className="text-[10px] text-slate-400 truncate">{d.receiverMac}-{d.repeaterId} / {d.mode}</span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -551,9 +603,11 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                 <div className="flex flex-col gap-4">
                     <div className="flex items-center gap-4 bg-slate-900 p-4 rounded border border-slate-700">
                         <div className={`w-12 h-12 flex items-center justify-center rounded-full text-xl font-bold text-white
-                            ${(selectedAlertDevice as any).status === '화재' ? 'bg-red-600 animate-pulse' : 'bg-green-600'}
+                            ${(selectedAlertDevice as any).status === '화재' ? 'bg-orange-600 animate-pulse' : 'bg-green-600'}
                         `}>
-                            {(selectedAlertDevice as any).detectorId || (selectedAlertDevice as any).repeaterId || 'M'}
+                            <span className="material-icons text-2xl">
+                                {(selectedAlertDevice as any).status === '화재' ? 'local_fire_department' : 'sensors'}
+                            </span>
                         </div>
                         <div>
                             <div className="text-lg font-bold text-white">
@@ -562,7 +616,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                             <div className="text-sm text-slate-400">
                                 {(selectedAlertDevice as any).type === 'detector' ? '화재감지기' : ((selectedAlertDevice as any).type === 'repeater' ? '중계기' : '수신기')}
                                 <span className="mx-2">|</span>
-                                상태: <span className={(selectedAlertDevice as any).status === '화재' ? 'text-red-400 font-bold' : 'text-green-400'}>{(selectedAlertDevice as any).status}</span>
+                                상태: <span className={(selectedAlertDevice as any).status === '화재' ? 'text-orange-400 font-bold' : 'text-green-400'}>{(selectedAlertDevice as any).status}</span>
                             </div>
                         </div>
                     </div>
