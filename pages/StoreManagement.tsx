@@ -115,6 +115,32 @@ export const StoreManagement: React.FC = () => {
     if (!formData.marketId) { alert('소속 시장을 선택해주세요.'); return; }
     if (!formData.name) { alert('상가명을 입력해주세요.'); return; }
 
+    // [New Logic] 중복 기기 체크 (수신기 + 중계기 + 감지기)
+    if (formData.receiverMac && formData.repeaterId && formData.detectorId) {
+        try {
+            // 해당 시장의 전체 기기 목록을 가져옵니다.
+            const marketStores = await StoreAPI.getList({ marketId: formData.marketId });
+            
+            // 중복 검사: 현재 수정 중인 기기(selectedStore.id)는 제외하고 비교
+            const isDuplicate = marketStores.some(s => 
+                s.id !== (selectedStore?.id || 0) &&
+                s.receiverMac === formData.receiverMac &&
+                s.repeaterId === formData.repeaterId &&
+                s.detectorId === formData.detectorId
+            );
+
+            if (isDuplicate) {
+                alert(`이미 등록된 기기입니다.\n\n수신기: ${formData.receiverMac}\n중계기: ${formData.repeaterId}\n감지기: ${formData.detectorId}\n\n다른 번호를 입력해주세요.`);
+                return;
+            }
+        } catch (checkError) {
+            console.error("중복 체크 중 오류 발생", checkError);
+            // 오류가 나도 저장은 진행하지 않음 (안전 최우선)
+            alert("중복 확인 중 오류가 발생했습니다. 다시 시도해주세요.");
+            return;
+        }
+    }
+
     try {
       let uploadedUrl = formData.storeImage;
       if (storeImageFile) {
