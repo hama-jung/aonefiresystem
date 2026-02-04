@@ -134,7 +134,8 @@ export const Dashboard2: React.FC = () => {
 
   // Auto Navigation Effect
   useEffect(() => {
-      let autoMoveTimer: NodeJS.Timeout;
+      // [FIX] Use any or ReturnType<typeof setTimeout> instead of NodeJS.Timeout for browser environment
+      let autoMoveTimer: any;
 
       if (data?.fireEvents && data.fireEvents.length > 0 && !isAutoMovePaused && !hasAutoMoved) {
           autoMoveTimer = setTimeout(() => {
@@ -463,7 +464,7 @@ export const Dashboard2: React.FC = () => {
                            <th className="px-4 py-3 text-left text-xs font-bold text-slate-400">현장명</th>
                            <th className="px-4 py-3 text-left text-xs font-bold text-slate-400">주소</th>
                            <th className="px-4 py-3 text-center text-xs font-bold text-slate-400 w-24">상태</th>
-                           <th className="px-4 py-3 text-center text-xs font-bold text-slate-400 w-24">관리</th>
+                           <th className="px-4 py-3 text-center text-xs font-bold text-slate-400 w-24">관제</th>
                        </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-700/30">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { DetectorAPI, StoreAPI } from '../services/api';
 import { Detector, Market, Receiver, Store } from '../types';
@@ -311,7 +310,8 @@ export const DetectorManagement: React.FC = () => {
              {excelData.length > 0 && (
                  <div className="mb-6">
                      <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
-                     <DataTable 
+                     {/* [FIX] Explicitly provide Detector type to DataTable for correct accessor inference */}
+                     <DataTable<Detector> 
                         columns={[
                             {header:'수신기MAC', accessor:'receiverMac'}, 
                             {header:'중계기ID', accessor:'repeaterId'}, 

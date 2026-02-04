@@ -50,7 +50,7 @@ interface ImageItem {
 }
 
 export const MarketManagement: React.FC = () => {
-  const [view, setView] = useState<'list' | 'form'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'list'>('list');
   const [markets, setMarkets] = useState<Market[]>([]);
   const [selectedMarket, setSelectedMarket] = useState<Market | null>(null);
   const [loading, setLoading] = useState(false);
@@ -270,7 +270,8 @@ export const MarketManagement: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files);
+      // [FIX] Explicitly cast to File[] to ensure correct type for the .map operation below
+      const newFiles = Array.from(e.target.files) as File[];
       const remainingSlots = 10 - imageList.length;
       
       if (newFiles.length > remainingSlots) {
@@ -278,7 +279,8 @@ export const MarketManagement: React.FC = () => {
           return;
       }
 
-      const newItems: ImageItem[] = newFiles.slice(0, remainingSlots).map(file => ({
+      // [FIX] Explicitly type 'file' parameter in map to avoid 'unknown' error
+      const newItems: ImageItem[] = newFiles.slice(0, remainingSlots).map((file: File) => ({
           id: `new-${Date.now()}-${Math.random()}`,
           file: file,
           name: file.name

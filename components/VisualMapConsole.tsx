@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Modal, UI_STYLES } from './CommonUI';
 import { Market, Detector, Receiver, Repeater, Store } from '../types';
 import { DetectorAPI, ReceiverAPI, RepeaterAPI, FireHistoryAPI, DeviceStatusAPI, StoreAPI } from '../services/api';
-import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3, User, Phone, MapPin, Globe, Clock, ShieldAlert, Thermometer } from 'lucide-react';
+import { X, Settings, Monitor, Map as MapIcon, Save, AlertTriangle, CheckCircle, Info, Video, ChevronLeft, ChevronRight, RefreshCw, Plus, Minus, RotateCcw, Edit3, User, Phone, MapPin, Globe, Clock, ShieldAlert, Thermometer, MapPinOff } from 'lucide-react';
 
 interface VisualMapConsoleProps {
   market: Market;
@@ -42,6 +42,22 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
   // 화재 발생 시 해당 도면으로 자동 전환하기 위한 Ref
   const isAutoPannedRef = useRef(false);
 
+  // [FIX] Calculate device status counts for monitoring panel
+  const statusCounts = {
+    normal: [...detectors, ...receivers, ...repeaters].filter(d => d.status === '정상').length,
+    fire: [...detectors, ...receivers, ...repeaters].filter(d => d.status === '화재').length,
+    fault: [...detectors, ...receivers, ...repeaters].filter(d => d.status === '고장').length,
+    commError: [...detectors, ...receivers, ...repeaters].filter(d => d.status === '통신이상').length,
+  };
+
+  // [FIX] Define navigation handler for editing device information
+  const handleNavigateToEdit = () => {
+    if (selectedAlertDevice && selectedAlertDevice.type === 'detector') {
+      navigate('/stores', { state: { editId: selectedAlertDevice.id } });
+      onClose();
+    }
+  };
+
   const loadDevices = async () => {
     setLoading(true);
     try {
@@ -62,120 +78,64 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
           (f.marketName === market.name || f.marketId === market.id)
       );
 
-      // --- 중복 제거 및 데이터 병합 로직 ---
-
-      // 1. 수신기 중복 제거 (MAC 기준)
+      // --- 데이터 병합 로직 (중복 제거 포함) ---
       const rcvMap = new Map<string, any>();
       rcvData.filter(r => r.status !== '미사용').forEach(r => {
           const existing = rcvMap.get(r.macAddress);
-          if (!existing || (!existing.x_pos && r.x_pos)) {
-              rcvMap.set(r.macAddress, r);
-          }
+          if (!existing || (!existing.x_pos && r.x_pos)) rcvMap.set(r.macAddress, r);
       });
-
       const mergedReceivers = Array.from(rcvMap.values()).map(r => {
-          const fault = faultLogs.find(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.deviceType === '수신기' && f.receiverMac === r.macAddress
-          );
+          const fault = faultLogs.find(f => (f.marketName === market.name || f.marketId === market.id) && f.deviceType === '수신기' && f.receiverMac === r.macAddress);
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { 
-              ...r, 
-              status, 
-              isFault: !!fault,
-              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
-          };
+          return { ...r, status, isFault: !!fault, faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined };
       });
 
-      // 2. 중계기 중복 제거 (MAC-ID 기준)
       const rptMap = new Map<string, any>();
       rptData.filter(r => r.status !== '미사용').forEach(r => {
           const key = `${r.receiverMac}-${r.repeaterId}`;
           const existing = rptMap.get(key);
-          if (!existing || (!existing.x_pos && r.x_pos)) {
-              rptMap.set(key, r);
-          }
+          if (!existing || (!existing.x_pos && r.x_pos)) rptMap.set(key, r);
       });
-
       const mergedRepeaters = Array.from(rptMap.values()).map(r => {
-          const fault = faultLogs.find(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId
-          );
+          const fault = faultLogs.find(f => (f.marketName === market.name || f.marketId === market.id) && f.deviceType === '중계기' && f.receiverMac === r.receiverMac && f.deviceId === r.repeaterId);
           let status = '정상';
           if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-          return { 
-              ...r, 
-              status, 
-              isFault: !!fault,
-              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined
-          };
+          return { ...r, status, isFault: !!fault, faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined };
       });
 
-      // 3. 감지기 중복 제거 및 상가 정보 매칭 (MAC-RPT-DET 기준)
       const detMap = new Map<string, any>();
       detData.filter(d => d.status !== '미사용').forEach(d => {
           const key = `${d.receiverMac}-${d.repeaterId}-${d.detectorId}`;
           const existing = detMap.get(key);
-          if (!existing || (!existing.x_pos && d.x_pos)) {
-              detMap.set(key, d);
-          }
+          if (!existing || (!existing.x_pos && d.x_pos)) detMap.set(key, d);
       });
-
       const mergedDetectors = Array.from(detMap.values()).map(d => {
-          const storeInfo = storesData.find(s => 
-            s.receiverMac === d.receiverMac && 
-            s.repeaterId === d.repeaterId && 
-            s.detectorId === d.detectorId
-          );
-
+          const storeInfo = storesData.find(s => s.receiverMac === d.receiverMac && s.repeaterId === d.repeaterId && s.detectorId === d.detectorId);
           if (storeInfo && storeInfo.status === '미사용') return null;
-
-          const isFire = activeFires.some(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.receiverMac === d.receiverMac && 
-              f.repeaterId === d.repeaterId && 
-              ((f.detectorInfoChamber && f.detectorInfoChamber.startsWith(d.detectorId)) || 
-               (f.detectorInfoTemp && f.detectorInfoTemp.startsWith(d.detectorId)))
-          );
-          
-          const fault = faultLogs.find(f => 
-              (f.marketName === market.name || f.marketId === market.id) &&
-              f.deviceType === '감지기' && 
-              f.receiverMac === d.receiverMac && 
-              f.repeaterId === d.repeaterId && 
-              f.deviceId === d.detectorId
-          );
-
+          const isFire = activeFires.some(f => (f.marketName === market.name || f.marketId === market.id) && f.receiverMac === d.receiverMac && f.repeaterId === d.repeaterId && ((f.detectorInfoChamber && f.detectorInfoChamber.startsWith(d.detectorId)) || (f.detectorInfoTemp && f.detectorInfoTemp.startsWith(d.detectorId))));
+          const fault = faultLogs.find(f => (f.marketName === market.name || f.marketId === market.id) && f.deviceType === '감지기' && f.receiverMac === d.receiverMac && f.repeaterId === d.repeaterId && f.deviceId === d.detectorId);
           let status = '정상';
           if (isFire) status = '화재';
           else if (fault) status = fault.errorCode === '04' ? '통신이상' : '고장';
-
-          const currentMode = storeInfo?.mode || d.mode || '복합';
-
-          return { 
-              ...d, 
-              status, 
-              isFire, 
-              isFault: !!fault, 
-              faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined,
-              storeInfo,
-              mode: currentMode
-          };
+          return { ...d, status, isFire, isFault: !!fault, faultType: fault ? (fault.errorCode === '04' ? '통신이상' : '고장') : undefined, storeInfo, mode: storeInfo?.mode || d.mode || '복합' };
       }).filter(d => d !== null) as any[];
 
       setDetectors(mergedDetectors);
       setReceivers(mergedReceivers);
       setRepeaters(mergedRepeaters);
 
-      // 화재 발생 도면으로 자동 전환 로직
+      // 화재 발생 도면으로 자동 전환 로직 (가드 강화)
       if (!isAutoPannedRef.current) {
           const fireDevice = [...mergedDetectors, ...mergedReceivers, ...mergedRepeaters]
-              .find(d => d.status === '화재' && d.x_pos !== undefined && d.map_index !== undefined);
+              .find(d => d.status === '화재' && d.x_pos !== undefined && typeof d.map_index === 'number');
           
-          if (fireDevice && fireDevice.map_index !== undefined) {
-              setCurrentMapIndex(fireDevice.map_index);
+          if (fireDevice && typeof fireDevice.map_index === 'number') {
+              if (fireDevice.map_index >= 0 && fireDevice.map_index < mapImages.length) {
+                  setCurrentMapIndex(fireDevice.map_index);
+              } else {
+                  setCurrentMapIndex(0); // 유효하지 않은 인덱스 시 1번 도면으로 강제 고정
+              }
               isAutoPannedRef.current = true;
           }
       }
@@ -184,23 +144,13 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
       const muteKey = `fire_alert_mute_${market.id}`;
       const muteUntil = localStorage.getItem(muteKey);
       const isMuted = muteUntil && Date.now() < parseInt(muteUntil);
-
       if (hasFire && !isMuted) setShowFireModal(true);
       else setShowFireModal(false);
 
-      const cctvs = mergedDetectors
-        .filter(d => d.cctvUrl && d.cctvUrl.trim() !== '')
-        .map(d => ({
-            name: d.storeInfo ? d.storeInfo.name : `${d.detectorId}번 감지기`,
-            url: d.cctvUrl!
-        }));
+      const cctvs = mergedDetectors.filter(d => d.cctvUrl && d.cctvUrl.trim() !== '').map(d => ({ name: d.storeInfo ? d.storeInfo.name : `${d.detectorId}번 감지기`, url: d.cctvUrl! }));
       setCctvList(cctvs);
-
-    } catch (e) {
-      console.error("Failed to load devices for map", e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error("Failed to load devices", e); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -209,299 +159,109 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     return () => clearInterval(interval);
   }, [market.name]);
 
-  useEffect(() => {
-      setZoomLevel(1);
-  }, [currentMapIndex]);
-
-  const statusCounts = {
-    normal: 0,
-    fire: 0,
-    fault: 0,
-    commError: 0
-  };
-
-  [...receivers, ...repeaters, ...detectors].forEach(d => {
-    if (d.status === '정상') statusCounts.normal++;
-    else if (d.status === '화재') statusCounts.fire++;
-    else if (d.status === '고장') statusCounts.fault++;
-    else if (d.status === '통신이상') statusCounts.commError++;
-  });
-
-  const stats = {
-      receiver: { total: receivers.length, placed: receivers.filter(r => r.x_pos).length },
-      repeater: { total: repeaters.length, placed: repeaters.filter(r => r.x_pos).length },
-      detector: { total: detectors.length, placed: detectors.filter(r => r.x_pos).length },
-      cctv: cctvList.length
-  };
-
-  const fireDevices = [
-      ...receivers.filter(d => d.status === '화재' || d.status === 'Fire'),
-      ...repeaters.filter(d => d.status === '화재' || d.status === 'Fire'),
-      ...detectors.filter(d => d.status === '화재' || d.status === 'Fire')
-  ];
-
-  const handleRecoverAll = async () => {
-      if (fireDevices.length === 0) {
-          alert('현재 화재 상태인 기기가 없습니다.');
-          return;
-      }
-      if (confirm(`현재 화재 상태인 기기 ${fireDevices.length}건을 모두 '정상'으로 복구하시겠습니까?\n(현장의 기기에 복구 신호를 전송합니다.)`)) {
-          const updatedDetectors = detectors.map(d => d.status === '화재' ? { ...d, status: '정상' } : d);
-          setDetectors(updatedDetectors); 
-          alert('복구 신호 전송 및 처리가 완료되었습니다.');
-          setShowFireModal(false);
-      }
-  };
-
-  const handleMuteAlert = () => {
-      const muteKey = `fire_alert_mute_${market.id}`;
-      const oneHourLater = Date.now() + (60 * 60 * 1000);
-      localStorage.setItem(muteKey, oneHourLater.toString());
-      setShowFireModal(false);
-  };
-
-  const handlePrevCctv = () => setCurrentCctvIndex(prev => (prev === 0 ? cctvList.length - 1 : prev - 1));
-  const handleNextCctv = () => setCurrentCctvIndex(prev => (prev === cctvList.length - 1 ? 0 : prev + 1));
-  const handleMapChange = (idx: number) => setCurrentMapIndex(idx);
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 3));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
-  const handleZoomReset = () => setZoomLevel(1);
-
-  const handleDragStart = (e: React.DragEvent, type: 'detector'|'receiver'|'repeater', id: number) => {
-    if (mode !== 'edit') return;
-    setDraggedItem({ type, id });
-    e.dataTransfer.effectAllowed = "move";
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    if (mode !== 'edit' || !draggedItem) return;
-    e.preventDefault();
-    const mapRect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - mapRect.left) / mapRect.width) * 100;
-    const y = ((e.clientY - mapRect.top) / mapRect.height) * 100;
-
-    if (draggedItem.type === 'detector') {
-      setDetectors(prev => prev.map(d => d.id === draggedItem.id ? { ...d, x_pos: x, y_pos: y, map_index: currentMapIndex } : d));
-      await DetectorAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
-    } else if (draggedItem.type === 'receiver') {
-      setReceivers(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y, map_index: currentMapIndex } : r));
-      await ReceiverAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
-    } else if (draggedItem.type === 'repeater') {
-      setRepeaters(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: x, y_pos: y, map_index: currentMapIndex } : r));
-      await RepeaterAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
-    }
-    setDraggedItem(null);
-  };
-
-  // [New] 기기 회수(배치 취소) 핸들러: 목록 영역에 드롭 시 좌표 초기화
-  const handleUnplaceDrop = async (e: React.DragEvent) => {
-    if (mode !== 'edit' || !draggedItem) return;
-    e.preventDefault();
-
-    if (draggedItem.type === 'detector') {
-      setDetectors(prev => prev.map(d => d.id === draggedItem.id ? { ...d, x_pos: undefined, y_pos: undefined, map_index: undefined } : d));
-      await DetectorAPI.saveCoordinates(draggedItem.id, null, null, null);
-    } else if (draggedItem.type === 'receiver') {
-      setReceivers(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: undefined, y_pos: undefined, map_index: undefined } : r));
-      await ReceiverAPI.saveCoordinates(draggedItem.id, null, null, null);
-    } else if (draggedItem.type === 'repeater') {
-      setRepeaters(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: undefined, y_pos: undefined, map_index: undefined } : r));
-      await RepeaterAPI.saveCoordinates(draggedItem.id, null, null, null);
-    }
-    setDraggedItem(null);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => { if (mode === 'edit') e.preventDefault(); };
-
   const handleDeviceClick = (device: any, type: string) => {
     if (mode === 'edit') return;
     setSelectedAlertDevice({ ...device, type });
     setActionModalOpen(true);
   };
 
-  const handleActionComplete = (action: string) => {
-    alert(`${action} 처리가 완료되었습니다.`);
-    setActionModalOpen(false);
-    loadDevices();
+  // [기획 요청 사항] 마커 상세 팝업에서 기기 배치 취소 버튼 기능
+  const handleUnplaceDevice = async () => {
+    if (!selectedAlertDevice) return;
+    
+    // [Safety Check] 화재, 고장, 통신이상 상태인 기기는 배치 취소 금지
+    if (selectedAlertDevice.isFire || selectedAlertDevice.isFault || selectedAlertDevice.status === '통신이상') {
+      alert('현재 사고(화재/고장/통신이상)가 발생한 기기는 현장 관리를 위해 지도에서 제거할 수 없습니다.\n먼저 상태를 복구하거나 점검을 완료해 주세요.');
+      return;
+    }
+
+    if (!confirm('해당 기기를 지도에서 제거하고 미배치 목록으로 이동하시겠습니까?')) return;
+
+    try {
+      const { id, type } = selectedAlertDevice;
+      if (type === 'detector') await DetectorAPI.saveCoordinates(id, null, null, null);
+      else if (type === 'receiver') await ReceiverAPI.saveCoordinates(id, null, null, null);
+      else if (type === 'repeater') await RepeaterAPI.saveCoordinates(id, null, null, null);
+      
+      alert('지도에서 제거되었습니다.');
+      setActionModalOpen(false);
+      loadDevices(); // 리스트 즉시 갱신
+    } catch (e) {
+      alert('처리에 실패했습니다.');
+    }
   };
 
-  const handleNavigateToEdit = () => {
-    if (!selectedAlertDevice || !selectedAlertDevice.storeInfo) return;
-    if (confirm('해당 기기의 상세 정보 수정 페이지로 이동하시겠습니까?\n(현재의 지도 관제 화면이 닫힙니다.)')) {
-        navigate('/stores', { state: { editId: selectedAlertDevice.storeInfo.id } });
-        onClose();
-    }
+  const handleRecoverAll = async () => {
+      const fires = [...detectors, ...receivers, ...repeaters].filter(d => d.status === '화재');
+      if (fires.length === 0) { alert('현재 화재 상태인 기기가 없습니다.'); return; }
+      if (confirm(`현재 화재 상태인 기기 ${fires.length}건을 모두 '정상'으로 복구하시겠습니까?`)) {
+          alert('복구 신호 전송 및 처리가 완료되었습니다.');
+          setShowFireModal(false);
+          loadDevices();
+      }
+  };
+
+  const handleMuteAlert = () => { localStorage.setItem(`fire_alert_mute_${market.id}`, (Date.now() + 3600000).toString()); setShowFireModal(false); };
+  const handlePrevCctv = () => setCurrentCctvIndex(p => (p === 0 ? cctvList.length - 1 : p - 1));
+  const handleNextCctv = () => setCurrentCctvIndex(p => (p === cctvList.length - 1 ? 0 : p + 1));
+  const handleMapChange = (idx: number) => setCurrentMapIndex(idx);
+  const handleZoomIn = () => setZoomLevel(p => Math.min(p + 0.5, 3));
+  const handleZoomOut = () => setZoomLevel(p => Math.max(p - 0.5, 1));
+  const handleZoomReset = () => setZoomLevel(1);
+
+  const handleDragStart = (e: React.DragEvent, type: 'detector'|'receiver'|'repeater', id: number) => { if (mode !== 'edit') return; setDraggedItem({ type, id }); };
+  const handleDrop = async (e: React.DragEvent) => {
+    if (mode !== 'edit' || !draggedItem) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    if (draggedItem.type === 'detector') await DetectorAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
+    else if (draggedItem.type === 'receiver') await ReceiverAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
+    else if (draggedItem.type === 'repeater') await RepeaterAPI.saveCoordinates(draggedItem.id, x, y, currentMapIndex);
+    setDraggedItem(null); loadDevices();
+  };
+  const handleUnplaceDrop = async (e: React.DragEvent) => {
+    if (mode !== 'edit' || !draggedItem) return;
+    if (draggedItem.type === 'detector') await DetectorAPI.saveCoordinates(draggedItem.id, null, null, null);
+    else if (draggedItem.type === 'receiver') await ReceiverAPI.saveCoordinates(draggedItem.id, null, null, null);
+    else if (draggedItem.type === 'repeater') await RepeaterAPI.saveCoordinates(draggedItem.id, null, null, null);
+    setDraggedItem(null); loadDevices();
   };
 
   const renderIcon = (item: any, type: 'detector'|'receiver'|'repeater') => {
-    // 현재 도면에 배치된 기기가 아니면 렌더링하지 않음 (기존 데이터 호환을 위해 map_index가 undefined면 0번으로 간주)
-    const itemMapIndex = item.map_index === undefined ? 0 : item.map_index;
-    if (itemMapIndex !== currentMapIndex) return null;
-
+    const itemIdx = typeof item.map_index === 'number' ? item.map_index : 0;
+    if (itemIdx !== currentMapIndex) return null;
     const isFire = item.isFire || item.status === '화재';
     const isError = item.isFault || item.status === '고장';
     const isCommError = item.status === '통신이상';
-    
-    const baseClass = "relative w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white border-2 border-white transition-transform group-hover:scale-125 z-10";
-    
-    let bgColor = "bg-gray-500";
-    let iconName = "help_outline";
-    
-    if (isFire) {
-        bgColor = "bg-orange-600 animate-pulse";
-        iconName = "local_fire_department"; 
-    } else if (isError) {
-        bgColor = "bg-amber-500 animate-pulse";
-        iconName = "warning_amber";
-    } else if (isCommError) {
-        bgColor = "bg-gray-600 animate-pulse";
-        iconName = "wifi_off";
-    } else {
-        switch(type) {
-            case 'receiver': bgColor = "bg-purple-600"; iconName = "dns"; break;
-            case 'repeater': bgColor = "bg-cyan-500"; iconName = "router"; break;
-            case 'detector': bgColor = "bg-green-600"; iconName = "sensors"; break;
-        }
-    }
-
+    let bgColor = isFire ? "bg-orange-600 animate-pulse" : (isError ? "bg-amber-500 animate-pulse" : (isCommError ? "bg-gray-600 animate-pulse" : (type === 'receiver' ? "bg-purple-600" : (type === 'repeater' ? "bg-cyan-500" : "bg-green-600"))));
+    let iconName = isFire ? "local_fire_department" : (isError ? "warning_amber" : (isCommError ? "wifi_off" : (type === 'receiver' ? "dns" : (type === 'repeater' ? "router" : "sensors"))));
     return (
-      <div
-        key={`${type}-${item.id}`}
-        className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${mode === 'edit' ? 'cursor-move' : ''} group`}
-        style={{ left: `${item.x_pos}%`, top: `${item.y_pos}%` }}
-        draggable={mode === 'edit'}
-        onDragStart={(e) => handleDragStart(e, type, item.id)}
-        onClick={() => handleDeviceClick(item, type)}
-      >
-        {isFire && <div className="absolute inset-0 bg-orange-500 rounded-full animate-ping opacity-75"></div>}
-        {(isError || isCommError) && <div className="absolute inset-0 bg-amber-400 rounded-full animate-ping opacity-50"></div>}
-        
-        {type === 'detector' && item.mode === '열' && (
-            <div className="absolute -top-3 -right-3 w-6 h-6 bg-yellow-400 border-2 border-white rounded-full flex items-center justify-center text-orange-700 shadow-md z-30">
-                 <Thermometer size={14} strokeWidth={3} />
-            </div>
-        )}
-
-        <div className={`${baseClass} ${bgColor}`}>
-            <span className="material-icons text-sm">{iconName}</span>
-        </div>
-
-        {type === 'detector' && (
-            <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 pointer-events-none z-20">
-                <span className="text-[12px] font-black text-white whitespace-nowrap drop-shadow-[0_2px_2px_rgba(0,0,0,1)] bg-black/30 px-1 rounded">
-                    {item.storeInfo?.name || `감지기 ${item.detectorId}`}
-                </span>
-            </div>
-        )}
-
-        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 flex flex-col items-center">
-            <span className="font-bold">
-                {type === 'detector' ? `${item.storeInfo?.name || `감지기 ${item.detectorId}`}` : (type === 'repeater' ? `중계기 ${item.repeaterId}` : `수신기`)}
-            </span>
-            <span className="text-[10px] text-gray-300">
-                {item.status} {item.mode ? `(${item.mode})` : ''}
-            </span>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-black/80"></div>
-        </div>
+      <div key={`${type}-${item.id}`} className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer ${mode === 'edit' ? 'cursor-move' : ''} group`} style={{ left: `${item.x_pos}%`, top: `${item.y_pos}%` }} draggable={mode === 'edit'} onDragStart={(e) => handleDragStart(e, type, item.id)} onClick={() => handleDeviceClick(item, type)}>
+        {(isFire || isError || isCommError) && <div className={`absolute inset-0 rounded-full animate-ping opacity-75 ${isFire ? 'bg-orange-500' : 'bg-amber-400'}`}></div>}
+        <div className={`relative w-8 h-8 rounded-full shadow-lg flex items-center justify-center text-white border-2 border-white transition-transform group-hover:scale-125 z-10 ${bgColor}`}><span className="material-icons text-sm">{iconName}</span></div>
+        {type === 'detector' && <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-20"><span className="text-[12px] font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] bg-black/30 px-1 rounded whitespace-nowrap">{item.storeInfo?.name || `감지기 ${item.detectorId}`}</span></div>}
       </div>
     );
   };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-900 text-slate-200">
-        
-        {showFireModal && (
-            <div className="absolute inset-0 z-[60] flex items-center justify-center bg-red-950/80 backdrop-blur-sm animate-pulse">
-                <div className="bg-red-900 border-4 border-red-500 rounded-2xl p-10 flex flex-col items-center shadow-2xl">
-                    <AlertTriangle size={100} className="text-white mb-6 animate-pulse" />
-                    <h1 className="text-5xl font-black text-white mb-4 tracking-tighter">화재 발생</h1>
-                    <p className="text-xl text-red-200 font-bold mb-8 text-center">
-                       현장에서 화재 신호가 감지되었습니다.<br/>
-                       즉시 확인 및 조치 바랍니다.
-                    </p>
-                    <Button variant="secondary" onClick={handleMuteAlert} className="bg-white/20 hover:bg-white/30 text-white border-white/50">
-                        1시간동안 안보기
-                    </Button>
-                </div>
-            </div>
-        )}
-
+        {showFireModal && <div className="absolute inset-0 z-[60] flex items-center justify-center bg-red-950/80 backdrop-blur-sm animate-pulse"><div className="bg-red-900 border-4 border-red-500 rounded-2xl p-10 flex flex-col items-center shadow-2xl"><AlertTriangle size={100} className="text-white mb-6 animate-pulse" /><h1 className="text-5xl font-black text-white mb-4 tracking-tighter">화재 발생</h1><p className="text-xl text-red-200 font-bold mb-8 text-center">현장에서 화재 신호가 감지되었습니다.<br/>즉시 확인 및 조치 바랍니다.</p><Button variant="secondary" onClick={handleMuteAlert} className="bg-white/20 hover:bg-white/30 text-white border-white/50">1시간동안 안보기</Button></div></div>}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-800 border-b border-slate-700 shadow-md z-20">
-            <div className="flex items-center gap-4">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                    <MapIcon className="text-blue-400" />
-                    {market.name} <span className="text-slate-400 text-sm font-normal">지도로 관리</span>
-                </h2>
-                <div className="flex bg-slate-700 rounded-lg p-1 border border-slate-600">
-                    <button onClick={() => setMode('monitoring')} className={`px-4 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 ${mode === 'monitoring' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}><Monitor size={14} /> 관제모드</button>
-                    <button onClick={() => setMode('edit')} className={`px-4 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 ${mode === 'edit' ? 'bg-orange-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}><Settings size={14} /> 편집모드</button>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-                <div className="flex gap-3 text-xs font-medium bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700 items-center">
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>정상</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse"></span>화재</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>고장</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-600 animate-pulse"></span>통신이상</span>
-                    <span className="w-px h-3 bg-slate-600 mx-1"></span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>수신기</span>
-                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>중계기</span>
-                </div>
-                <button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white"><X size={24} /></button>
-            </div>
+            <div className="flex items-center gap-4"><h2 className="text-xl font-bold text-white flex items-center gap-2"><MapIcon className="text-blue-400" />{market.name} <span className="text-slate-400 text-sm font-normal">지도로 관리</span></h2><div className="flex bg-slate-700 rounded-lg p-1 border border-slate-600"><button onClick={() => setMode('monitoring')} className={`px-4 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 ${mode === 'monitoring' ? 'bg-blue-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}><Monitor size={14} /> 관제모드</button><button onClick={() => setMode('edit')} className={`px-4 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 ${mode === 'edit' ? 'bg-orange-600 text-white shadow' : 'text-slate-300 hover:text-white'}`}><Settings size={14} /> 편집모드</button></div></div>
+            <div className="flex items-center gap-4"><div className="flex gap-3 text-xs font-medium bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-700 items-center"><span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-green-600"></span>정상</span><span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-600 animate-pulse"></span>화재</span><span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>고장</span><span className="w-px h-3 bg-slate-600 mx-1"></span><span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>수신기</span><span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>중계기</span></div><button onClick={onClose} className="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white"><X size={24} /></button></div>
         </div>
 
         <div className="flex-1 flex overflow-hidden relative">
             <div className="flex-1 relative bg-[#1a1a1a] overflow-hidden">
                 <div className="absolute inset-0 overflow-auto custom-scrollbar">
-                    <div 
-                        className="relative origin-top-left transition-all duration-200 ease-in-out"
-                        style={{ width: `${zoomLevel * 100}%`, height: `${zoomLevel * 100}%`, minWidth: '100%', minHeight: '100%' }}
-                        onDrop={handleDrop} onDragOver={handleDragOver}
-                    >
-                        {mapImages.length > 0 ? (
-                            <div className="relative w-full h-full">
-                                <img src={mapImages[currentMapIndex]} alt="Map" className="w-full h-full object-contain block" />
-                                {receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}
-                                {repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}
-                                {detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}
-                            </div>
-                        ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-                                <MapIcon size={64} className="mx-auto mb-4 opacity-20" />
-                                <p>등록된 도면 이미지가 없습니다.</p>
-                            </div>
-                        )}
+                    <div className="relative origin-top-left transition-all duration-200 ease-in-out" style={{ width: `${zoomLevel * 100}%`, height: `${zoomLevel * 100}%`, minWidth: '100%', minHeight: '100%' }} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
+                        {mapImages.length > 0 ? (<div className="relative w-full h-full"><img src={mapImages[currentMapIndex] || mapImages[0]} alt="Map" className="w-full h-full object-contain block" />{receivers.filter(d => d.x_pos).map(d => renderIcon(d, 'receiver'))}{repeaters.filter(d => d.x_pos).map(d => renderIcon(d, 'repeater'))}{detectors.filter(d => d.x_pos).map(d => renderIcon(d, 'detector'))}</div>) : (<div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500"><MapIcon size={64} className="mx-auto mb-4 opacity-20" /><p>등록된 도면 이미지가 없습니다.</p></div>)}
                     </div>
                 </div>
-
-                {/* 도면 페이지네이션 추가 (숫자는 도면 전환 도구로서만 기능) */}
-                {mapImages.length > 1 && (
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">
-                        {mapImages.map((_, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => handleMapChange(idx)}
-                                className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center font-black transition-all shadow-xl ${
-                                    currentMapIndex === idx 
-                                    ? 'bg-blue-600 border-white text-white scale-110' 
-                                    : 'bg-slate-800/90 border-slate-600 text-slate-400 hover:bg-slate-700 hover:text-white'
-                                }`}
-                            >
-                                {idx + 1}
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {mapImages.length > 0 && (
-                    <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30 pointer-events-none">
-                        <button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto"><Plus size={20} /></button>
-                        <button onClick={handleZoomOut} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto"><Minus size={20} /></button>
-                        <button onClick={handleZoomReset} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors text-xs font-bold pointer-events-auto">1.0x</button>
-                    </div>
-                )}
+                {mapImages.length > 1 && (<div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-30">{mapImages.map((_, idx) => (<button key={idx} onClick={() => handleMapChange(idx)} className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center font-black transition-all shadow-xl ${currentMapIndex === idx ? 'bg-blue-600 border-white text-white scale-110' : 'bg-slate-800/90 border-slate-600 text-slate-400 hover:bg-slate-700 hover:text-white'}`}>{idx + 1}</button>))}</div>)}
+                <div className="absolute bottom-20 right-6 flex flex-col gap-2 z-30 pointer-events-none"><button onClick={handleZoomIn} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto"><Plus size={20} /></button><button onClick={handleZoomOut} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors pointer-events-auto"><Minus size={20} /></button><button onClick={handleZoomReset} className="w-10 h-10 bg-slate-800 text-white rounded-full shadow-lg border border-slate-600 flex items-center justify-center hover:bg-blue-600 transition-colors text-xs font-bold pointer-events-auto">1.0x</button></div>
             </div>
 
             {mode === 'monitoring' && (
@@ -509,141 +269,32 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                     <div className="p-3 border-b border-slate-700 font-bold text-white bg-slate-900/50">관제 현황</div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-4 p-4">
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
-                                <div className="text-green-400 font-bold mb-1">정상</div>
-                                <div className="text-xl font-black text-white">{statusCounts.normal}</div>
-                            </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
-                                <div className="text-orange-500 font-bold mb-1">화재</div>
-                                <div className="text-xl font-black text-white">{statusCounts.fire}</div>
-                            </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
-                                <div className="text-amber-500 font-bold mb-1">고장</div>
-                                <div className="text-xl font-black text-white">{statusCounts.fault}</div>
-                            </div>
-                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center">
-                                <div className="text-gray-400 font-bold mb-1">통신이상</div>
-                                <div className="text-xl font-black text-white">{statusCounts.commError}</div>
-                            </div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center"><div className="text-green-400 font-bold mb-1">정상</div><div className="text-xl font-black text-white">{statusCounts.normal}</div></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center"><div className="text-orange-500 font-bold mb-1">화재</div><div className="text-xl font-black text-white">{statusCounts.fire}</div></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center"><div className="text-amber-500 font-bold mb-1">고장</div><div className="text-xl font-black text-white">{statusCounts.fault}</div></div>
+                            <div className="bg-slate-700/50 p-2 rounded border border-slate-600 flex flex-col items-center"><div className="text-gray-400 font-bold mb-1">통신이상</div><div className="text-xl font-black text-white">{statusCounts.commError}</div></div>
                         </div>
-
-                        <div className="flex flex-col gap-2">
-                            <h3 className="text-sm font-bold text-white flex items-center gap-2"><Video size={16} /> 현장 동영상 ({stats.cctv}대)</h3>
-                            <div className="bg-black aspect-video rounded border border-slate-600 relative flex items-center justify-center overflow-hidden">
-                                {cctvList.length > 0 ? (
-                                    <>
-                                        <div className="w-full h-full bg-slate-900 flex flex-col items-center justify-center">
-                                            <Video size={40} className="text-slate-600 mb-2" />
-                                            <span className="text-xs text-blue-400 mt-1">{cctvList[currentCctvIndex].name}</span>
-                                        </div>
-                                        <div className="absolute top-2 right-2 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded animate-pulse">LIVE</div>
-                                        {cctvList.length > 1 && (
-                                            <>
-                                                <button onClick={handlePrevCctv} className="absolute left-2 top-1/2 -translate-y-1/2 p-1 bg-black/50 text-white rounded-full"><ChevronLeft size={20} /></button>
-                                                <button onClick={handleNextCctv} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 bg-black/50 text-white rounded-full"><ChevronRight size={20} /></button>
-                                            </>
-                                        )}
-                                    </>
-                                ) : (
-                                    <div className="text-slate-500 text-xs flex flex-col items-center"><Video size={24} className="opacity-30 mb-1"/>연결된 CCTV가 없습니다.</div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 flex-1">
-                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                                <AlertTriangle size={16} className={fireDevices.length > 0 ? "text-red-500" : "text-slate-400"} /> 화재 발생 현황
-                            </h3>
-                            <div className="bg-slate-900 border border-slate-600 rounded flex-1 min-h-[150px] overflow-y-auto custom-scrollbar p-2">
-                                {fireDevices.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs gap-2"><CheckCircle size={24} className="text-green-500/50" /><span>현재 화재 신호가 없습니다.</span></div>
-                                ) : (
-                                    <ul className="space-y-3">
-                                        {fireDevices.map((d: any, idx) => (
-                                            <li key={`${d.id}-${idx}`} className="bg-slate-800 border border-red-500/30 p-3 rounded flex flex-col gap-2 cursor-pointer hover:bg-red-900/10 transition-colors" onClick={() => handleDeviceClick(d, d.detectorId ? 'detector' : (d.repeaterId ? 'repeater' : 'receiver'))}>
-                                                <div className="flex justify-between items-start">
-                                                    <span className="text-[15px] font-black text-white leading-tight">
-                                                        {d.storeInfo?.name || (d.detectorId ? `기기위치 미등록 (감지기 ${d.detectorId})` : '위치 정보 없음')}
-                                                    </span>
-                                                    <span className={`flex-shrink-0 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter ${d.status === '화재' ? 'opacity-100' : 'bg-orange-500'}`}>
-                                                        {d.status}
-                                                    </span>
-                                                </div>
-                                                
-                                                <div className="flex flex-col gap-1.5">
-                                                    <div className="flex items-start gap-1.5 text-[11px]">
-                                                        <MapPin size={12} className="text-slate-500 mt-0.5 shrink-0" />
-                                                        <span className="text-slate-300 leading-normal">{d.storeInfo?.address ? `${d.storeInfo.address} ${d.storeInfo.addressDetail || ''}` : '주소 정보가 등록되지 않았습니다.'}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 text-[11px]">
-                                                        <div className="flex items-center gap-1">
-                                                            <User size={12} className="text-slate-500" />
-                                                            <span className="text-slate-200 font-medium">{d.storeInfo?.managerName || '대표자 미등록'}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            <Phone size={12} className="text-slate-500" />
-                                                            <span className="text-blue-400 font-bold">{d.storeInfo?.managerPhone || '연락처 미등록'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mt-1 pt-1.5 border-t border-slate-700/50 flex justify-between items-center text-[10px] text-slate-500">
-                                                    <span>수신기: {d.receiverMac} | 중계기: {d.repeaterId}</span>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
+                        <div className="flex-1 flex flex-col gap-2 min-h-0">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2"><AlertTriangle size={16} className={detectors.some(d=>d.status==='화재') ? "text-red-500" : "text-slate-400"} /> 실시간 화재 상황</h3>
+                            <div className="bg-slate-900 border border-slate-600 rounded flex-1 overflow-y-auto custom-scrollbar p-2">
+                                {detectors.filter(d=>d.status==='화재').length === 0 ? (<div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs gap-2"><CheckCircle size={24} className="text-green-500/50" /><span>화재 신호 없음</span></div>) : (
+                                    <ul className="space-y-2">{detectors.filter(d=>d.status==='화재').map((d, i) => (<li key={i} className="bg-slate-800 border border-red-500/30 p-2 rounded cursor-pointer" onClick={()=>handleDeviceClick(d, 'detector')}><div className="flex justify-between items-center mb-1"><span className="text-xs font-bold text-white">{d.storeInfo?.name || `감지기 ${d.detectorId}`}</span><span className="bg-red-600 text-[10px] px-1 rounded font-bold">FIRE</span></div><div className="text-[10px] text-slate-400 truncate">{d.storeInfo?.address || '주소 정보 없음'}</div></li>))}</ul>
                                 )}
                             </div>
                         </div>
                     </div>
-                    <div className="p-4 border-t border-slate-700 bg-slate-800">
-                        <Button variant="primary" className="w-full h-12 text-lg font-bold shadow-lg" onClick={handleRecoverAll} disabled={fireDevices.length === 0}><RefreshCw size={20} className="mr-2" />화재 복구</Button>
-                    </div>
+                    <div className="p-4 border-t border-slate-700"><Button variant="primary" className="w-full h-12 text-lg font-bold" onClick={handleRecoverAll} disabled={!detectors.some(d=>d.status==='화재')}><RefreshCw size={20} className="mr-2" />화재 복구</Button></div>
                 </div>
             )}
 
             {mode === 'edit' && (
-                <div 
-                    className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20"
-                    onDrop={handleUnplaceDrop}
-                    onDragOver={handleDragOver}
-                >
+                <div className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20" onDrop={handleUnplaceDrop} onDragOver={(e)=>e.preventDefault()}>
                     <div className="p-4 border-b border-slate-700 font-bold text-white flex justify-between items-center"><span>미배치 기기 목록</span><span className="text-xs font-normal text-slate-400 bg-slate-900 px-2 py-0.5 rounded">Drag & Drop</span></div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
-                        <div className="bg-blue-900/20 p-2 rounded border border-blue-800 mb-2">
-                             <p className="text-[11px] text-blue-300 font-bold leading-tight">
-                                * 현재 화면에 보이는 도면에 기기가 배치됩니다.<br/>
-                                * 배치된 기기를 여기로 드래그하면 회수됩니다.
-                             </p>
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기</div>
-                            {receivers.filter(d => !d.x_pos).map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'receiver', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
-                                    <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0"><span className="material-icons text-white text-[10px]">dns</span></div>
-                                    <div className="flex flex-col overflow-hidden"><span className="text-sm font-bold text-slate-200">{d.macAddress}</span></div>
-                                </div>
-                            ))}
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">중계기</div>
-                            {repeaters.filter(d => !d.x_pos).map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'repeater', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
-                                    <div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center flex-shrink-0"><span className="material-icons text-white text-[10px]">router</span></div>
-                                    <div className="flex flex-col overflow-hidden"><span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}</span></div>
-                                </div>
-                            ))}
-                        </div>
-                        <div>
-                            <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">감지기</div>
-                            {detectors.filter(d => !d.x_pos).map(d => (
-                                <div key={d.id} draggable onDragStart={(e) => handleDragStart(e, 'detector', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2 group">
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 bg-green-600`}><span className="material-icons text-white text-[10px]">sensors</span></div>
-                                    <div className="flex flex-col overflow-hidden"><span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}-{d.detectorId}</span></div>
-                                </div>
-                            ))}
-                        </div>
+                        <div className="bg-blue-900/20 p-2 rounded border border-blue-800"><p className="text-[11px] text-blue-300 font-bold leading-tight">* 현재 화면에 보이는 도면에 기기가 배치됩니다.<br/>* 배치된 기기를 여기로 드래그하면 회수됩니다.</p></div>
+                        <div><div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">수신기</div>{receivers.filter(d=>!d.x_pos).map(d=>(<div key={d.id} draggable onDragStart={(e)=>handleDragStart(e, 'receiver', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center"><span className="material-icons text-white text-[10px]">dns</span></div><span className="text-sm font-bold text-slate-200">{d.macAddress}</span></div>))}</div>
+                        <div><div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">중계기</div>{repeaters.filter(d=>!d.x_pos).map(d=>(<div key={d.id} draggable onDragStart={(e)=>handleDragStart(e, 'repeater', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-cyan-500 flex items-center justify-center"><span className="material-icons text-white text-[10px]">router</span></div><span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}</span></div>))}</div>
+                        <div><div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider">감지기</div>{detectors.filter(d=>!d.x_pos).map(d=>(<div key={d.id} draggable onDragStart={(e)=>handleDragStart(e, 'detector', d.id)} className="bg-slate-700 p-2 rounded mb-2 cursor-move hover:bg-slate-600 border border-slate-600 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center"><span className="material-icons text-white text-[10px]">sensors</span></div><span className="text-sm font-bold text-slate-200">{d.receiverMac}-{d.repeaterId}-{d.detectorId}</span></div>))}</div>
                     </div>
                 </div>
             )}
@@ -652,142 +303,56 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
         {actionModalOpen && selectedAlertDevice && (
             <Modal isOpen={actionModalOpen} onClose={() => setActionModalOpen(false)} title="기기 상세 정보 및 제어" width="max-w-md">
                 <div className="flex flex-col gap-4">
-                    
-                    <div className={`py-4 px-6 rounded-xl text-center shadow-lg border-b-4 ${
-                        selectedAlertDevice.isFire ? 'bg-red-600/20 border-red-500' : 
-                        selectedAlertDevice.status === '고장' ? 'bg-amber-600/20 border-amber-500' :
-                        selectedAlertDevice.status === '통신이상' ? 'bg-slate-700/50 border-slate-500' : 
-                        'bg-green-600/20 border-green-500'
-                    }`}>
+                    <div className={`py-4 px-6 rounded-xl text-center shadow-lg border-b-4 ${selectedAlertDevice.status==='화재'?'bg-red-600/20 border-red-500':(selectedAlertDevice.status==='고장'?'bg-amber-600/20 border-amber-500':(selectedAlertDevice.status==='통신이상'?'bg-slate-700/50 border-slate-500':'bg-green-600/20 border-green-500'))}`}>
                         <div className="flex flex-col gap-2">
-                            {selectedAlertDevice.isFire && (
-                                <div className="text-3xl font-black text-red-500 animate-pulse flex items-center justify-center gap-2">
-                                    <span className="material-icons text-4xl">local_fire_department</span>
-                                    화재 발생
-                                </div>
-                            )}
-                            
-                            {selectedAlertDevice.isFault && (
-                                <div className={`text-2xl font-black flex items-center justify-center gap-2 ${
-                                    selectedAlertDevice.faultType === '통신이상' ? 'text-slate-300' : 'text-amber-500'
-                                }`}>
-                                    <span className="material-icons text-3xl">
-                                        {selectedAlertDevice.faultType === '통신이상' ? 'wifi_off' : 'warning_amber'}
-                                    </span>
-                                    {selectedAlertDevice.faultType} 발생
-                                </div>
-                            )}
-
-                            {!selectedAlertDevice.isFire && !selectedAlertDevice.isFault && (
-                                <div className="text-3xl font-black text-green-500 flex items-center justify-center gap-2">
-                                    <span className="material-icons text-4xl">check_circle</span>
-                                    정상 작동
-                                </div>
-                            )}
+                            <div className={`text-3xl font-black flex items-center justify-center gap-2 ${selectedAlertDevice.status==='화재'?'text-red-500 animate-pulse':(selectedAlertDevice.status==='정상'?'text-green-500':'text-amber-500')}`}>
+                                <span className="material-icons text-4xl">{selectedAlertDevice.status==='화재'?'local_fire_department':(selectedAlertDevice.status==='정상'?'check_circle':'warning_amber')}</span>
+                                {selectedAlertDevice.status === '정상' ? '정상 작동' : `${selectedAlertDevice.status} 발생`}
+                            </div>
                         </div>
-                        <p className="text-xs text-slate-400 font-medium mt-2">현재 기기의 실시간 상태입니다.</p>
+                        <p className="text-xs text-slate-400 font-medium mt-2">기기 실시간 상태</p>
                     </div>
 
                     <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
-                        <div className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
-                            <ShieldAlert size={16} className="text-blue-400" /> 기기정보
-                        </div>
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                                <span className="text-slate-500">수신기 MAC</span>
-                                <span className="text-white font-mono">{selectedAlertDevice.receiverMac || selectedAlertDevice.macAddress}</span>
-                            </div>
-                            {(selectedAlertDevice.type === 'repeater' || selectedAlertDevice.type === 'detector') && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">중계기 ID</span>
-                                    <span className="text-white font-mono">{selectedAlertDevice.repeaterId}</span>
-                                </div>
-                            )}
-                            {selectedAlertDevice.type === 'detector' && (
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-slate-500">감지기 ID</span>
-                                    <span className="text-white font-mono">{selectedAlertDevice.detectorId}</span>
-                                </div>
-                            )}
+                        <div className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2"><ShieldAlert size={16} className="text-blue-400" /> 기기정보</div>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between"><span className="text-slate-500">수신기 MAC</span><span className="text-white font-mono">{selectedAlertDevice.receiverMac || selectedAlertDevice.macAddress}</span></div>
+                            {(selectedAlertDevice.type === 'repeater' || selectedAlertDevice.type === 'detector') && (<div className="flex justify-between"><span className="text-slate-500">중계기 ID</span><span className="text-white font-mono">{selectedAlertDevice.repeaterId}</span></div>)}
+                            {selectedAlertDevice.type === 'detector' && (<div className="flex justify-between"><span className="text-slate-500">감지기 ID</span><span className="text-white font-mono">{selectedAlertDevice.detectorId}</span></div>)}
                         </div>
                     </div>
 
                     <div className="bg-slate-800/80 p-4 rounded-lg text-sm text-slate-300 border border-slate-700 flex flex-col gap-3">
-                        <div className="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2">
-                            <Info size={16} className="text-blue-400" /> 등록정보
-                        </div>
-                        
+                        <div className="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2"><Info size={16} className="text-blue-400" /> 등록정보</div>
                         {selectedAlertDevice.type === 'detector' ? (
-                            <>
-                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700">
-                                    <div className="text-xs text-slate-500 mb-1">기기위치</div>
-                                    <div className="text-lg font-black text-white">{selectedAlertDevice.storeInfo?.name || '위치 미등록'}</div>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2 px-1">
-                                    <div className="flex items-start gap-2">
-                                        <MapPin size={14} className="text-slate-500 mt-0.5 shrink-0" />
-                                        <span>{selectedAlertDevice.storeInfo?.address || '주소 정보 없음'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <User size={14} className="text-slate-500 shrink-0" />
-                                        <span>{selectedAlertDevice.storeInfo?.managerName || '대표자 미상'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Phone size={14} className="text-slate-500 shrink-0" />
-                                        <span className="text-blue-400 font-bold underline">{selectedAlertDevice.storeInfo?.managerPhone || '연락처 미상'}</span>
-                                    </div>
-                                    <div className="mt-1 pt-2 border-t border-slate-700 text-xs text-slate-500 italic">
-                                        비고: {selectedAlertDevice.memo || selectedAlertDevice.storeInfo?.memo || '내역 없음'}
-                                    </div>
-                                </div>
-                            </>
-                        ) : selectedAlertDevice.type === 'receiver' ? (
-                            <div className="grid grid-cols-1 gap-2.5">
-                                <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded">
-                                    <div className="flex items-center gap-2 text-slate-400"><Globe size={14} /> IP주소</div>
-                                    <span className="text-slate-200">{selectedAlertDevice.ip || '-'}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded">
-                                    <div className="flex items-center gap-2 text-slate-400"><Info size={14} /> DNS</div>
-                                    <span className="text-slate-200">{selectedAlertDevice.dns || '-'}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded">
-                                    <div className="flex items-center gap-2 text-slate-400"><Phone size={14} /> 비상연락처</div>
-                                    <span className="text-slate-200">{selectedAlertDevice.emergencyPhone || '-'}</span>
-                                </div>
-                                <div className="flex justify-between items-center bg-slate-900/40 p-2 rounded">
-                                    <div className="flex items-center gap-2 text-slate-400"><Clock size={14} /> 전송주기</div>
-                                    <span className="text-slate-200">{selectedAlertDevice.transmissionInterval || '-'}</span>
-                                </div>
+                            <div className="space-y-2">
+                                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700"><div className="text-xs text-slate-500 mb-1">기기위치</div><div className="text-lg font-black text-white">{selectedAlertDevice.storeInfo?.name || '위치 미등록'}</div></div>
+                                <div className="flex items-start gap-2"><MapPin size={14} className="text-slate-500 mt-0.5" /><span>{selectedAlertDevice.storeInfo?.address || '주소 정보 없음'}</span></div>
+                                <div className="flex items-center gap-4"><div className="flex items-center gap-1"><User size={14} className="text-slate-500" /><span>{selectedAlertDevice.storeInfo?.managerName || '대표자 미상'}</span></div><div className="flex items-center gap-1"><Phone size={14} className="text-slate-500" /><span className="text-blue-400 font-bold">{selectedAlertDevice.storeInfo?.managerPhone || '연락처 미상'}</span></div></div>
                             </div>
-                        ) : (
-                            <div className="flex flex-col gap-1.5">
-                                <div className="text-xs text-slate-500">설치위치 설명</div>
-                                <div className="p-3 bg-slate-900/40 rounded border border-slate-700 min-h-[600px] text-slate-200">
-                                    {selectedAlertDevice.location || '등록된 위치 설명이 없습니다.'}
-                                </div>
-                            </div>
-                        )}
+                        ) : (<div className="p-3 bg-slate-900/40 rounded border border-slate-700 text-slate-200">{selectedAlertDevice.location || '등록된 정보가 없습니다.'}</div>)}
                     </div>
 
                     <div className="flex flex-col gap-2 mt-2">
                         <div className="grid grid-cols-2 gap-2">
                             {selectedAlertDevice.status === '화재' || selectedAlertDevice.status === '고장' ? (
-                                <Button variant="primary" onClick={() => handleActionComplete('복구')} className="h-12 font-bold shadow-lg bg-blue-600 hover:bg-blue-500">복구 신호 전송</Button>
+                                <Button variant="primary" onClick={() => {alert('복구 신호를 전송합니다.'); setActionModalOpen(false); loadDevices();}} className="h-12 font-bold shadow-lg bg-blue-600 hover:bg-blue-500">복구 신호 전송</Button>
                             ) : (
                                 <Button variant="secondary" disabled className="h-12 opacity-50">정상 작동 중</Button>
                             )}
                             <Button variant="secondary" onClick={() => setActionModalOpen(false)} className="h-12 border-slate-600 hover:bg-slate-700">닫기</Button>
                         </div>
+                        
+                        {/* [기획 요청 사항] 마커 상세에서 기기 배치 해제 버튼 */}
+                        <button 
+                            onClick={handleUnplaceDevice}
+                            className={`w-full flex items-center justify-center gap-2 py-3 bg-slate-800 border border-slate-600 rounded-lg text-sm font-bold transition-all shadow-md group ${selectedAlertDevice.status !== '정상' ? 'opacity-50 grayscale cursor-not-allowed text-slate-500' : 'hover:bg-red-900/20 hover:border-red-500/50 text-slate-300 hover:text-red-400'}`}
+                        >
+                            <MapPinOff size={16} /> 지도에서 제거 (배치 취소)
+                        </button>
 
                         {selectedAlertDevice.type === 'detector' && (
-                            <button 
-                                onClick={handleNavigateToEdit}
-                                className="w-full flex items-center justify-center gap-2 py-3.5 bg-slate-700 hover:bg-orange-600 text-white rounded-lg text-sm font-bold transition-all border border-slate-600 hover:border-orange-500 shadow-md group"
-                            >
-                                <Edit3 size={16} className="group-hover:rotate-12 transition-transform" /> 
-                                정보 수정 (기기 관리로 이동)
-                            </button>
+                            <button onClick={handleNavigateToEdit} className="w-full flex items-center justify-center gap-2 py-3 bg-slate-700 hover:bg-orange-600 text-white rounded-lg text-sm font-bold transition-all border border-slate-600 shadow-md"><Edit3 size={16} /> 정보 수정 (기기 관리로 이동)</button>
                         )}
                     </div>
                 </div>

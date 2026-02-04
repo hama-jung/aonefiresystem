@@ -8,7 +8,7 @@ const ITEMS_PER_PAGE = 10;
 const MODAL_ITEMS_PER_PAGE = 5;
 
 export const WorkLogManagement: React.FC = () => {
-  const [view, setView] = useState<'list' | 'form'>('list');
+  const [view, setView] = useState<'list' | 'form' | 'list'>('list');
   const [logs, setLogs] = useState<WorkLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<WorkLog | null>(null);
   const [formData, setFormData] = useState<Partial<WorkLog>>({});
@@ -98,7 +98,7 @@ export const WorkLogManagement: React.FC = () => {
                                 {(formData.attachment || attachmentFile) && (
                                     <div className="flex items-center gap-2 p-2 bg-slate-700/50 rounded border border-slate-600">
                                         <Paperclip size={14} className="text-slate-400" />
-                                        <span className="text-sm text-blue-400 cursor-pointer hover:underline" onClick={() => window.open(formData.attachment || URL.createObjectURL(attachmentFile!), '_blank')}>이미지 보기</span>
+                                        <span className="text-sm text-blue-400 cursor-pointer hover:underline" onClick={() => window.open(formData.attachment || (attachmentFile ? URL.createObjectURL(attachmentFile) : ''), '_blank')}>이미지 보기</span>
                                         <button type="button" onClick={handleRemoveFile} className="text-red-400 hover:text-red-300 ml-2"><X size={16}/></button>
                                     </div>
                                 )}
@@ -143,7 +143,8 @@ export const WorkLogManagement: React.FC = () => {
            <SearchFilterBar onSearch={fetchMarkets}>
               <InputGroup label="시장명" value={marketSearchName} onChange={(e) => setMarketSearchName(e.target.value)} placeholder="시장명 검색" />
            </SearchFilterBar>
-           <DataTable 
+           {/* [FIX] Explicitly provide Market type to DataTable for correct accessor and callback inference */}
+           <DataTable<Market> 
              columns={[
                 { header: '시장명', accessor: 'name' },
                 { header: '주소', accessor: 'address' },

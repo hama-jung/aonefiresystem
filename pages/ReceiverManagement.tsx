@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { ReceiverAPI } from '../services/api';
 import { Receiver, Market } from '../types';
@@ -274,7 +273,8 @@ export const ReceiverManagement: React.FC = () => {
              {excelData.length > 0 && (
                  <div className="mb-6">
                      <h4 className="text-lg font-bold text-slate-200 mb-2">등록 미리보기 ({excelData.length}건)</h4>
-                     <DataTable 
+                     {/* [FIX] Explicitly provide Receiver type to DataTable for correct accessor inference */}
+                     <DataTable<Receiver> 
                         columns={[
                             {header:'MAC', accessor:'macAddress'},
                             {header:'IP', accessor:'ip'},
