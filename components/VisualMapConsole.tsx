@@ -293,6 +293,24 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
     setDraggedItem(null);
   };
 
+  // [New] 기기 회수(배치 취소) 핸들러: 목록 영역에 드롭 시 좌표 초기화
+  const handleUnplaceDrop = async (e: React.DragEvent) => {
+    if (mode !== 'edit' || !draggedItem) return;
+    e.preventDefault();
+
+    if (draggedItem.type === 'detector') {
+      setDetectors(prev => prev.map(d => d.id === draggedItem.id ? { ...d, x_pos: undefined, y_pos: undefined, map_index: undefined } : d));
+      await DetectorAPI.saveCoordinates(draggedItem.id, null, null, null);
+    } else if (draggedItem.type === 'receiver') {
+      setReceivers(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: undefined, y_pos: undefined, map_index: undefined } : r));
+      await ReceiverAPI.saveCoordinates(draggedItem.id, null, null, null);
+    } else if (draggedItem.type === 'repeater') {
+      setRepeaters(prev => prev.map(r => r.id === draggedItem.id ? { ...r, x_pos: undefined, y_pos: undefined, map_index: undefined } : r));
+      await RepeaterAPI.saveCoordinates(draggedItem.id, null, null, null);
+    }
+    setDraggedItem(null);
+  };
+
   const handleDragOver = (e: React.DragEvent) => { if (mode === 'edit') e.preventDefault(); };
 
   const handleDeviceClick = (device: any, type: string) => {
@@ -586,12 +604,17 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
             )}
 
             {mode === 'edit' && (
-                <div className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20">
+                <div 
+                    className="w-72 bg-slate-800 border-l border-slate-700 flex flex-col shadow-xl z-20"
+                    onDrop={handleUnplaceDrop}
+                    onDragOver={handleDragOver}
+                >
                     <div className="p-4 border-b border-slate-700 font-bold text-white flex justify-between items-center"><span>미배치 기기 목록</span><span className="text-xs font-normal text-slate-400 bg-slate-900 px-2 py-0.5 rounded">Drag & Drop</span></div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
                         <div className="bg-blue-900/20 p-2 rounded border border-blue-800 mb-2">
                              <p className="text-[11px] text-blue-300 font-bold leading-tight">
-                                * 현재 화면에 보이는 도면에 기기가 배치됩니다.
+                                * 현재 화면에 보이는 도면에 기기가 배치됩니다.<br/>
+                                * 배치된 기기를 여기로 드래그하면 회수됩니다.
                              </p>
                         </div>
                         <div>
@@ -740,7 +763,7 @@ export const VisualMapConsole: React.FC<VisualMapConsoleProps> = ({ market, init
                         ) : (
                             <div className="flex flex-col gap-1.5">
                                 <div className="text-xs text-slate-500">설치위치 설명</div>
-                                <div className="p-3 bg-slate-900/40 rounded border border-slate-700 min-h-[60px] text-slate-200">
+                                <div className="p-3 bg-slate-900/40 rounded border border-slate-700 min-h-[600px] text-slate-200">
                                     {selectedAlertDevice.location || '등록된 위치 설명이 없습니다.'}
                                 </div>
                             </div>

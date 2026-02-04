@@ -377,7 +377,7 @@ export const StoreAPI = {
 export const ReceiverAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Receiver>('receivers', params),
   save: async (r: Receiver) => supabaseSaver('receivers', r, [...DEVICE_BASE_COLS, 'macAddress', 'ip', 'dns', 'emergencyPhone', 'transmissionInterval', 'image']),
-  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+  saveCoordinates: async (id: number, x: number | null, y: number | null, map_index?: number | null) => { 
     await supabase.from('receivers').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
     return true; 
   },
@@ -391,9 +391,8 @@ export const ReceiverAPI = {
 
 export const RepeaterAPI = {
   getList: async (params?: any) => getDeviceListWithMarket<Repeater>('repeaters', params),
-  // [FIX] Corrected parameter type from Receiver to Repeater to match the target API
   save: async (r: Repeater) => supabaseSaver('repeaters', r, [...DEVICE_BASE_COLS, 'repeaterId', 'alarmStatus', 'location', 'image']),
-  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+  saveCoordinates: async (id: number, x: number | null, y: number | null, map_index?: number | null) => { 
     await supabase.from('repeaters').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
     return true; 
   },
@@ -465,7 +464,7 @@ export const DetectorAPI = {
     }
     return saved;
   },
-  saveCoordinates: async (id: number, x: number, y: number, map_index?: number) => { 
+  saveCoordinates: async (id: number, x: number | null, y: number | null, map_index?: number | null) => { 
     await supabase.from('detectors').update({ x_pos: x, y_pos: y, map_index }).eq('id', id); 
     return true; 
   },
@@ -616,8 +615,8 @@ export const DashboardAPI = {
       const errorMap = new Map<string, string>();
       codes.forEach((c: any) => errorMap.set(c.code, c.name));
       const { data: fH } = await supabase.from('fire_history').select('*, markets(name, usageStatus)').in('falseAlarmStatus', ['화재', '등록']).order('registeredAt', { ascending: false });
-      const { data: dS } = await supabase.from('device_status').select('*, markets(name, usageStatus)').eq('deviceStatus', '에러').neq('errorCode', '04').order('registeredAt', { ascending: false });
-      const { data: cE } = await supabase.from('device_status').select('*, markets(name, usageStatus)').eq('errorCode', '04').order('registeredAt', { ascending: false });
+      const { data: dS = [] } = await supabase.from('device_status').select('*, markets(name, usageStatus)').eq('deviceStatus', '에러').neq('errorCode', '04').order('registeredAt', { ascending: false });
+      const { data: cE = [] } = await supabase.from('device_status').select('*, markets(name, usageStatus)').eq('errorCode', '04').order('registeredAt', { ascending: false });
       const normalizedMkts = normalizeData(mkts);
       const activeFH = (fH || []).filter((e: any) => e.markets?.usageStatus === '사용');
       const activeDS = (dS || []).filter((e: any) => e.markets?.usageStatus === '사용');
